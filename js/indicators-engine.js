@@ -273,7 +273,7 @@ function openSet(id){
         return h+`<div class="f">${q}${pin(sp,a.p[sp[0]],"dp_")}${x.tt?`<small>${x.tt}</small>`:""}${x.hp?`<small class="hp" data-hp="${sp[0]}"${hpo.has(sp[0])?"":" hidden"}>${x.hp.map(z=>`<span>${z}</span>`).join("")}</small>`:""}</div>`}).join("")||`<p class="msg">Indicator này không có thông số.</p>`}
     else if(tab==="st"){
       b=d.L.map((l,j)=>`<div class="f"><label for="dc_${j}">${l}</label><input type="color" id="dc_${j}" data-c="${j}" value="${cres(a,j)}"></div>`).join("");
-      if(d.L.length&&!["vd","cvd","fpr","bt","dst"].includes(a.key))b+=`<div class="f"><label for="dw">Độ dày đường</label><select id="dw" data-w="1">${[1,2,3,4].map(n=>`<option value="${n}"${(a.w||2)===n?" selected":""}>${n}px</option>`).join("")}</select></div>`;
+      if(d.L.length&&!["vd","cvd","fpr","bt","dst","kin"].includes(a.key))b+=`<div class="f"><label for="dw">Độ dày đường</label><select id="dw" data-w="1">${[1,2,3,4].map(n=>`<option value="${n}"${(a.w||2)===n?" selected":""}>${n}px</option>`).join("")}</select></div>`;
       if(d.c.some(x=>x[0]==="@"))b+=`<p class="msg">Một số màu mặc định lấy theo màu nến tăng/giảm (mục Chart Setting). Chọn màu khác để ghi đè; bấm Mặc định để quay lại.</p>`;
       if(a.key==="macd")b+=`<p class="msg">Histogram luôn lấy theo màu nến tăng/giảm (đậm khi động lượng mạnh lên, nhạt khi yếu đi).</p>`}
     else b=`<p class="msg">Chỉ hiện indicator trên các khung được chọn.</p><div class="bar">${allTfs().map(([n,s])=>`<label class="chk"><input type="checkbox" data-v="${s}"${vis().includes(s)?" checked":""}>${n}</label>`).join("")}</div>`;

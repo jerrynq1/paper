@@ -263,3 +263,17 @@ IND.qt={
   L:["A (Accumulation)","M (Manipulation)","D (Distribution)","X (Reversal/Cont)"],
   lab:()=>"",f:()=>[]
 };
+
+/* ===== Kinematics: quãng đường S, vận tốc V, gia tốc a của từng nến, hiện thành bảng dưới chart giống Statistic =====
+   Kiểu "of": phần tính + vẽ nằm ở js/orderflow-kinematics.js. Chỉ dùng OHLC nên không cần tick, chạy ở mọi khung giờ. */
+IND.kin={
+  n:"Kinematics (S · V · a)",t:"of",ver:1,
+  d:"Bảng số liệu dưới chart, mỗi nến một cột, theo ba đại lượng của chuyển động: S = quãng đường nến đi được (High − Low), V = vận tốc = S / thời gian nến, mang dấu + nếu nến tăng và − nếu nến giảm, a = gia tốc = thay đổi của V so với nến trước chia cho thời gian nến (đơn vị …/s²). Ô đậm dần theo độ lớn, ô vượt ngưỡng bạn đặt được tô sáng. Chỉ dùng giá OHLC nên không cần tick, chạy ở mọi khung giờ.",
+  p:[["tu","Đơn vị thời gian","s","s",{g:"Dữ liệu",mn:1,o:[["s","Giây (V: …/s, a: …/s²)"],["m","Phút (V: …/min, a: …/min²)"],["b","Nến (V: …/nến, a: …/nến²)"]],hp:["Các đại lượng được tính thế nào?","S = High − Low của nến (đơn vị giá).","V = S / Δt, có dấu theo thân nến: Close ≥ Open là +, Close < Open là −.","a = (V − V nến trước) / Δt. Nến đầu tiên chưa có a.","Δt là thời lượng một nến theo đơn vị chọn ở đây. Khung càng lớn tính theo giây thì V và a càng nhỏ; chọn Phút hoặc Nến để con số dễ đọc hơn."]}],
+     ["s","S: Quãng đường (High − Low)",true,"b",{g:"Dòng hiển thị"}],["v","V: Vận tốc",true,"b"],["a","a: Gia tốc",true,"b"],
+     ["th_s","Ngưỡng S",0,"n",{g:"Ngưỡng tô sáng (0 = tắt)",min:0,step:0.1,tt:"Ô nào có giá trị tuyệt đối từ ngưỡng trở lên sẽ được tô bằng màu ngưỡng (đổi ở tab Kiểu dáng). Ngưỡng tính theo đúng đơn vị đang hiển thị. Để 0 là tắt."}],["th_v","Ngưỡng V",0,"n",{min:0,step:0.001}],["th_a","Ngưỡng a",0,"n",{min:0,step:0.0001}],
+     ["rh","Chiều cao dòng",18,"i",{g:"Hiển thị",min:12,max:40}],["fs","Cỡ chữ",10,"i",{min:7,max:16}],
+     ["inv","Đảo thứ tự dòng",false,"b"],["lbl","Hiện tên dòng",true,"b"],["hs","Cỡ chữ tên dòng",10,"i",{min:7,max:16,on:p=>p.lbl}],["hbg","Nền cho tên dòng",true,"b",{on:p=>p.lbl}],
+     ["sdk","Độ lệch chuẩn tô màu",2,"n",{min:0.5,step:0.5,hp:["Độ lệch chuẩn tô màu là gì?","Mỗi ô được tô đậm dần theo giá trị của nó so với mức trung bình của cả dòng.","Giá trị này là số độ lệch chuẩn cộng thêm vào mức trung bình để đạt độ đậm tối đa. Nhỏ hơn thì nhiều ô đậm hơn; lớn hơn thì chỉ những ô thật nổi bật mới đậm. Ô đạt mức tối đa có thêm viền sáng."]}],["op","Độ mờ nền",0.6,"n",{min:0.1,max:1,step:0.05}]],
+  c:["#26c882","#ba32c4","#ffd700"],L:["Màu dương (tăng / tăng tốc)","Màu âm (giảm / giảm tốc)","Màu ngưỡng tô sáng"],lab:p=>({s:"s",m:"min",b:"nến"})[p.tu]||"s",f:()=>[]
+};

@@ -25,6 +25,7 @@ Sửa `js/indicators-custom.js` (đã có sẵn một mẫu `IND.mine` và hư�
 - `js/ctrader.js`: kết nối, đăng nhập, nến M1, tick, footprint
 - `js/chart.js`, `js/candle-style.js`, `js/timezone.js`, `js/symbols.js`: chart, màu nến, múi giờ, chọn mã
 - `js/indicators-*.js`, `js/volume-profile.js`, `js/orderflow-*.js`: indicator
+- `js/orderflow-kinematics.js`: Kinematics (bảng S / V / a của từng nến dưới chart, giống Statistic, chỉ dùng OHLC); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.kin`)
 - `js/orderflow-absorption.js`: Heavy Absorption (tính ngưỡng + vẽ marker); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.hab`)
 - `js/orderflow-dom.js`: DOM / MBO (kênh depth cTrader, bảng bên phải + histogram thanh khoản ở mép phải chart); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.dom`)
 - `js/hvn-profile.js`: HVN Profile (tính cụm HVN + vẽ canvas); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.hvn`)
@@ -33,7 +34,7 @@ Sửa `js/indicators-custom.js` (đã có sẵn một mẫu `IND.mine` và hư�
 - `js/qt.js`: Quarterly Theory (tính chu kỳ A-M-D-X + vẽ thanh các làn); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.qt`)
 - `js/replay.js`: Replay để backtest (thanh điều khiển nổi, cắt/nối lại mảng `m1`); `RP` và `RPLIM()` khai báo ở đầu `js/chart.js`
 - `js/drawings-*.js`, `js/mobile.js`: công cụ vẽ và cử chỉ cảm ứng
-- `tests/`: `node tests/footprint.test.js`, `node tests/customtf.test.js`, `node tests/hvn.test.js`, `node tests/hab.test.js`, `node tests/dom.test.js`, `node tests/replay.test.js`, `node tests/killzones.test.js`, `node tests/goldbach.test.js`, `node tests/qt.test.js`
+- `tests/`: `node tests/footprint.test.js`, `node tests/customtf.test.js`, `node tests/hvn.test.js`, `node tests/hab.test.js`, `node tests/dom.test.js`, `node tests/replay.test.js`, `node tests/killzones.test.js`, `node tests/goldbach.test.js`, `node tests/qt.test.js`, `node tests/kinematics.test.js`
 
 ## Replay (backtest)
 
