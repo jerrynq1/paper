@@ -378,11 +378,10 @@ a.sb{text-decoration:none}
 #paperQuick.min .pq-chip{display:block}
 @media(max-width:600px){#paperQuick .pq-btn{min-width:54px}#paperQuick input{width:40px}#paperLines .pl-box{font-size:12px}}
 
-/* ===== Price Variation Table / Gexadecimal ===== */
-#cw{position:relative}
-#pvtSelection{display:none;position:absolute;top:0;bottom:0;pointer-events:none;border-left:1px solid #35b6ff;border-right:1px solid #35b6ff;background:rgba(53,182,255,.09);z-index:12}
-#pvtSelection:before,#pvtSelection:after{content:"";position:absolute;top:0;bottom:0;width:1px;background:#35b6ff}
-#pvtPanel{position:absolute;z-index:30;right:12px;top:12px;width:min(580px,calc(100% - 24px));max-height:min(64vh,560px);overflow:auto;background:rgba(13,20,31,.97);color:#e8edf6;border:1px solid rgba(120,160,210,.42);border-radius:12px;box-shadow:0 12px 36px #0006;font:12px/1.45 'Space Grotesk',sans-serif;padding:12px;backdrop-filter:blur(12px)}
+
+/* Isolated Price Variation overlay; chart layout rules above remain unchanged. */
+#pvtSelection{display:none;position:absolute;pointer-events:none;border-left:1px solid #35b6ff;border-right:1px solid #35b6ff;background:rgba(53,182,255,.09);z-index:12}
+#pvtPanel{position:absolute;z-index:30;right:12px;top:42px;width:min(580px,calc(100% - 24px));max-height:min(64vh,560px);overflow:auto;background:rgba(13,20,31,.97);color:#e8edf6;border:1px solid rgba(120,160,210,.42);border-radius:12px;box-shadow:0 12px 36px #0006;font:12px/1.45 'Space Grotesk',sans-serif;padding:12px;backdrop-filter:blur(12px)}
 #pvtPanel[hidden]{display:none}
 .pvt-head{display:flex;align-items:center;gap:8px;margin-bottom:9px}.pvt-head strong{font-size:13px;letter-spacing:.02em}.pvt-head .pvt-spacer{flex:1}.pvt-btn{background:#202d40;color:#e8edf6;border:1px solid #42536a;border-radius:6px;padding:5px 8px;cursor:pointer}.pvt-btn.active{background:#175b7b;border-color:#35b6ff}.pvt-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:8px 0 10px}.pvt-stat{background:#ffffff08;border:1px solid #ffffff12;border-radius:7px;padding:7px;min-width:0}.pvt-stat span{display:block;color:#9eacc0;font-size:10px}.pvt-stat b{display:block;font-size:12px;overflow-wrap:anywhere;margin-top:2px}.pvt-table-wrap{overflow:auto;max-height:290px;border:1px solid #ffffff12;border-radius:7px}.pvt-table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;white-space:nowrap}.pvt-table th,.pvt-table td{padding:5px 7px;text-align:right;border-bottom:1px solid #ffffff0d}.pvt-table th{position:sticky;top:0;background:#1c293b;color:#b8c7db;font-weight:600}.pvt-table th:first-child,.pvt-table td:first-child{text-align:left}.pvt-table tr:last-child td{border-bottom:0}.pvt-up{color:#3df5c0}.pvt-down{color:#ff789a}.pvt-note{font-size:10px;color:#9eacc0;margin-top:8px}.pvt-empty{padding:16px;color:#b8c7db}
-@media(max-width:650px){#pvtPanel{right:5px;top:5px;width:calc(100% - 10px);max-height:58vh;padding:8px}.pvt-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.pvt-table-wrap{max-height:220px}}
+@media(max-width:650px){#pvtPanel{right:5px;top:36px;width:calc(100% - 10px);max-height:58vh;padding:8px}.pvt-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.pvt-table-wrap{max-height:220px}}

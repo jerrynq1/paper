@@ -2,8 +2,8 @@
 (()=>{
  'use strict';
  const $=id=>document.getElementById(id);
- const btn=$('pvtToggle'),panel=$('pvtPanel'),sel=$('pvtSelection'),host=$('chart'),cw=$('cw');
- if(!btn||!panel||!sel||!host||!cw||typeof chart==='undefined')return;
+ const btn=$('pvtToggle'),panel=$('pvtPanel'),sel=$('pvtSelection'),host=$('chart'),cw=$('cw'),card=$('chartCard');
+ if(!btn||!panel||!sel||!host||!cw||!card||typeof chart==='undefined')return;
  let active=false,dragging=false,startX=0,endX=0,range=null,lastDataKey='',lastSymbol=typeof C!=='undefined'?C.sym:null;
  const MAX_ROWS=400;
  const finite=Number.isFinite;
@@ -64,13 +64,13 @@
   ${d.rows.length>MAX_ROWS?`<div class="pvt-note">Đang hiển thị ${shown.length}/${d.rows.length} dòng lấy mẫu để tránh làm chậm chart; các chỉ số tổng quan vẫn tính trên toàn bộ vùng.</div>`:''}
   <div class="pvt-note">ΔP, V và a được tính từ Close giữa các nến. V = ΔClose/Δt; a = ΔV/Δt. Với một nến, khoảng thời gian dùng độ dài khung hiện tại. Hiệu suất hướng = |ΔP ròng| / tổng |ΔP từng bước| × 100%; nếu giá không di chuyển thì bằng 0%. Dữ liệu OHLC không thay thế được vận tốc tick-by-tick. Chỉ mang tính mô tả, không phải khuyến nghị giao dịch.</div>`;
  }
- function setRect(x1,x2){const cr=cw.getBoundingClientRect(),left=Math.max(0,Math.min(x1,x2)),right=Math.min(cr.width,Math.max(x1,x2));sel.style.display='block';sel.style.left=left+'px';sel.style.width=Math.max(1,right-left)+'px'}
+ function setRect(clientX1,clientX2){const cr=card.getBoundingClientRect(),wr=cw.getBoundingClientRect(),left=Math.max(0,Math.min(clientX1,clientX2)-cr.left),right=Math.min(cr.width,Math.max(clientX1,clientX2)-cr.left);sel.style.display='block';sel.style.left=left+'px';sel.style.top=(wr.top-cr.top)+'px';sel.style.height=wr.height+'px';sel.style.width=Math.max(1,right-left)+'px'}
  function activate(on){active=!!on;btn.classList.toggle('active',active);btn.textContent=active?'↔ Đang chọn vùng':'↔ Bảng biến thiên';host.style.cursor=active?'crosshair':'';if(active)panel.hidden=false;render()}
  function clear(){range=null;sel.style.display='none';render()}
  btn.addEventListener('click',()=>{panel.hidden=false;activate(!active)});
  panel.addEventListener('click',e=>{const b=e.target.closest('[data-pvt]');if(!b)return;switch(b.dataset.pvt){case'select':activate(!active);break;case'close':panel.hidden=true;activate(false);break;case'clear':clear();break;}});
- host.addEventListener('pointerdown',e=>{if(!active||e.button!==0)return;const cr=host.getBoundingClientRect(),wr=cw.getBoundingClientRect();startX=Math.max(0,Math.min(cr.width,e.clientX-cr.left));endX=startX;dragging=true;setRect(e.clientX-wr.left,e.clientX-wr.left);e.preventDefault();e.stopPropagation();},true);
- window.addEventListener('pointermove',e=>{if(!dragging)return;const wr=cw.getBoundingClientRect(),cr=host.getBoundingClientRect();endX=Math.max(0,Math.min(cr.width,e.clientX-cr.left));setRect(startX+(host.getBoundingClientRect().left-wr.left),e.clientX-wr.left);},true);
+ host.addEventListener('pointerdown',e=>{if(!active||e.button!==0)return;const cr=host.getBoundingClientRect();startX=Math.max(0,Math.min(cr.width,e.clientX-cr.left));endX=startX;dragging=true;setRect(e.clientX,e.clientX);e.preventDefault();e.stopPropagation();},true);
+ window.addEventListener('pointermove',e=>{if(!dragging)return;const cr=host.getBoundingClientRect();endX=Math.max(0,Math.min(cr.width,e.clientX-cr.left));setRect(cr.left+startX,e.clientX);},true);
  window.addEventListener('pointerup',e=>{if(!dragging)return;dragging=false;const a=coordinateTime(startX),b=coordinateTime(endX);if(finite(a)&&finite(b)){range={start:a,end:b};panel.hidden=false;render()}activate(false);},true);
  window.addEventListener('keydown',e=>{if(e.key==='Escape'&&active)activate(false)});
  // Keep the selection anchored to timestamps, not array indices, when history is prepended or chart data refreshes.
