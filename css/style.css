@@ -326,3 +326,12 @@ a.sb{text-decoration:none}
 #paperModeNote.paper-warning{color:#e6bd63}
 #paperPanel .paper-account-tools select:focus,#paperPanel .paper-account-tools button:focus{outline:1px solid var(--acc)}
 @media(max-width:600px){#paperPanel .paper-account-tools label{flex:1 1 40%}#paperPanel .paper-account-tools select{max-width:none;width:100%}#paperPanel .paper-account-tools button{flex:1}}
+
+/* Paper Trading compact ticket: SELL | quantity | BUY */
+#paperQuick{position:absolute;z-index:8;top:10px;left:10px;width:min(340px,calc(100% - 20px));box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr);gap:7px;align-items:stretch;padding:7px;border:1px solid var(--line);border-radius:11px;background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(10px);box-shadow:0 5px 20px #0002;color:var(--ink);font-family:'Space Grotesk',sans-serif}
+#paperQuick>button{min-width:0;min-height:43px;border:0;border-radius:7px;padding:5px 4px;color:#fff;font:700 12px 'Space Grotesk',sans-serif;cursor:pointer;touch-action:manipulation}
+#paperQuick .pq-sell{background:#d74768}#paperQuick .pq-buy{background:#0e9f78}
+#paperQuick button small{display:block;font-size:10px;opacity:.9;margin-top:2px;font-weight:600}
+#paperQuick .pq-qty{display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0;text-align:center;font-size:9px;letter-spacing:.7px;color:var(--mut)}
+#paperQuick input{width:100%;height:28px;box-sizing:border-box;min-width:0;text-align:center;background:var(--inp,var(--card));color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px;font:600 14px 'Space Grotesk',sans-serif;touch-action:manipulation}
+@media(max-width:600px){#paperQuick{top:6px;left:6px;width:min(310px,calc(100% - 12px));grid-template-columns:minmax(0,1fr) 62px minmax(0,1fr);gap:5px;padding:6px}#paperQuick>button{min-height:42px;font-size:11px}#paperQuick button small{font-size:9px}#paperQuick input{height:27px;font-size:13px}#paperLines .paper-line span{right:2px;font-size:9px}}
