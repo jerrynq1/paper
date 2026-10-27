@@ -337,14 +337,28 @@ a.sb{text-decoration:none}
 #paperPanel .paper-close{font-size:11px;padding:4px 10px}
 @media(max-width:600px){#paperPanel{padding:11px}.paper-account{grid-template-columns:repeat(2,1fr)}.pp-head{gap:8px}}
 
-/* Đường Entry/SL/TP trên chart */
+/* Lệnh trên chart: đường giá + nhãn "số lượng | P/L | ×" + nhãn giá ở trục phải */
 #paperLines{position:absolute;inset:0;z-index:7;pointer-events:none;overflow:hidden}
-#paperLines .paper-line{position:absolute;left:0;right:0;height:0;border-top:1px dashed var(--linecolor)}
-#paperLines .paper-line span{position:absolute;right:62px;top:-12px;padding:3px 7px;border:1px solid var(--linecolor);border-radius:6px;background:var(--hole);color:var(--linecolor);font-size:10px;font-weight:700;white-space:nowrap;pointer-events:auto;cursor:ns-resize;touch-action:none}
-#paperLines .paper-zone{position:absolute;left:8px;right:56px;pointer-events:none;overflow:hidden;opacity:.85}
-#paperLines .paper-zone span{font-size:9px;padding:2px 6px;color:var(--ink);opacity:.7}
-#paperLines .paper-zone.risk{background:rgba(240,77,110,.12);border-block:1px solid rgba(240,77,110,.45)}
-#paperLines .paper-zone.reward{background:rgba(22,184,138,.12);border-block:1px solid rgba(22,184,138,.45)}
+#paperLines .paper-line{position:absolute;left:0;right:0;height:0;border-top:1.5px solid var(--linecolor)}
+#paperLines .paper-line.pending{border-top-style:dashed}
+#paperLines .pl-box{position:absolute;top:-15px;height:30px;display:flex;align-items:stretch;border:1.5px solid var(--linecolor);border-radius:8px;background:var(--hole);overflow:hidden;pointer-events:auto;font:600 13px 'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums;color:var(--linecolor);-webkit-user-select:none;user-select:none}
+#paperLines .pl-box[data-drag]{cursor:ns-resize;touch-action:none}
+#paperLines .pl-q,#paperLines .pl-v{display:grid;place-items:center;padding:0 10px;white-space:nowrap}
+#paperLines .pl-v{border-left:1px solid var(--line);color:var(--ink)}
+#paperLines .paper-line.entry .pl-q{background:var(--linecolor);color:#fff}
+#paperLines .pl-x{width:32px;border:0;border-left:1px solid var(--line);background:none;color:var(--linecolor);font:400 20px/1 'Space Grotesk',sans-serif;cursor:pointer;padding:0}
+#paperLines .pl-tag{position:absolute;right:0;top:-12px;min-width:58px;height:24px;padding:0 4px;display:grid;place-items:center;border:1.5px solid var(--linecolor);border-radius:4px;background:var(--hole);color:var(--linecolor);font:700 11px 'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums;pointer-events:none}
+#paperLines .paper-line.entry .pl-tag{background:var(--linecolor);color:#fff}
+#paperLines .paper-chip{position:absolute;width:58px;height:28px;border:1.5px dotted;border-radius:8px;background:var(--hole);font:700 13px 'Space Grotesk',sans-serif;cursor:pointer;pointer-events:auto;padding:0}
+#paperLines .paper-chip.tp{border-color:#0e9f78;color:#0e9f78}#paperLines .paper-chip.sl{border-color:#ff9f1a;color:#ff9f1a}
+#paperLines .paper-chip:hover{background:var(--inp)}
+
+#paperLines{--lf:0}
+#paperLines .pl-box,#paperLines .paper-chip{left:calc(60px + (100% - 122px)*var(--lf));transform:translateX(calc(-100%*var(--lf)))}
+#paperLines .pl-grip{display:grid;place-items:center;width:18px;color:var(--mut);cursor:ew-resize;touch-action:none}
+#paperLines[data-lbl=compact] .pl-v{display:none}
+#paperLines[data-lbl=off] .pl-box,#paperLines[data-lbl=off] .paper-chip{display:none}
+.pp-lbl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mut)}.pp-lbl>span{margin-right:auto;font-weight:600}
 
 /* Ticket Buy/Sell nhỏ, kéo được, thu nhỏ/ẩn được */
 #paperQuick{position:absolute;z-index:8;left:0;top:0;display:flex;align-items:stretch;gap:3px;padding:3px;border:1px solid var(--line);border-radius:13px;background:color-mix(in srgb,var(--hole) 80%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 6px 20px rgba(0,0,10,.4);color:var(--ink);font-family:'Space Grotesk',sans-serif;-webkit-user-select:none;user-select:none}
@@ -362,4 +376,4 @@ a.sb{text-decoration:none}
 #paperQuick .pq-chip{display:none;padding:0 10px;font:700 12px 'Space Grotesk',sans-serif;color:var(--ink)}
 #paperQuick.min .pq-btn,#paperQuick.min .pq-qty,#paperQuick.min .pq-min{display:none}
 #paperQuick.min .pq-chip{display:block}
-@media(max-width:600px){#paperQuick .pq-btn{min-width:54px}#paperQuick input{width:40px}#paperLines .paper-line span{right:58px;font-size:9px}}
+@media(max-width:600px){#paperQuick .pq-btn{min-width:54px}#paperQuick input{width:40px}#paperLines .pl-box{font-size:12px}}
