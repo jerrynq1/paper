@@ -286,52 +286,80 @@ a.sb{text-decoration:none}
 #kzTbl td{padding:2px 7px;text-align:center;border:1px solid var(--line);white-space:nowrap;line-height:1.25}
 @media (max-width:700px){#kzTbl{max-width:92%;overflow-x:auto}}
 
-/* ===== Paper Trading (local simulation; separate from cTrader) ===== */
-#paperPanel{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);position:relative;z-index:5;font-family:'Space Grotesk',sans-serif}
-#paperPanel .paper-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
-#paperPanel .paper-head b{font-size:15px;letter-spacing:.2px}#paperPanel .paper-head small{display:block;color:var(--mut);font-size:10px;letter-spacing:.7px;margin-top:2px}
-#paperPanel button{font:inherit;cursor:pointer;border:1px solid var(--line);border-radius:7px;padding:7px 10px;background:var(--hole,var(--card));color:var(--ink)}
-#paperPanel .paper-account{display:flex;gap:18px;flex-wrap:wrap;padding:12px 0;font-size:12px;color:var(--mut)}#paperPanel .paper-account b{display:block;color:var(--ink);font-size:15px;font-variant-numeric:tabular-nums}
-#paperPanel .paper-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap}#paperPanel .paper-controls label{display:grid;gap:4px;font-size:11px;color:var(--mut)}#paperPanel input{width:100px;min-width:70px;background:var(--inp,var(--card));color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:8px;font:inherit}
-#paperPanel .paper-buy{background:#0e9f78;color:#fff;border-color:#0e9f78}#paperPanel .paper-sell{background:#d74768;color:#fff;border-color:#d74768}
-#paperPanel .paper-note{font-size:11px;color:var(--mut);line-height:1.5;margin:10px 0}#paperPanel .paper-tabs{display:flex;gap:6px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:8px}#paperPanel .paper-tabs button.active{border-color:var(--acc);color:var(--acc)}#paperPanel #paperReset{margin-left:auto;color:var(--mut)}
-#paperRows{max-height:260px;overflow:auto}.paper-empty{padding:18px 6px;text-align:center;color:var(--mut);font-size:12px}.paper-row{padding:10px 2px;border-bottom:1px solid var(--line)}.paper-rowtop{display:flex;justify-content:space-between;gap:10px;font-size:12px}.paper-rowtop small{font-weight:400;color:var(--mut)}.paper-meta{display:flex;flex-wrap:wrap;gap:8px 12px;color:var(--mut);font-size:11px;margin:6px 0}.buytxt,.pos{color:#16b88a}.selltxt,.neg{color:#f05d7b}.paper-close{font-size:11px!important;padding:4px 8px!important}
-#paperLines{position:absolute;inset:0;z-index:7;pointer-events:none;overflow:hidden}#paperLines .paper-line{position:absolute;left:0;right:0;height:0;border-top:1px dashed var(--linecolor);pointer-events:none}#paperLines .paper-line span{position:absolute;right:8px;top:-12px;padding:3px 7px;border:1px solid var(--linecolor);border-radius:5px;background:var(--card);color:var(--linecolor);font-size:10px;font-weight:700;white-space:nowrap;pointer-events:auto;cursor:ns-resize;touch-action:none;box-shadow:0 2px 8px #0002}
-#paperPanel.collapsed>*:not(.paper-head){display:none}
-@media(max-width:600px){#paperPanel{padding:9px}#paperPanel .paper-account{gap:12px}#paperPanel .paper-controls label{flex:1 1 25%}#paperPanel input{width:100%;min-width:0}#paperPanel .paper-buy,#paperPanel .paper-sell{flex:1}#paperLines .paper-line span{right:2px;font-size:9px}}
-/* Paper Trading pending orders and risk preview */
-#paperPanel .paper-pending-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:9px}
-#paperPanel .paper-pending-controls label{display:grid;gap:4px;font-size:11px;color:var(--mut)}
-#paperPanel select{min-width:95px;background:var(--inp,var(--card));color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:8px;font:inherit}
-#paperPanel .paper-pending-controls button{min-height:34px}
-#paperPanel .paper-risk{margin:10px 0;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:11px;color:var(--mut);display:flex;flex-wrap:wrap;gap:4px 8px;line-height:1.6}
-#paperPanel .paper-risk b{color:var(--ink);font-variant-numeric:tabular-nums}
-#paperPanel .paper-risk b.neg{color:#f05d7b}#paperPanel .paper-risk b.pos{color:#16b88a}
-@media(max-width:600px){#paperPanel .paper-pending-controls label{flex:1 1 30%}#paperPanel .paper-pending-controls button{flex:1 1 42%;font-size:11px!important;padding:8px 6px!important}#paperPanel .paper-risk{font-size:10px}}
+/* ===== Paper Trading (mô phỏng cục bộ, không gửi lệnh tới cTrader) ===== */
+#paperPanel{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);position:relative;z-index:5;font-family:'Space Grotesk',sans-serif;box-shadow:0 12px 40px rgba(0,0,10,.3)}
+#paperPanel button,#paperPanel summary{font:inherit;cursor:pointer}
+#paperPanel button{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:var(--inp);color:var(--ink);transition:border-color .15s}
+#paperPanel button:hover{border-color:var(--acc)}
+#paperPanel input,#paperPanel select{width:100%;min-width:0;background:var(--inp);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:inherit;font-variant-numeric:tabular-nums}
+.pp-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pp-title{display:flex;align-items:center;gap:8px;margin-right:auto;font:700 16px Sora,'Space Grotesk',sans-serif}
+.paper-netting-badge{font:700 9px/1 'Space Grotesk',sans-serif;letter-spacing:.6px;padding:3px 6px;border:1px solid var(--acc);border-radius:5px;color:var(--acc)}
+.pp-seg{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--inp)}
+#paperPanel .pp-seg button{border:0;background:none;border-radius:999px;padding:6px 14px;color:var(--mut);font-weight:700;font-size:12px}
+#paperPanel .pp-seg button.on{background:var(--grad);color:var(--onacc);box-shadow:0 0 12px rgba(var(--glow),.4)}
+#paperPanel .pp-ic{padding:6px 11px;font-size:12px;color:var(--mut)}
+#paperPanel .pp-ic.on{color:var(--acc);border-color:var(--acc)}
+.pp-note{display:block;margin-top:6px;color:var(--mut);font-size:11px}
+#paperModeNote.paper-warning{color:var(--acc)}
+.pp-body{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+#paperPanel.collapsed .pp-body{display:none}
+.pp-acc{display:flex;gap:8px}.pp-acc select{flex:1}
+.paper-account{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.paper-account>div{padding:9px 11px;border:1px solid var(--line);border-radius:12px;background:var(--inp)}
+.paper-account span{display:block;font-size:11px;color:var(--mut)}
+.paper-account b{display:block;margin-top:2px;font:700 15px Sora,'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums}
+.paper-controls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.paper-controls label,.paper-pending-controls label{display:grid;gap:4px;font-size:11px;color:var(--mut)}
+.pp-go{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#paperPanel .paper-sell,#paperPanel .paper-buy{border:0;color:#fff;font-weight:700;padding:11px 10px}
+#paperPanel .paper-sell{background:linear-gradient(180deg,#e0526f,#c23a58)}
+#paperPanel .paper-buy{background:linear-gradient(180deg,#14b389,#0b8f6c)}
+.pp-pend,.pp-info{border:1px solid var(--line);border-radius:12px;padding:0 12px}
+.pp-pend summary,.pp-info summary{padding:10px 0;font-size:12px;font-weight:700;color:var(--mut)}
+.pp-pend[open] summary{color:var(--ink)}
+.paper-pending-controls{display:grid;grid-template-columns:1fr 1.4fr;gap:8px;padding-bottom:12px}
+.paper-pending-controls .pp-go{grid-column:1/-1}
+.paper-note{font-size:11px;color:var(--mut);line-height:1.55;padding-bottom:10px}
+.paper-risk{padding:9px 11px;border:1px dashed var(--line);border-radius:10px;font-size:12px;color:var(--mut);line-height:1.6}
+.paper-risk b{color:var(--ink);font-variant-numeric:tabular-nums}
+.paper-tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+#paperPanel .paper-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 10px;color:var(--mut);font-weight:600}
+#paperPanel .paper-tabs button.active{border-bottom-color:var(--acc);color:var(--acc)}
+#paperPanel #paperReset{margin-left:auto;font-size:11px}
+#paperRows{max-height:280px;overflow:auto}
+.paper-empty{padding:20px 6px;text-align:center;color:var(--mut);font-size:12px}
+.paper-row{padding:10px 2px;border-bottom:1px solid var(--line)}
+.paper-rowtop{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.paper-rowtop small{font-weight:400;color:var(--mut)}
+.paper-meta{display:flex;flex-wrap:wrap;gap:4px 12px;color:var(--mut);font-size:11px;margin:6px 0}
+.buytxt,.pos{color:var(--win)}.selltxt,.neg{color:var(--loss)}
+#paperPanel .paper-close{font-size:11px;padding:4px 10px}
+@media(max-width:600px){#paperPanel{padding:11px}.paper-account{grid-template-columns:repeat(2,1fr)}.pp-head{gap:8px}}
 
-/* Paper Trading V3: chart quick-order ticket + risk/reward zones */
-#cw{position:relative}
-#paperQuick{position:absolute;z-index:8;top:10px;left:10px;width:min(250px,calc(100% - 20px));padding:10px;border:1px solid var(--line);border-radius:10px;background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(10px);box-shadow:0 5px 20px #0002;color:var(--ink);font-family:'Space Grotesk',sans-serif}
-#paperQuick .pq-title{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:8px}#paperQuick .pq-title span{font-size:9px;letter-spacing:1px;color:var(--mut);border:1px solid var(--line);border-radius:4px;padding:2px 5px}
-#paperQuick .pq-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}#paperQuick button{border:0;border-radius:6px;padding:8px 5px;color:white;font:700 12px 'Space Grotesk',sans-serif;cursor:pointer}#paperQuick #pqSell{background:#d74768}#paperQuick #pqBuy{background:#0e9f78}#paperQuick button small{display:block;font-size:10px;opacity:.85;margin-top:2px}
-#paperQuick .pq-size{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}#paperQuick label{display:grid;gap:3px;font-size:10px;color:var(--mut)}#paperQuick input{width:100%;min-width:0;box-sizing:border-box;background:var(--inp,var(--card));color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px;font:11px 'Space Grotesk',sans-serif}#paperQuick .pq-hint{font-size:9px;color:var(--mut);margin-top:7px}
-#paperLines .paper-zone{position:absolute;pointer-events:none;z-index:0;overflow:hidden;opacity:.8}#paperLines .paper-zone.risk{background:rgba(240,77,110,.12);border-top:1px solid rgba(240,77,110,.45);border-bottom:1px solid rgba(240,77,110,.45)}#paperLines .paper-zone.reward{background:rgba(22,184,138,.12);border-top:1px solid rgba(22,184,138,.45);border-bottom:1px solid rgba(22,184,138,.45)}#paperLines .paper-zone span{position:absolute;left:4px;top:2px;font-size:9px;font-weight:700;opacity:.85;color:var(--ink)}#paperLines .paper-line{z-index:2}
-@media(max-width:600px){#paperQuick{top:6px;left:6px;width:190px;padding:7px}#paperQuick .pq-size{gap:4px}#paperQuick input{padding:5px 3px;font-size:10px}#paperQuick .pq-hint{display:none}#paperLines .paper-zone{right:48px!important}}
-/* Paper Trading v4 account / mode controls */
-#paperPanel .paper-account-tools{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:10px 0}
-#paperPanel .paper-account-tools label{display:grid;gap:4px;font-size:11px;color:var(--mut)}
-#paperPanel .paper-account-tools select{max-width:210px;min-width:120px;background:var(--inp,var(--card));color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:8px;font:inherit}
-#paperPanel .paper-account-tools button{padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink);font-size:11px}
-#paperPanel .paper-netting-badge{display:inline-block;font-size:9px;letter-spacing:.6px;padding:3px 5px;border:1px solid var(--acc);border-radius:4px;color:var(--acc);vertical-align:2px}
-#paperModeNote.paper-warning{color:#e6bd63}
-#paperPanel .paper-account-tools select:focus,#paperPanel .paper-account-tools button:focus{outline:1px solid var(--acc)}
-@media(max-width:600px){#paperPanel .paper-account-tools label{flex:1 1 40%}#paperPanel .paper-account-tools select{max-width:none;width:100%}#paperPanel .paper-account-tools button{flex:1}}
+/* Đường Entry/SL/TP trên chart */
+#paperLines{position:absolute;inset:0;z-index:7;pointer-events:none;overflow:hidden}
+#paperLines .paper-line{position:absolute;left:0;right:0;height:0;border-top:1px dashed var(--linecolor)}
+#paperLines .paper-line span{position:absolute;right:62px;top:-12px;padding:3px 7px;border:1px solid var(--linecolor);border-radius:6px;background:var(--hole);color:var(--linecolor);font-size:10px;font-weight:700;white-space:nowrap;pointer-events:auto;cursor:ns-resize;touch-action:none}
+#paperLines .paper-zone{position:absolute;left:8px;right:56px;pointer-events:none;overflow:hidden;opacity:.85}
+#paperLines .paper-zone span{font-size:9px;padding:2px 6px;color:var(--ink);opacity:.7}
+#paperLines .paper-zone.risk{background:rgba(240,77,110,.12);border-block:1px solid rgba(240,77,110,.45)}
+#paperLines .paper-zone.reward{background:rgba(22,184,138,.12);border-block:1px solid rgba(22,184,138,.45)}
 
-/* Paper Trading compact ticket: SELL | quantity | BUY */
-#paperQuick{position:absolute;z-index:8;top:10px;left:10px;width:min(340px,calc(100% - 20px));box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr);gap:7px;align-items:stretch;padding:7px;border:1px solid var(--line);border-radius:11px;background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(10px);box-shadow:0 5px 20px #0002;color:var(--ink);font-family:'Space Grotesk',sans-serif}
-#paperQuick>button{min-width:0;min-height:43px;border:0;border-radius:7px;padding:5px 4px;color:#fff;font:700 12px 'Space Grotesk',sans-serif;cursor:pointer;touch-action:manipulation}
+/* Ticket Buy/Sell nhỏ, kéo được, thu nhỏ/ẩn được */
+#paperQuick{position:absolute;z-index:8;left:0;top:0;display:flex;align-items:stretch;gap:3px;padding:3px;border:1px solid var(--line);border-radius:13px;background:color-mix(in srgb,var(--hole) 80%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 6px 20px rgba(0,0,10,.4);color:var(--ink);font-family:'Space Grotesk',sans-serif;-webkit-user-select:none;user-select:none}
+#paperQuick[hidden]{display:none}
+#paperQuick.drag{border-color:var(--acc);box-shadow:0 10px 28px rgba(0,0,10,.55)}
+#paperQuick .pq-grip{width:20px;display:grid;place-items:center;color:var(--mut);cursor:grab;touch-action:none;border-radius:9px}
+#paperQuick.drag .pq-grip{cursor:grabbing;color:var(--acc)}
+#paperQuick .pq-btn{min-width:60px;height:34px;padding:0 8px;border:0;border-radius:9px;color:#fff;font:700 11px/1.1 'Space Grotesk',sans-serif;cursor:pointer;touch-action:manipulation}
+#paperQuick .pq-btn small{display:block;margin-top:2px;font:600 11px/1 'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums}
 #paperQuick .pq-sell{background:#d74768}#paperQuick .pq-buy{background:#0e9f78}
-#paperQuick button small{display:block;font-size:10px;opacity:.9;margin-top:2px;font-weight:600}
-#paperQuick .pq-qty{display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0;text-align:center;font-size:9px;letter-spacing:.7px;color:var(--mut)}
-#paperQuick input{width:100%;height:28px;box-sizing:border-box;min-width:0;text-align:center;background:var(--inp,var(--card));color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px;font:600 14px 'Space Grotesk',sans-serif;touch-action:manipulation}
-@media(max-width:600px){#paperQuick{top:6px;left:6px;width:min(310px,calc(100% - 12px));grid-template-columns:minmax(0,1fr) 62px minmax(0,1fr);gap:5px;padding:6px}#paperQuick>button{min-height:42px;font-size:11px}#paperQuick button small{font-size:9px}#paperQuick input{height:27px;font-size:13px}#paperLines .paper-line span{right:2px;font-size:9px}}
+#paperQuick input{width:46px;height:34px;padding:0 2px;text-align:center;border:1px solid var(--line);border-radius:9px;background:var(--inp);color:var(--ink);font:700 13px 'Space Grotesk',sans-serif;-moz-appearance:textfield;touch-action:manipulation}
+#paperQuick input::-webkit-inner-spin-button,#paperQuick input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+#paperQuick .pq-min,#paperQuick .pq-chip{border:0;background:none;color:var(--mut);cursor:pointer;border-radius:9px}
+#paperQuick .pq-min{width:22px;font-size:16px;line-height:1}
+#paperQuick .pq-chip{display:none;padding:0 10px;font:700 12px 'Space Grotesk',sans-serif;color:var(--ink)}
+#paperQuick.min .pq-btn,#paperQuick.min .pq-qty,#paperQuick.min .pq-min{display:none}
+#paperQuick.min .pq-chip{display:block}
+@media(max-width:600px){#paperQuick .pq-btn{min-width:54px}#paperQuick input{width:40px}#paperLines .paper-line span{right:58px;font-size:9px}}
