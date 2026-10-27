@@ -135,7 +135,7 @@ Khác bản Pine: vẽ thành thanh trên chart thay vì mở pane riêng (cùng
 
 ## Paper Trading v4 (Live + Replay, Netting)
 
-- UI v4.1: ticket Sell/qty/Buy trên chart nhỏ gọn, kéo bằng tay nắm ⋮⋮, thu nhỏ bằng nút – (chip "Buy / Sell"), ẩn hẳn bằng nút Ticket ở panel; vị trí và trạng thái được nhớ (`gx_paper_ui`).
+- UI v4.3: nhãn lệnh có 3 chế độ (Đủ P/L, Gọn chỉ khối lượng, Ẩn) và dời ngang được (kéo tay nắm hoặc nút Trái/Giữa/Phải). UI v4.2: lệnh trên chart kiểu cTrader (đường entry luôn hiện, nhãn số lượng | P/L | ×, chip TP/SL nét đứt để thêm nhanh, kéo nhãn để chỉnh SL/TP). UI v4.1: ticket Sell/qty/Buy trên chart nhỏ gọn, kéo bằng tay nắm ⋮⋮, thu nhỏ bằng nút – (chip "Buy / Sell"), ẩn hẳn bằng nút Ticket ở panel; vị trí và trạng thái được nhớ (`gx_paper_ui`).
 
 - Paper accounts are local simulations only and never submit orders to cTrader.
 - `Live Paper` and `Replay Paper` use separate account books in localStorage (`gx_paper_live_v2` and `gx_paper_replay_v2`). Each mode supports multiple accounts, switching accounts, renaming, and resetting the selected account.
