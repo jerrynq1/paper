@@ -135,6 +135,8 @@ Khác bản Pine: vẽ thành thanh trên chart thay vì mở pane riêng (cùng
 
 ## Paper Trading v4 (Live + Replay, Netting)
 
+- UI v4.1: ticket Sell/qty/Buy trên chart nhỏ gọn, kéo bằng tay nắm ⋮⋮, thu nhỏ bằng nút – (chip "Buy / Sell"), ẩn hẳn bằng nút Ticket ở panel; vị trí và trạng thái được nhớ (`gx_paper_ui`).
+
 - Paper accounts are local simulations only and never submit orders to cTrader.
 - `Live Paper` and `Replay Paper` use separate account books in localStorage (`gx_paper_live_v2` and `gx_paper_replay_v2`). Each mode supports multiple accounts, switching accounts, renaming, and resetting the selected account.
 - Netting is enforced per symbol: same-direction fills increase the net position and weighted-average entry; opposite-direction fills reduce/close the current position and only reverse when the new order quantity is larger. It does not create simultaneous long and short positions for the same symbol in the same account.
