@@ -10,7 +10,7 @@
   const readBooks=key=>{try{const x=JSON.parse(localStorage.getItem(key)||'null');if(x&&Array.isArray(x.accounts)&&x.accounts.length)return x; }catch{}if(key===LIVE_KEY){try{const old=JSON.parse(localStorage.getItem('gx_paper_v1')||'null');if(old&&typeof old==='object'){const a={...freshBook('Live Paper 1'),...old,id:'pa_migrated_live',name:'Live Paper 1',lastReplayTime:null};return {activeId:a.id,accounts:[a]}}}catch{}}const a=freshBook(key===REPLAY_KEY?'Replay Account 1':'Live Paper 1');return {activeId:a.id,accounts:[a]}};
   let books={live:readBooks(LIVE_KEY),replay:readBooks(REPLAY_KEY)}, mode='live', drag=null, overlay=null, panel=null, quick=null, activeTab='open', lastReplayStamp=null;
   let state,rowsKey='';
-  const UI_KEY='gx_paper_ui';let ui={collapsed:false,ticket:'full',x:null,y:null},qd=null;try{Object.assign(ui,JSON.parse(localStorage.getItem(UI_KEY)||'{}'))}catch{}
+  const UI_KEY='gx_paper_ui';let ui={collapsed:false,ticket:'full',x:null,y:null,lbl:'full',lf:0},qd=null,lxd=null;try{Object.assign(ui,JSON.parse(localStorage.getItem(UI_KEY)||'{}'))}catch{}
   const saveUi=()=>{try{localStorage.setItem(UI_KEY,JSON.stringify(ui))}catch{}};
   const money=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const digits=()=>typeof window.PDIG==='function'?PDIG():2, fmt=p=>Number(p).toFixed(digits());
@@ -29,6 +29,7 @@
     <div class="paper-controls"><label>Khối lượng<input id="paperQty" type="number" min="0.01" step="0.01" value="1"></label><label>SL (khoảng giá)<input id="paperSL" type="number" min="0" step="0.1" value="5" title="0 = không đặt SL"></label><label>TP (khoảng giá)<input id="paperTP" type="number" min="0" step="0.1" value="10" title="0 = không đặt TP"></label></div>
     <div class="pp-go"><button id="paperSell" type="button" class="paper-sell">Sell Market</button><button id="paperBuy" type="button" class="paper-buy">Buy Market</button></div>
     <details class="pp-pend"><summary>Lệnh chờ Limit / Stop</summary><div class="paper-pending-controls"><label>Loại lệnh<select id="paperOrderType"><option value="limit">Limit</option><option value="stop">Stop</option></select></label><label>Giá vào lệnh<input id="paperEntry" type="number" step="any" inputmode="decimal" placeholder="Giá entry"></label><div class="pp-go"><button id="paperPendingSell" type="button" class="paper-sell">Sell pending</button><button id="paperPendingBuy" type="button" class="paper-buy">Buy pending</button></div></div></details>
+    <div class="pp-lbl"><span>Nhãn trên chart</span><div class="pp-seg"><button type="button" data-lbl="full">Đủ P/L</button><button type="button" data-lbl="compact">Gọn</button><button type="button" data-lbl="off">Ẩn</button></div><div class="pp-seg"><button type="button" data-lpos="0">Trái</button><button type="button" data-lpos="0.5">Giữa</button><button type="button" data-lpos="1">Phải</button></div></div>
     <div id="paperRisk" class="paper-risk">Risk: — · Reward: — · R:R —</div>
     <div class="paper-tabs"><button class="active" data-ptab="open">Vị thế (<span id="paperCount">0</span>)</button><button data-ptab="pending">Lệnh chờ (<span id="paperPendingCount">0</span>)</button><button data-ptab="history">Lịch sử</button><button id="paperReset">Reset tài khoản</button></div><div id="paperRows"></div>
     <details class="pp-info"><summary>Lưu ý về mô hình</summary><div class="paper-note">NETTING: mỗi mã chỉ có một vị thế ròng. Lệnh ngược chiều bù trừ vị thế hiện tại, phần dư mới đảo chiều. Kéo nhãn Entry/SL/TP trên chart để chỉnh. *Free margin chỉ để tham khảo; mô hình chưa tính margin, commission, swap.</div></details></div>`;
@@ -44,8 +45,13 @@
     $('paperBuy').onclick=()=>openTrade('buy');$('paperSell').onclick=()=>openTrade('sell');$('paperPendingBuy').onclick=()=>placePending('buy');$('paperPendingSell').onclick=()=>placePending('sell');['paperQty','paperSL','paperTP','paperEntry','paperOrderType'].forEach(id=>$(id).addEventListener('input',renderRisk));
     panel.querySelectorAll('[data-ptab]').forEach(b=>b.onclick=()=>{activeTab=b.dataset.ptab;panel.querySelectorAll('[data-ptab]').forEach(x=>x.classList.toggle('active',x===b));renderRows(activeTab)});
     $('paperReset').onclick=()=>{if(!confirm(`Reset “${state.name}” về $${money(START_BALANCE)}? Toàn bộ vị thế, lệnh chờ và lịch sử của tài khoản này sẽ bị xoá.`))return;const name=state.name,id=state.id;state={...freshBook(name),id};state.balance=START_BALANCE;book().accounts[book().accounts.findIndex(a=>a.id===id)]=state;useActive();persist();render()};
-    overlay.addEventListener('pointerdown',e=>{const h=e.target.closest('[data-drag]');if(!h)return;const id=Number(h.dataset.id),field=h.dataset.drag,p=field==='entry'?state.pending.find(x=>x.id===id):state.positions.find(x=>x.id===id)||state.pending.find(x=>x.id===id);if(!p)return;drag={id,field,collection:field==='entry'?'pending':(state.positions.some(x=>x.id===id)?'positions':'pending'),pointerId:e.pointerId};try{h.setPointerCapture(e.pointerId)}catch{}e.preventDefault()});
+    overlay.addEventListener('pointerdown',e=>{if(e.target.closest('[data-x]'))return;if(e.target.closest('.pl-grip')){lxd=e.pointerId;try{e.target.closest('.pl-grip').setPointerCapture(e.pointerId)}catch{}e.preventDefault();return}const h=e.target.closest('[data-drag]');if(!h)return;const id=Number(h.dataset.id),field=h.dataset.drag,p=field==='entry'?state.pending.find(x=>x.id===id):state.positions.find(x=>x.id===id)||state.pending.find(x=>x.id===id);if(!p)return;drag={id,field,collection:field==='entry'?'pending':(state.positions.some(x=>x.id===id)?'positions':'pending'),pointerId:e.pointerId};try{h.setPointerCapture(e.pointerId)}catch{}e.preventDefault()});
     window.addEventListener('pointermove',e=>{if(!drag)return;const p=(drag.collection==='pending'?state.pending:state.positions).find(x=>x.id===drag.id);if(!p)return;const r=$('chart').getBoundingClientRect(),y=e.clientY-r.top;try{const v=cs.coordinateToPrice(y);if(Number.isFinite(v)){p[drag.field]=v;drawLines();renderRows(activeTab)}}catch{}});
+    overlay.addEventListener('click',e=>{const x=e.target.closest('[data-x]');
+      if(x){const id=Number(x.dataset.x==='entry'?x.dataset.id:x.dataset.id),f=x.dataset.x;if(f==='entry'){if(state.positions.some(p=>p.id===id))closeManual(id);else{state.pending=state.pending.filter(p=>p.id!==id);persist();render()}}else{const p=[...state.positions,...state.pending].find(q=>q.id===id);if(p){p[f]=null;persist();render()}}return}
+      const a=e.target.closest('[data-add]');if(a){const p=[...state.positions,...state.pending].find(q=>q.id===Number(a.dataset.id));if(!p)return;const f=a.dataset.add,d=dist(f==='sl'?'paperSL':'paperTP')||p.entry*(f==='sl'?.002:.004),up=(f==='tp')===(p.side==='buy');p[f]=p.entry+(up?d:-d);persist();render()}});
+    window.addEventListener('pointermove',e=>{if(lxd==null||e.pointerId!==lxd)return;const r=$('cw').getBoundingClientRect();ui.lf=Math.min(1,Math.max(0,(e.clientX-r.left-60)/Math.max(1,r.width-122)));applyLabels()});
+    const endLx=e=>{if(lxd==null||e.pointerId!==lxd)return;lxd=null;saveUi()};window.addEventListener('pointerup',endLx);window.addEventListener('pointercancel',endLx);
     window.addEventListener('pointerup',finishDrag);window.addEventListener('pointercancel',finishDrag);window.addEventListener('resize',drawLines);
     let raf=0;const sched=()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(state&&(state.positions.length||state.pending.length))drawLines()})};['wheel','pointermove','touchmove'].forEach(n=>{const el=$('chart');if(el)el.addEventListener(n,sched,{passive:true})});try{chart.timeScale().subscribeVisibleLogicalRangeChange(sched)}catch{}
     window.__paperSyncQuick=syncQuick;
@@ -61,7 +67,10 @@ function placeTicket(){const cw=$('cw');if(!cw||!quick)return;quick.hidden=ui.ti
     const endQ=()=>{if(!qd)return;qd=null;quick.classList.remove('drag');saveUi()};quick.addEventListener('pointerup',endQ);quick.addEventListener('pointercancel',endQ);
     $('pqMin').onclick=()=>{ui.ticket='min';saveUi();placeTicket()};$('pqChip').onclick=()=>{ui.ticket='full';saveUi();placeTicket()};$('paperTicket').onclick=()=>{ui.ticket=ui.ticket==='off'?'full':'off';saveUi();placeTicket()};
     window.addEventListener('resize',placeTicket);if(cw&&typeof ResizeObserver==='function')new ResizeObserver(placeTicket).observe(cw);
-    applyCollapsed();placeTicket();
+    function applyLabels(){overlay.dataset.lbl=ui.lbl;overlay.style.setProperty('--lf',ui.lf);panel.querySelectorAll('[data-lbl]').forEach(b=>b.classList.toggle('on',b.dataset.lbl===ui.lbl));panel.querySelectorAll('[data-lpos]').forEach(b=>b.classList.toggle('on',Math.abs(Number(b.dataset.lpos)-ui.lf)<.02))}
+    panel.querySelectorAll('[data-lbl]').forEach(b=>b.onclick=()=>{ui.lbl=b.dataset.lbl;saveUi();applyLabels()});
+    panel.querySelectorAll('[data-lpos]').forEach(b=>b.onclick=()=>{ui.lf=Number(b.dataset.lpos);saveUi();applyLabels()});
+    applyLabels();applyCollapsed();placeTicket();
     useActive();render();
     function syncQuick(){ $('paperQty').value=$('pqQty').value; }
     function finishDrag(){if(!drag)return;drag=null;persist();render()}
@@ -104,6 +113,7 @@ function placeTicket(){const cw=$('cw');if(!cw||!quick)return;quick.hidden=ui.ti
     $('paperBalance').textContent='$'+money(state.balance);$('paperEquity').textContent='$'+money(equity);$('paperOpenPL').textContent=(open<0?'−':'')+'$'+money(Math.abs(open));$('paperOpenPL').style.color=open<0?'var(--loss,#ff5c78)':'var(--profit,#3dd6a5)';$('paperFree').textContent='$'+money(equity);$('paperCount').textContent=state.positions.length;$('paperPendingCount').textContent=state.pending.length;
     renderRows(activeTab);drawLines();renderRisk();
   }
+  function closeManual(id){const p=state.positions.find(x=>x.id===id);if(!p)return;if(!isCur(p)){alert('Hãy chuyển chart sang '+p.symbol+' để đóng vị thế này.');return}const q=price(),exit=p.side==='buy'?(q.bid||q.mid):(q.ask||q.mid);if(exit>0){closePosition(p,exit,'Đóng thủ công');persist();render()}}
   function updateQuotes(){const q=price(),b=$('pqBid'),a=$('pqAsk');if(b)b.textContent=q.bid>0?fmt(q.bid):'—';if(a)a.textContent=q.ask>0?fmt(q.ask):'—'}
   function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
   function renderRows(tab='open'){const root=$('paperRows');if(!root)return;const rows=tab==='history'?state.history:tab==='pending'?state.pending:state.positions,key=state.id+'|'+tab+'|'+rows.map(p=>[p.id,p.qty,p.entry,p.sl,p.tp,p.exit,p.type].join(',')).join(';');
@@ -114,13 +124,26 @@ function placeTicket(){const cw=$('cw');if(!cw||!quick)return;quick.hidden=ui.ti
     root.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>{state.pending=state.pending.filter(p=>p.id!==Number(b.dataset.cancel));persist();render()});
   }
   function drawLines(){if(!overlay)return;const chartEl=$('chart');if(!chartEl)return;const rect=chartEl.getBoundingClientRect(),old=new Map(),keep=new Set();
-    overlay.querySelectorAll('.paper-line').forEach(el=>old.set(el.dataset.key,el));overlay.querySelectorAll('.paper-zone').forEach(el=>el.remove());
+    overlay.querySelectorAll('[data-key]').forEach(el=>old.set(el.dataset.key,el));
     if(!rect.width||!rect.height){old.forEach(el=>el.remove());return}
-    const yOf=v=>{try{return cs.priceToCoordinate(v)}catch{return null}},items=[...state.positions,...state.pending].filter(isCur);
-    for(const p of items){const yE=yOf(p.entry);if(!Number.isFinite(yE))continue;for(const [field,fill] of [['sl','risk'],['tp','reward']])if(p[field]!=null){const y=yOf(p[field]);if(Number.isFinite(y)){const z=document.createElement('div');z.className='paper-zone '+fill;z.style.top=Math.min(yE,y)+'px';z.style.height=Math.max(1,Math.abs(y-yE))+'px';z.innerHTML=`<span>${fill==='risk'?'Risk':'Reward'} #${p.id} · ${fmt(p[field])}</span>`;overlay.appendChild(z)}}}
-    for(const p of items)for(const [field,color,label] of [['entry','#e6bd63','Entry'],['sl','#ff5c78','SL'],['tp','#3dd6a5','TP']]){if(p[field]==null||(field==='entry'&&state.positions.some(x=>x.id===p.id)))continue;const y=yOf(p[field]);if(!Number.isFinite(y)||y<0||y>rect.height)continue;
-      const k=field+'-'+p.id;keep.add(k);let line=old.get(k);if(!line){line=document.createElement('div');line.className='paper-line '+field;line.dataset.key=k;line.innerHTML=`<span data-drag="${field}" data-id="${p.id}"></span>`;overlay.appendChild(line)}
-      line.style.top=y+'px';line.style.setProperty('--linecolor',color);const sp=line.firstChild;sp.title='Kéo để chỉnh '+label;sp.textContent=`${label} #${p.id} · ${fmt(p[field])}`}
+    const yOf=v=>{try{return cs.priceToCoordinate(v)}catch{return null}},items=[...state.positions,...state.pending].filter(isCur),inView=y=>Number.isFinite(y)&&y>=0&&y<=rect.height,
+      plTxt=v=>(v<0?'−':'+')+money(Math.abs(v))+' USD',
+      put=(key,mk,y,fn)=>{keep.add(key);let el=old.get(key);if(!el){el=mk();el.dataset.key=key;overlay.appendChild(el)}el.style.top=y+'px';fn(el)};
+    for(const p of items){const isPos=state.positions.includes(p),yE=yOf(p.entry);
+      for(const [field,color] of [['entry',isPos?'#2f6bff':'#e6bd63'],['sl','#ff9f1a'],['tp','#0e9f78']]){
+        if(p[field]==null)continue;const y=yOf(p[field]);if(!inView(y))continue;
+        put(field+'-'+p.id,()=>{const el=document.createElement('div');el.className='paper-line '+field;el.innerHTML=`<div class="pl-box"><span class="pl-grip" title="Kéo ngang để dời nhãn"><svg viewBox="0 0 10 16" width="8" height="14" aria-hidden="true"><g fill="currentColor"><circle cx="2" cy="3" r="1.3"/><circle cx="8" cy="3" r="1.3"/><circle cx="2" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="2" cy="13" r="1.3"/><circle cx="8" cy="13" r="1.3"/></g></svg></span><span class="pl-q"></span><span class="pl-v"></span><button type="button" class="pl-x" data-x="${field}" data-id="${p.id}">×</button></div><div class="pl-tag"></div>`;return el},y,el=>{
+          el.classList.toggle('pending',!isPos&&field==='entry');el.style.setProperty('--linecolor',color);
+          const box=el.firstChild;if(field==='entry'&&isPos)box.removeAttribute('data-drag');else{box.dataset.drag=field;box.dataset.id=p.id}
+          el.querySelector('.pl-q').textContent=p.qty;const v=el.querySelector('.pl-v');
+          if(field==='entry'&&!isPos){v.textContent=p.side.toUpperCase()+' '+String(p.type).toUpperCase();v.style.color=''}
+          else{const val=pnl(p,field==='entry'?(p.mark||p.entry):p[field]);v.textContent=plTxt(val);v.style.color=val<0?'var(--loss)':'var(--win)'}
+          el.querySelector('.pl-tag').textContent=fmt(p[field]);
+          el.querySelector('.pl-x').title=field==='entry'?(isPos?'Đóng vị thế':'Huỷ lệnh chờ'):'Xoá '+field.toUpperCase()});
+      }
+      if(inView(yE))for(const f of ['tp','sl'])if(p[f]==null){const above=(f==='tp')===(p.side==='buy');
+        put('add-'+f+'-'+p.id,()=>{const b=document.createElement('button');b.type='button';b.className='paper-chip '+f;b.dataset.add=f;b.dataset.id=p.id;b.textContent=f.toUpperCase();b.title='Thêm '+f.toUpperCase();return b},yE+(above?-49:19),()=>{})}
+    }
     old.forEach((el,k)=>{if(!keep.has(k))el.remove()});
   }
   function renderRisk(){const q=price(),entry=Number($('paperEntry').value)||q.ask||q.mid||0,qty=Math.max(.01,Number($('paperQty').value)||1),sd=dist('paperSL'),td=dist('paperTP'),risk=sd*qty,reward=td*qty,rr=sd>0?td/sd:0,el=$('paperRisk');if(el)el.innerHTML=`Entry <b>${entry>0?fmt(entry):'—'}</b> · Risk <b class="neg">${sd?'$'+money(risk):'—'}</b> · Reward <b class="pos">${td?'$'+money(reward):'—'}</b> · R:R <b>${sd&&td?'1 : '+rr.toFixed(2):'—'}</b>`}
