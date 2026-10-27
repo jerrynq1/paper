@@ -27,10 +27,10 @@
     <div class="symw"><input id="sym" title="Chọn mã giao dịch" aria-label="Mã" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="symDd" autocomplete="off" autocapitalize="characters" spellcheck="false"><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></div>
     <div class="tfs" id="tfs"></div>
     <span class="pill" id="st">Chưa kết nối</span>
-    <button class="btn ghost sm" data-go="ind">ƒx Indicator</button><button class="btn ghost sm" data-go="cs">🎨 Màu nến</button><button class="btn ghost sm" id="rpB" type="button" aria-pressed="false" title="Replay: xem lại giá chạy để backtest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 4 12l7 6z"/><path d="M20 6l-7 6 7 6z"/></svg>Replay</button>
+    <button class="btn ghost sm" id="pvtToggle" type="button" title="Kéo chọn vùng giá để lập bảng biến thiên">↔ Bảng biến thiên</button><button class="btn ghost sm" data-go="ind">ƒx Indicator</button><button class="btn ghost sm" data-go="cs">🎨 Màu nến</button><button class="btn ghost sm" id="rpB" type="button" aria-pressed="false" title="Replay: xem lại giá chạy để backtest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 4 12l7 6z"/><path d="M20 6l-7 6 7 6z"/></svg>Replay</button>
 <div class="px"><span><small>Bid</small><b id="bid">–</b></span><span><small>Ask</small><b id="ask">–</b></span></div>
   </div>
-  <div class="card" id="chartCard"><div id="ohlc"></div><div id="legend"></div><div id="cw"><div id="chart"></div><div id="panes"></div></div>
+  <div class="card" id="chartCard"><div id="ohlc"></div><div id="legend"></div><div id="cw"><div id="chart"></div><div id="panes"></div><div id="pvtSelection" aria-hidden="true"></div><section id="pvtPanel" class="pvt-panel" aria-label="Bảng biến thiên giá" hidden></section></div>
     <div id="clk"><button type="button" id="clkB" aria-haspopup="dialog" aria-expanded="false" title="Đổi múi giờ hiển thị"><span id="clkT">--:--:--</span><small id="clkZ"></small><span aria-hidden="true">▾</span></button></div>
     <div id="tzp" role="dialog" aria-label="Múi giờ"></div>
   </div>
@@ -74,6 +74,7 @@
 <script src="js/timezone.js"></script>
 <script src="js/ctrader.js"></script>
 <script src="js/chart.js"></script>
+<script src="js/price-variation.js"></script>
 <script src="js/candle-style.js"></script>
 <script src="js/kinematics.js"></script>
 <script src="js/indicators-defs.js"></script>
