@@ -264,16 +264,40 @@ IND.qt={
   lab:()=>"",f:()=>[]
 };
 
-/* ===== Kinematics: quãng đường S, vận tốc V, gia tốc a của từng nến, hiện thành bảng dưới chart giống Statistic =====
-   Kiểu "of": phần tính + vẽ nằm ở js/orderflow-kinematics.js. Chỉ dùng OHLC nên không cần tick, chạy ở mọi khung giờ. */
-IND.kin={
-  n:"Kinematics (S · V · a)",t:"of",ver:1,
-  d:"Bảng số liệu dưới chart, mỗi nến một cột, theo ba đại lượng của chuyển động: S = quãng đường nến đi được (High − Low), V = vận tốc = S / thời gian nến, mang dấu + nếu nến tăng và − nếu nến giảm, a = gia tốc = thay đổi của V so với nến trước chia cho thời gian nến (đơn vị …/s²). Ô đậm dần theo độ lớn, ô vượt ngưỡng bạn đặt được tô sáng. Chỉ dùng giá OHLC nên không cần tick, chạy ở mọi khung giờ.",
-  p:[["tu","Đơn vị thời gian","s","s",{g:"Dữ liệu",mn:1,o:[["s","Giây (V: …/s, a: …/s²)"],["m","Phút (V: …/min, a: …/min²)"],["b","Nến (V: …/nến, a: …/nến²)"]],hp:["Các đại lượng được tính thế nào?","S = High − Low của nến (đơn vị giá).","V = S / Δt, có dấu theo thân nến: Close ≥ Open là +, Close < Open là −.","a = (V − V nến trước) / Δt. Nến đầu tiên chưa có a.","Δt là thời lượng một nến theo đơn vị chọn ở đây. Khung càng lớn tính theo giây thì V và a càng nhỏ; chọn Phút hoặc Nến để con số dễ đọc hơn."]}],
-     ["s","S: Quãng đường (High − Low)",true,"b",{g:"Dòng hiển thị"}],["v","V: Vận tốc",true,"b"],["a","a: Gia tốc",true,"b"],
-     ["th_s","Ngưỡng S",0,"n",{g:"Ngưỡng tô sáng (0 = tắt)",min:0,step:0.1,tt:"Ô nào có giá trị tuyệt đối từ ngưỡng trở lên sẽ được tô bằng màu ngưỡng (đổi ở tab Kiểu dáng). Ngưỡng tính theo đúng đơn vị đang hiển thị. Để 0 là tắt."}],["th_v","Ngưỡng V",0,"n",{min:0,step:0.001}],["th_a","Ngưỡng a",0,"n",{min:0,step:0.0001}],
-     ["rh","Chiều cao dòng",18,"i",{g:"Hiển thị",min:12,max:40}],["fs","Cỡ chữ",10,"i",{min:7,max:16}],
-     ["inv","Đảo thứ tự dòng",false,"b"],["lbl","Hiện tên dòng",true,"b"],["hs","Cỡ chữ tên dòng",10,"i",{min:7,max:16,on:p=>p.lbl}],["hbg","Nền cho tên dòng",true,"b",{on:p=>p.lbl}],
-     ["sdk","Độ lệch chuẩn tô màu",2,"n",{min:0.5,step:0.5,hp:["Độ lệch chuẩn tô màu là gì?","Mỗi ô được tô đậm dần theo giá trị của nó so với mức trung bình của cả dòng.","Giá trị này là số độ lệch chuẩn cộng thêm vào mức trung bình để đạt độ đậm tối đa. Nhỏ hơn thì nhiều ô đậm hơn; lớn hơn thì chỉ những ô thật nổi bật mới đậm. Ô đạt mức tối đa có thêm viền sáng."]}],["op","Độ mờ nền",0.6,"n",{min:0.1,max:1,step:0.05}]],
-  c:["#26c882","#ba32c4","#ffd700"],L:["Màu dương (tăng / tăng tốc)","Màu âm (giảm / giảm tốc)","Màu ngưỡng tô sáng"],lab:p=>({s:"s",m:"min",b:"nến"})[p.tu]||"s",f:()=>[]
+/* ===== Kinematics: quãng đường S, vận tốc V, gia tốc a của từng nến, tách thành 3 chỉ báo =====
+   Phần tính nằm ở js/kinematics.js (kmCalc, kmDt). Chỉ dùng OHLC nên không cần tick, chạy ở mọi khung giờ.
+     kins  S: đường đè lên chart như EMA (thang giá riêng, ẩn)      kinv  V: histogram ở pane riêng      kina  a: đường ở pane riêng như RSI */
+const kmTU=()=>["tu","Đơn vị thời gian","s","s",{g:"Dữ liệu",o:[["s","Giây (V: …/s, a: …/s²)"],["m","Phút (V: …/min, a: …/min²)"],["b","Nến (V: …/nến, a: …/nến²)"]],
+  hp:["Các đại lượng được tính thế nào?","S = High − Low của nến (đơn vị giá).","V = S / Δt, có dấu theo thân nến: Close ≥ Open là +, Close < Open là −.","a = (V − V nến trước) / Δt. Nến đầu tiên chưa có a.","Δt là thời lượng một nến theo đơn vị chọn ở đây. Khung càng lớn tính theo giây thì V và a càng nhỏ; chọn Phút hoặc Nến để con số dễ đọc hơn."]}];
+const kmLab=p=>({s:"/s",m:"/min",b:"/nến"})[p.tu]||"/s";
+IND.kins={
+  n:"Kinematics S (Quãng đường)",t:"ov",ver:1,
+  d:"Quãng đường nến đi được, S = High − Low (đơn vị giá), vẽ thành một đường chạy theo các nến giống EMA, kèm đường EMA làm mượt (tùy chọn). Đường nằm trên thang giá riêng nên không làm méo thang giá của nến: chỉnh vị trí và chiều cao vùng vẽ ở Thông số. Chỉ dùng OHLC, chạy ở mọi khung giờ.",
+  p:[["ml","Chu kỳ EMA của S (0 = tắt)",9,"i",{g:"S",min:0,tt:"Đường EMA làm mượt của S. Đặt 0 để chỉ còn đường S của từng nến."}],
+     ["offset","Dịch chuyển (nến)",0,"i",{min:-500,max:500}],
+     ["sh","Chiều cao vùng vẽ (% chart)",25,"i",{g:"Vị trí",min:5,max:90,tt:"Đường S nằm trên thang giá riêng, chiếm phần trăm chiều cao này của chart."}],
+     ["sb","Cách đáy chart (%)",3,"i",{min:0,max:90}]],
+  c:["#98a2d8","#35b6ff"],L:["S (từng nến)","EMA của S"],
+  lab:p=>p.ml>0?"EMA "+p.ml:"",
+  f:(A,p,E,a)=>{
+    const S=A.h.map((h,i)=>h-A.l[i]),ps="kins_"+(a?a.id:""),bt=Math.min(.9,Math.max(0,p.sb/100)),tp=Math.min(.95,Math.max(.02,1-bt-p.sh/100)),pm={top:tp,bottom:bt},out=[{k:"l",d:S,ci:0,lw:1,ps,pm}];
+    if(p.ml>0)out.push({k:"l",d:ema(S,P_(p.ml)),ci:1,ps,pm});
+    return out}
+};
+IND.kinv={
+  n:"Kinematics V (Vận tốc)",t:"osc",ver:1,rc:true,
+  d:"Vận tốc của nến, V = S / thời gian nến, hiện thành histogram ở pane riêng. Cột dương (màu nến tăng) khi nến tăng, cột âm (màu nến giảm) khi nến giảm; cột càng cao nến chạy càng nhanh. Chỉ dùng OHLC, chạy ở mọi khung giờ.",
+  p:[kmTU()],
+  c:["@up","@dn"],L:["V dương (nến tăng)","V âm (nến giảm)"],hl:[{y:0,al:.5}],pf:"auto",
+  lab:kmLab,
+  f:(A,p,E,a)=>{const up=cres(a,0,E),dn=cres(a,1,E),V=kmCalc(A,kmDt(p.tu,C.tf)).v;
+    return[{k:"h",d:V.map(x=>({v:x,c:x>=0?up:dn}))}]}
+};
+IND.kina={
+  n:"Kinematics a (Gia tốc)",t:"osc",ver:1,
+  d:"Gia tốc của nến, a = (V − V nến trước) / thời gian nến, vẽ thành đường ở pane riêng giống RSI, có đường 0 làm mốc. Có thêm đường MA làm mượt (tùy chọn, kèm Bollinger Bands). Chỉ dùng OHLC, chạy ở mọi khung giờ.",
+  p:[kmTU(),...SMP("None")],
+  c:["#8b7cff","#ffb02e","@up"],L:["a (gia tốc)","MA làm mượt","Dải BB"],hl:[{y:0,al:.5}],pf:"auto",
+  lab:kmLab,
+  f:(A,p)=>{const x=kmCalc(A,kmDt(p.tu,C.tf)).a;return[{k:"l",d:x,ci:0},...smooth(A,p,x,1,2)]}
 };
