@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Indicator Lab – Chart &amp; cTrader</title>
+<link rel="icon" type="image/png" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Unbounded:wght@800&family=Sora:wght@500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body class="nt">
+<canvas id="sky"></canvas>
+<div class="scrim" id="scrim"></div>
+<aside id="side">
+  <div class="sh"><button class="ib" id="tg" type="button" aria-label="Thu gọn thanh bên"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3.5"/><path d="M9.5 4v16"/></svg></button><h1 class="brand"><img class="blogo" src="img/logo.png" alt=""><span class="wm">Indicator Lab</span></h1></div>
+  <nav id="nav"></nav>
+  <div class="sf"><button class="sb" id="th" type="button"></button></div>
+</aside>
+<div class="main">
+<div class="topbar"><button class="ib" id="tg2" type="button" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3.5"/><path d="M9.5 4v16"/></svg></button><span class="brand"><img class="blogo" src="img/logo.png" alt=""><span class="wm">Indicator Lab</span></span></div>
+<div class="wrap">
+
+<section class="view on" id="v-chart">
+  <div class="card bar">
+    <div class="symw"><input id="sym" title="Chọn mã giao dịch" aria-label="Mã" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="symDd" autocomplete="off" autocapitalize="characters" spellcheck="false"><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></div>
+    <div class="tfs" id="tfs"></div>
+    <span class="pill" id="st">Chưa kết nối</span>
+    <button class="btn ghost sm" data-go="ind">ƒx Indicator</button><button class="btn ghost sm" data-go="cs">🎨 Màu nến</button><button class="btn ghost sm" id="rpB" type="button" aria-pressed="false" title="Replay: xem lại giá chạy để backtest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 4 12l7 6z"/><path d="M20 6l-7 6 7 6z"/></svg>Replay</button>
+<div class="px"><span><small>Bid</small><b id="bid">–</b></span><span><small>Ask</small><b id="ask">–</b></span></div>
+  </div>
+  <div class="card" id="chartCard"><div id="ohlc"></div><div id="legend"></div><div id="cw"><div id="chart"></div><div id="panes"></div></div>
+    <div id="clk"><button type="button" id="clkB" aria-haspopup="dialog" aria-expanded="false" title="Đổi múi giờ hiển thị"><span id="clkT">--:--:--</span><small id="clkZ"></small><span aria-hidden="true">▾</span></button></div>
+    <div id="tzp" role="dialog" aria-label="Múi giờ"></div>
+  </div>
+</section>
+
+<section class="view" id="v-ind">
+  <div class="card"><h2>Đang dùng trên chart</h2><div id="actList"></div></div>
+  <div class="card" style="margin-top:14px"><div class="bar" style="margin-bottom:12px"><h2 style="margin:0">Kho indicator</h2><div class="tfs" id="indF"></div></div><div class="grid" id="indGrid"></div></div>
+</section>
+
+<section class="view" id="v-cs"><div id="csBody"></div></section>
+
+<section class="view" id="v-conn">
+  <div class="card" id="ctCard" style="max-width:560px">
+    <h2>Kết nối cTrader Open API</h2>
+    <p class="msg" style="margin:0 0 6px">Nhập thông tin ứng dụng cTrader Open API của bạn (Client ID, Client Secret lấy ở trang Applications của Spotware; Access Token lấy bằng OAuth cho tài khoản cần dùng). Trình duyệt nối thẳng tới <code>live/demo.ctraderapi.com:5036</code>, không qua worker.</p>
+    <p class="msg" style="margin:0 0 6px">Key được lưu trong localStorage của trình duyệt này, chỉ dùng để test ở máy cá nhân. Đừng đưa bản này lên hosting công khai.</p>
+    <label class="msg" for="cId">Client ID</label>
+    <div class="kv"><input id="cId" autocomplete="off" spellcheck="false"></div>
+    <label class="msg" for="cSec">Client Secret</label>
+    <div class="kv"><input id="cSec" type="password" autocomplete="off" spellcheck="false"><button class="btn ghost" type="button" data-show="cSec">Hiện</button></div>
+    <label class="msg" for="cTok">Access Token</label>
+    <div class="kv"><input id="cTok" type="password" autocomplete="off" spellcheck="false"><button class="btn ghost" type="button" data-show="cTok">Hiện</button></div>
+    <label class="msg" for="cAcc">Account ID hoặc số tài khoản (tuỳ chọn, để trống = tài khoản đầu tiên của token)</label>
+    <div class="kv"><input id="cAcc" autocomplete="off" spellcheck="false" inputmode="numeric"></div>
+    <label class="msg" for="cEnv">Môi trường</label>
+    <div class="kv"><select id="cEnv"><option value="auto">Tự nhận (theo tài khoản)</option><option value="live">Live</option><option value="demo">Demo</option></select></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" id="cSave" type="button">Lưu &amp; kết nối</button><button class="btn ghost" id="cClear" type="button">Xoá key</button><span class="msg" id="cMsg"></span></div>
+  </div>
+  <div class="card" id="cacheCard" style="max-width:560px;margin-top:14px">
+    <h2>Xoá cache của web</h2>
+    <p class="msg" style="margin:0 0 6px">Dùng khi vừa cập nhật source mà trang vẫn chạy bản cũ (ví dụ chưa thấy nút Replay). Nút này tải lại toàn bộ file của trang (JS, CSS, HTML), xoá Cache Storage và Service Worker rồi tải lại trang. Key cTrader, mã, khung giờ, indicator và các cài đặt khác được giữ nguyên.</p>
+    <div class="bar"><button class="btn ghost" id="cacheClr" type="button">Xoá cache &amp; tải lại</button><span class="msg" id="cacheMsg"></span></div>
+  </div>
+</section>
+
+</div></div>
+
+<script src="js/core.js"></script>
+<script src="js/symbols.js"></script>
+<script src="js/timezone.js"></script>
+<script src="js/ctrader.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/candle-style.js"></script>
+<script src="js/indicators-defs.js"></script>
+<script src="js/indicators-custom.js"></script>
+<script src="js/indicators-engine.js"></script>
+<script src="js/connection-ui.js"></script>
+<script src="js/init.js"></script>
+<script src="js/drawings-core.js"></script>
+<script src="js/volume-profile.js"></script>
+<script src="js/hvn-profile.js"></script>
+<script src="js/killzones.js"></script>
+<script src="js/goldbach.js"></script>
+<script src="js/qt.js"></script>
+<script src="js/orderflow-footprint.js"></script>
+<script src="js/orderflow-bigtrade.js"></script>
+<script src="js/orderflow-statistic.js"></script>
+<script src="js/orderflow-absorption.js"></script>
+<script src="js/orderflow-dom.js"></script>
+<script src="js/drawings-interact.js"></script>
+<script src="js/mobile.js"></script>
+<script src="js/replay.js"></script>
+<script src="js/paper-trading.js"></script>
+</body>
+</html>
