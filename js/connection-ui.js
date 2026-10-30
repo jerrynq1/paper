@@ -46,7 +46,7 @@ let cur="chart";
 function show(v){
   cur=v;document.body.dataset.v=v;V.forEach(([k])=>$("v-"+k).classList.toggle("on",k===v));
   $("nav").innerHTML=V.map(([k,n])=>`<button class="sb${k===v?" on":""}" data-v="${k}" title="${n}"><span class="ic">${IC[k]}</span><span class="lb">${n}</span></button>`).join("");
-  if(v==="ind")buildInd();
+  if(v==="ind"){buildInd();if(typeof dttBuildSettings==="function")dttBuildSettings()}
   if(v==="cs")buildCS();
   if(v==="conn")fillConn();
   document.body.classList.remove("so");

@@ -16,6 +16,26 @@ Vào mục **Kết nối**, nhập Client ID, Client Secret, Access Token (tuỳ
 
 > Client Secret và Access Token nằm trong trình duyệt nên bản này chỉ dùng để test ở máy cá nhân, đừng đưa lên hosting công khai.
 
+## Digital Time Theory (DTT) + Digital Root Engine
+
+DTT đã được tích hợp thành **overlay JavaScript native** của web (không chạy Pine Script trực tiếp). Indicator chỉ vẽ lên canvas overlay `#dw`; không thêm/xóa series nến, không sửa OHLC, không đổi price scale/time scale và không can thiệp replay.
+
+- Bật/tắt nhanh bằng nút **◉ DTT** trên thanh chart.
+- Mở **Indicator** để chỉnh timezone, Tick Size, Tick Root Anchor, số ngày lịch sử, nhóm New York / Asia / London và từng model.
+- Hiển thị các phiên, từng DTT model, inner-time markers, Root Candle rectangle kéo tới hết phiên chứa model, Weekly macro và Yearly macro trên D1.
+- Digital Root dashboard tính Time Root, Quote OHLC Root, Tick OHLC Root, Shape Root (Range / Body / Upper Wick / Lower Wick), Composite Root và quan hệ Exact / Group / Cross-group.
+- Cài đặt được lưu riêng trong `localStorage` (`tp_dtt_v1`); không ghi đè indicator hoặc drawings đang có.
+
+**Lưu ý về dữ liệu và độ chính xác**
+
+- Model time mặc định theo `America/New_York`, tự tính DST bằng IANA timezone. Có thể chọn timezone khác trong phần cài đặt; khi đổi timezone, các mốc model được diễn giải theo đồng hồ của timezone đã chọn.
+- Root Candle lấy OHLC của cây nến chart chứa phút Root Candle. Trên M5/M15/H1, đây là cây nến timeframe hiện tại chứa thời điểm đó, không phải nến M1 gốc.
+- Tick Size tự động mặc định bằng `10^-digits` vì chart cTrader hiện không cung cấp min-tick chuẩn cho tất cả symbol. Với Futures / CFD có bước giá khác độ chính xác hiển thị, hãy nhập Tick Size thủ công để Tick Root và Shape Root có ý nghĩa đúng.
+- Weekly macro dùng khoảng Sunday 17:00 đến Friday 17:00 theo timezone model và các phân đoạn 0.1125 / 0.36 / 0.5625; phần này được đánh dấu xấp xỉ. Yearly model chỉ vẽ trên D1; các mốc ngày là cách diễn giải từ bản DTT đã tích hợp, không tự điều chỉnh lịch đặc biệt của mọi thị trường.
+- Intraday history bị giới hạn tối đa 120 ngày để tránh tạo quá nhiều đối tượng canvas; có giới hạn số box/marker. Dữ liệu không được tải về thì indicator không thể vẽ lịch sử đó.
+
+Kiểm thử phần DTT: `node tests/dtt.test.js`.
+
 ## Thêm indicator mới
 
 Sửa `js/indicators-custom.js` (đã có sẵn một mẫu `IND.mine` và hướng dẫn cấu trúc ở đầu file), tải lại trang rồi thêm indicator ở mục **Indicator**. Các indicator có sẵn nằm ở `js/indicators-defs.js`, phần vẽ/tính toán ở `js/indicators-engine.js`.
@@ -29,12 +49,13 @@ Sửa `js/indicators-custom.js` (đã có sẵn một mẫu `IND.mine` và hư�
 - `js/orderflow-absorption.js`: Heavy Absorption (tính ngưỡng + vẽ marker); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.hab`)
 - `js/orderflow-dom.js`: DOM / MBO (kênh depth cTrader, bảng bên phải + histogram thanh khoản ở mép phải chart); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.dom`)
 - `js/hvn-profile.js`: HVN Profile (tính cụm HVN + vẽ canvas); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.hvn`)
+- `js/dtt.js`: Digital Time Theory (DTT) + Digital Root Engine (overlay canvas; khung phiên/model, Root Candle, Weekly/Yearly macro, Quote/Tick/OHLC Root)
 - `js/killzones.js`: Killzones & Pivots (tính phiên/pivot/level/D-W-M + vẽ canvas + bảng thống kê); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.kz`)
 - `js/goldbach.js`: Goldbach Levels (tính PO3 + level + vẽ canvas); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.gb`)
 - `js/qt.js`: Quarterly Theory (tính chu kỳ A-M-D-X + vẽ thanh các làn); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.qt`)
 - `js/replay.js`: Replay để backtest (thanh điều khiển nổi, cắt/nối lại mảng `m1`); `RP` và `RPLIM()` khai báo ở đầu `js/chart.js`
 - `js/drawings-*.js`, `js/mobile.js`: công cụ vẽ và cử chỉ cảm ứng
-- `tests/`: `node tests/footprint.test.js`, `node tests/customtf.test.js`, `node tests/hvn.test.js`, `node tests/hab.test.js`, `node tests/dom.test.js`, `node tests/replay.test.js`, `node tests/killzones.test.js`, `node tests/goldbach.test.js`, `node tests/qt.test.js`, `node tests/kinematics.test.js`
+- `tests/`: `node tests/dtt.test.js`, `node tests/footprint.test.js`, `node tests/customtf.test.js`, `node tests/hvn.test.js`, `node tests/hab.test.js`, `node tests/dom.test.js`, `node tests/replay.test.js`, `node tests/killzones.test.js`, `node tests/goldbach.test.js`, `node tests/qt.test.js`, `node tests/kinematics.test.js`
 
 ## Replay (backtest)
 

@@ -27,7 +27,7 @@
     <div class="symw"><input id="sym" title="Chọn mã giao dịch" aria-label="Mã" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="symDd" autocomplete="off" autocapitalize="characters" spellcheck="false"><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></div>
     <div class="tfs" id="tfs"></div>
     <span class="pill" id="st">Chưa kết nối</span><button class="btn ghost sm" id="pvtToggle" type="button" title="Kéo chọn vùng giá để lập bảng biến thiên">↔ Bảng biến thiên</button>
-    <button class="btn ghost sm" data-go="ind">ƒx Indicator</button><button class="btn ghost sm" data-go="cs">🎨 Màu nến</button><button class="btn ghost sm" id="rpB" type="button" aria-pressed="false" title="Replay: xem lại giá chạy để backtest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 4 12l7 6z"/><path d="M20 6l-7 6 7 6z"/></svg>Replay</button>
+    <button class="btn ghost sm" data-go="ind">ƒx Indicator</button><button class="btn ghost sm" id="dttBtn" type="button" aria-pressed="true" title="Bật/tắt Digital Time Theory">◉ DTT</button><button class="btn ghost sm" data-go="cs">🎨 Màu nến</button><button class="btn ghost sm" id="rpB" type="button" aria-pressed="false" title="Replay: xem lại giá chạy để backtest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 4 12l7 6z"/><path d="M20 6l-7 6 7 6z"/></svg>Replay</button>
 <div class="px"><span><small>Bid</small><b id="bid">–</b></span><span><small>Ask</small><b id="ask">–</b></span></div>
   </div>
   <div class="card" id="chartCard"><div id="ohlc"></div><div id="legend"></div><div id="cw"><div id="chart"></div><div id="panes"></div></div><div id="pvtSelection" aria-hidden="true"></div><section id="pvtPanel" class="pvt-panel" aria-label="Bảng biến thiên giá" hidden></section>
@@ -37,6 +37,7 @@
 </section>
 
 <section class="view" id="v-ind">
+  <div class="card dtt-settings" id="dttSettings" style="margin-bottom:14px"></div>
   <div class="card"><h2>Đang dùng trên chart</h2><div id="actList"></div></div>
   <div class="card" style="margin-top:14px"><div class="bar" style="margin-bottom:12px"><h2 style="margin:0">Kho indicator</h2><div class="tfs" id="indF"></div></div><div class="grid" id="indGrid"></div></div>
 </section>
@@ -86,6 +87,7 @@
 <script src="js/volume-profile.js"></script>
 <script src="js/hvn-profile.js"></script>
 <script src="js/killzones.js"></script>
+<script src="js/dtt.js"></script>
 <script src="js/goldbach.js"></script>
 <script src="js/qt.js"></script>
 <script src="js/orderflow-footprint.js"></script>
