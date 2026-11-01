@@ -70,13 +70,21 @@ const DTT_DEFAULTS={
   showSessionBoxes:true,showModelBoxes:true,showRootBoxes:true,showInner:true,showLabels:true,
   showWeekly:true,showYearly:true,showDashboard:true,
   groups:{ny:true,asia:true,london:true},
-  models:Object.fromEntries(DTT_MODEL_DEFS.map(x=>[x.id,true]))
+  models:Object.fromEntries(DTT_MODEL_DEFS.map(x=>[x.id,true])),
+  // Profile theo từng model: off | vp (Volume Profile) | tpo (Time Price Opportunity)
+  profileType:"vp",profileSide:"l",profileWidth:80,tpoMin:0,profSessions:false,
+  profModels:Object.fromEntries(DTT_MODEL_DEFS.map(x=>[x.id,true]))
 };
 function dttLoadSettings(){
   let saved={};try{saved=JSON.parse(localStorage.getItem(DTT_STORE_KEY)||"{}")||{}}catch{}
   const out={...DTT_DEFAULTS,...saved};
   out.groups={...DTT_DEFAULTS.groups,...(saved.groups||{})};
   out.models={...DTT_DEFAULTS.models,...(saved.models||{})};
+  out.profModels={...DTT_DEFAULTS.profModels,...(saved.profModels||{})};
+  if(!["off","vp","tpo"].includes(out.profileType))out.profileType="vp";
+  if(!["l","r"].includes(out.profileSide))out.profileSide="l";
+  out.profileWidth=Math.max(20,Math.min(100,Math.trunc(+out.profileWidth||80)));
+  out.tpoMin=[0,1,2,3,5,10,15,30,60].includes(+out.tpoMin)?+out.tpoMin:0;
   if(!["America/New_York","Etc/UTC","Europe/London","Asia/Ho_Chi_Minh"].includes(out.timeZone))out.timeZone="America/New_York";
   out.tickSize=Number.isFinite(+out.tickSize)&&+out.tickSize>=0?+out.tickSize:0;
   out.tickAnchor=Number.isFinite(+out.tickAnchor)?+out.tickAnchor:0;
@@ -138,7 +146,7 @@ function dttBuildCache(){
   if(!bars.length)return{boxes:[],roots:[],markers:[],weekRoots:[],yearly:[]};
   const firstDay=dttDateMinute(bars[0].utc,tz).key,lastDay=dttDateMinute(bars[bars.length-1].utc,tz).key;
   const boxes=[],roots=[],markers=[],weekRoots=[],yearly=[];
-  const addRangeBox=(name,start,end,color,alpha,kind)=>{const rg=dttRange(bars,start,end,tf);if(!rg)return;boxes.push({name,start,end,high:rg.high,low:rg.low,baseHigh:rg.high,baseLow:rg.low,color,alpha,kind,i0:from+rg.first})};
+  const addRangeBox=(name,start,end,color,alpha,kind,mid)=>{const rg=dttRange(bars,start,end,tf);if(!rg)return;boxes.push({name,start,end,high:rg.high,low:rg.low,baseHigh:rg.high,baseLow:rg.low,color,alpha,kind,mid,i0:from+rg.first})};
   const addRoot=(name,key,root,start,modelEnd,sessionEnd,color)=>{
     const rt=dttRootTime(key,root,start,modelEnd,tz),bar=dttBarAt(bars,rt,tf);if(!bar)return;
     // Root box kéo đến cuối MODEL (modelEndUtc), không phải cuối session.
@@ -151,19 +159,19 @@ function dttBuildCache(){
   if(tf<86400){
     const dayModels=DTT_MODEL_DEFS.filter(m=>o.groups[m.group]&&o.models[m.id]);
     for(let key=Math.max(firstDay-1,lastDay-days-2);key<=lastDay;key++){
-      if(o.showSessionBoxes){
+      if(o.showSessionBoxes||(o.profSessions&&o.profileType!=="off")){
         for(const s of [
           {name:"ASIA SESSION",group:"asia",start:1080,end:120,color:DTT_COLORS.asia},
           {name:"LONDON SESSION",group:"london",start:120,end:570,color:DTT_COLORS.london},
           {name:"NEW YORK SESSION",group:"ny",start:570,end:960,color:DTT_COLORS.ny}
         ]){
           if(!o.groups[s.group])continue;
-          const [a,b]=dttStartEnd(key,s.start,s.end,tz);addRangeBox(s.name,a,b,s.color,.035,"session");
+          const [a,b]=dttStartEnd(key,s.start,s.end,tz);addRangeBox(s.name,a,b,s.color,.035,"session",s.group);
         }
       }
       for(const m of dayModels){
         const [a,b]=dttStartEnd(key,m.start,m.end,tz);
-        if(o.showModelBoxes)addRangeBox(m.name,a,b,DTT_COLORS[m.group],.085,"model");
+        if(o.showModelBoxes||o.profileType!=="off")addRangeBox(m.name,a,b,DTT_COLORS[m.group],.085,"model",m.id);
         if(o.showRootBoxes)addRoot(m.name+" ROOT",key,m.root,m.start,m.end,dttUtcAt(m.se===120?key+1:key,m.se,tz),DTT_COLORS.root);
         if(o.showInner)for(const minute of m.inner){
           const k=(m.start>m.end&&minute<m.end)||minute>=1440?key+1:minute<0?key-1:key,mm=((minute%1440)+1440)%1440;
@@ -238,6 +246,7 @@ function dttX(utcSec){
   try{const st=u2s(utcSec);return ts.logicalToCoordinate(s2l(st))}catch{return null}
 }
 function dttDrawBox(b,w,h){
+  if((b.kind==="model"&&!DTT.options.showModelBoxes)||(b.kind==="session"&&!DTT.options.showSessionBoxes))return;
   let x0=dttX(b.start);const x1=dttX(b.end),y0=cs.priceToCoordinate(b.high),y1=cs.priceToCoordinate(b.low);
   // Cạnh trái bám vào cây nến ĐẦU TIÊN thật sự nằm trong khung (không nội suy theo giờ), tránh box bị kéo dài sang trái khi dữ liệu có khoảng trống quanh giờ nghỉ.
   if(b.i0!=null&&agg[b.i0]){const xi=ts.logicalToCoordinate(b.i0);if(xi!=null&&Number.isFinite(xi)&&(x0==null||!Number.isFinite(x0)||xi>x0))x0=xi}
@@ -249,6 +258,96 @@ function dttDrawBox(b,w,h){
   ctx.fillRect(l,t,Math.max(1,r-l),Math.max(1,bt-t));ctx.strokeRect(l+.5,t+.5,Math.max(1,r-l-1),Math.max(1,bt-t-1));ctx.restore();
   if(DTT.options.showLabels&&b.kind!=="root"&&r-l>35&&t>10&&l<w-20){ctx.save();ctx.font="600 10px 'Space Grotesk',sans-serif";ctx.fillStyle=dttRgba(b.color,.95);ctx.textAlign="left";ctx.textBaseline="bottom";ctx.fillText(b.name,l+4,t-2);ctx.restore()}
   if(DTT.options.showLabels&&b.kind==="root"&&r-l>50&&t>12&&l<w-20){ctx.save();ctx.font="600 9px 'Space Grotesk',sans-serif";ctx.fillStyle="#f5be37";ctx.textAlign="left";ctx.textBaseline="bottom";ctx.fillText("ROOT",l+3,t-2);ctx.restore()}
+}
+
+/* ----- Rect của box trên canvas (dùng chung cho box và profile) ----- */
+function dttBoxRect(b){
+  let x0=dttX(b.start);const x1=dttX(b.end),y0=cs.priceToCoordinate(b.high),y1=cs.priceToCoordinate(b.low);
+  if(b.i0!=null&&agg[b.i0]){const xi=ts.logicalToCoordinate(b.i0);if(xi!=null&&Number.isFinite(xi)&&(x0==null||!Number.isFinite(x0)||xi>x0))x0=xi}
+  if(x0==null||x1==null||y0==null||y1==null||![x0,x1,y0,y1].every(Number.isFinite))return null;
+  return{l:Math.min(x0,x1),r:Math.max(x0,x1),t:Math.min(y0,y1),bt:Math.max(y0,y1)};
+}
+
+/* ----- Volume Profile / TPO cho từng model: dùng lại vpCalc + vpDerive (volume-profile.js) và m1 ----- */
+const DTT_LETTERS="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const DTT_TPO_CACHE=new Map();
+function dttM1Lower(t){let lo=0,hi=m1.length;while(lo<hi){const k=(lo+hi)>>1;m1[k][0]<t?lo=k+1:hi=k}return lo}
+function dttTpoCalc(id,t0,t1){
+  const N=m1.length;if(!N)return null;
+  const o=DTT.options,last=m1[N-1],sig=[t0,t1,N,last[2],last[3],last[4],PDIG(),o.tpoMin].join(),c=DTT_TPO_CACHE.get(id);
+  if(c&&c.sig===sig)return c.P;
+  const U=1e5,I=x=>Math.round(x*U),lo=dttM1Lower(t0);
+  let pmin=Infinity,pmax=-Infinity,cnt=0,tEnd=t0;
+  for(let i=lo;i<N&&m1[i][0]<t1;i++){const x=m1[i],l=I(x[3]),h=I(x[2]);if(l<pmin)pmin=l;if(h>pmax)pmax=h;cnt++;tEnd=m1[i][0]+60}
+  if(!cnt){DTT_TPO_CACHE.set(id,{sig,P:null});return null}
+  const durMin=Math.max(1,(tEnd-t0)/60);let pm=+o.tpoMin||0;
+  if(!pm){for(const q of [1,2,3,5,10,15,30,60]){pm=q;if(Math.ceil(durMin/q)<=26)break}}
+  const tick=Math.pow(10,-PDIG()),want=Math.max(1,(pmax-pmin)/U/tick/60),p10=Math.pow(10,Math.floor(Math.log10(want))),mm=want/p10,k=(mm<=1?1:mm<=2?2:mm<=5?5:10)*p10;
+  let bI=Math.max(1,Math.round(tick*k*U)),bi0=Math.floor(pmin/bI),nL=Math.floor(pmax/bI)-bi0+1;
+  if(nL>600){bI*=Math.ceil(nL/600);bi0=Math.floor(pmin/bI);nL=Math.floor(pmax/bI)-bi0+1}
+  const nP=Math.max(1,Math.ceil((tEnd-t0)/(pm*60))),fl=new Uint8Array(nL*nP),row=p=>Math.floor(p/bI)-bi0;
+  for(let i=lo;i<N&&m1[i][0]<t1;i++){const x=m1[i],pi=Math.min(nP-1,Math.max(0,Math.floor((x[0]-t0)/(pm*60))));
+    for(let j=row(I(x[3])),e=row(I(x[2]));j<=e;j++)fl[j*nP+pi]=1}
+  const cn=new Int32Array(nL);let mx=0,tot=0;
+  for(let j=0;j<nL;j++){let a=0;for(let q=0;q<nP;q++)a+=fl[j*nP+q];cn[j]=a;tot+=a;if(a>mx)mx=a}
+  let poc=0,pv=-1;const mid=(nL-1)/2;
+  for(let j=0;j<nL;j++)if(cn[j]>pv||(cn[j]===pv&&Math.abs(j-mid)<Math.abs(poc-mid))){pv=cn[j];poc=j}
+  let vl=poc,vh=poc,sum=cn[poc];const tg=tot*.7;
+  while(sum<tg&&(vl>0||vh<nL-1)){const a=(vh+1<nL?cn[vh+1]:0)+(vh+2<nL?cn[vh+2]:0),b=(vl>0?cn[vl-1]:0)+(vl>1?cn[vl-2]:0);
+    if(vh>=nL-1||(vl>0&&b>a)){sum+=b;vl=Math.max(0,vl-2)}else{sum+=a;vh=Math.min(nL-1,vh+2)}}
+  const P={base:bi0*bI/U,bin:bI/U,n:nL,nP,pm,fl,cn,mx,poc,vl,vh};
+  DTT_TPO_CACHE.set(id,{sig,P});if(DTT_TPO_CACHE.size>300)DTT_TPO_CACHE.delete(DTT_TPO_CACHE.keys().next().value);return P;
+}
+function dttProfileFrame(b,R,P){
+  const o=DTT.options,fw=R.r-R.l,maxW=fw*(o.profileWidth/100),right=o.profileSide==="r",ax=right?R.r:R.l,dir=right?-1:1;
+  const pa=P.base,pb=P.base+P.n*P.bin,ya=cs.priceToCoordinate(pa),yb=cs.priceToCoordinate(pb);
+  if(ya==null||yb==null||ya===yb||!Number.isFinite(ya)||!Number.isFinite(yb))return null;
+  return{fw,maxW,right,ax,dir,pa,pb,Yp:p=>ya+(p-pa)*(yb-ya)/(pb-pa)};
+}
+function dttProfileLines(b,R,F,pocP,vahP,valP){
+  const dg=PDIG(),yP=F.Yp(pocP),yH=F.Yp(vahP),yL=F.Yp(valP);
+  ctx.strokeStyle="#f5be37";ctx.lineWidth=1.3;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(R.l,yP);ctx.lineTo(R.r,yP);ctx.stroke();
+  ctx.strokeStyle=dttRgba("#35b6ff",.7);ctx.lineWidth=1;ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(R.l,yH);ctx.lineTo(R.r,yH);ctx.moveTo(R.l,yL);ctx.lineTo(R.r,yL);ctx.stroke();ctx.setLineDash([]);
+  if(F.fw>90){ctx.font="600 9px 'Space Grotesk',sans-serif";ctx.textBaseline="bottom";ctx.textAlign=F.right?"left":"right";const x=F.right?R.l+3:R.r-3;
+    ctx.fillStyle="#f5be37";ctx.fillText("POC "+pocP.toFixed(dg),x,yP-1);ctx.fillStyle=dttRgba("#35b6ff",.95);ctx.fillText("VAH "+vahP.toFixed(dg),x,yH-1);ctx.textBaseline="top";ctx.fillText("VAL "+valP.toFixed(dg),x,yL+1)}
+}
+function dttDrawVP(b,R){
+  if(typeof vpCalc!=="function"||typeof vpDerive!=="function")return;
+  const d={id:"dtt|"+b.name+"|"+b.start,mt:0,src:"auto",vap:70},P=vpCalc(d,u2s(b.start),u2s(b.end));if(!P)return;
+  const S=vpDerive(d,P);if(!(S.mx>0))return;const F=dttProfileFrame(b,R,P);if(!F)return;
+  const rowH=Math.abs(F.Yp(F.pa+P.bin)-F.Yp(F.pa)),gap=rowH>4?1:0;
+  ctx.save();
+  const yVAH=F.Yp(F.pa+(S.vhi+1)*P.bin),yVAL=F.Yp(F.pa+S.vlo*P.bin);
+  ctx.fillStyle=dttRgba("#35b6ff",.07);ctx.fillRect(R.l,Math.min(yVAH,yVAL),R.r-R.l,Math.abs(yVAL-yVAH));
+  for(let i=0;i<P.n;i++){const v=P.vol[i];if(v<=0)continue;const y1=F.Yp(F.pa+(i+1)*P.bin),y2=F.Yp(F.pa+i*P.bin),y=Math.min(y1,y2),hh=Math.max(1,Math.abs(y2-y1)-gap);
+    if(y+hh<0||y>R.bt+2000)continue;const len=v/S.mx*F.maxW,inVA=i>=S.vlo&&i<=S.vhi;
+    ctx.fillStyle=i===P.poc?"rgba(245,190,55,.85)":dttRgba(b.color,inVA?.7:.45);ctx.fillRect(F.dir>0?F.ax:F.ax-len,y,len,hh)}
+  dttProfileLines(b,R,F,P.base+(P.poc+.5)*P.bin,P.base+(S.vhi+1)*P.bin,P.base+S.vlo*P.bin);
+  ctx.restore();
+}
+function dttDrawTPO(b,R){
+  const P=dttTpoCalc("tpo|"+b.name+"|"+b.start,u2s(b.start),u2s(b.end));if(!P||!(P.mx>0))return;
+  const F=dttProfileFrame(b,R,P);if(!F)return;
+  const rowH=Math.abs(F.Yp(F.pa+P.bin)-F.Yp(F.pa)),cell=Math.min(9,F.maxW/P.mx),letters=cell>=5&&rowH>=7,fs=Math.max(6,Math.min(rowH-1,cell/.62));
+  ctx.save();
+  const yH=F.Yp(F.pa+(P.vh+1)*P.bin),yL=F.Yp(F.pa+P.vl*P.bin);
+  ctx.fillStyle=dttRgba("#35b6ff",.07);ctx.fillRect(R.l,Math.min(yH,yL),R.r-R.l,Math.abs(yL-yH));
+  if(letters){ctx.font="600 "+fs.toFixed(1)+"px 'Space Grotesk',monospace";ctx.textAlign="center";ctx.textBaseline="middle"}
+  for(let j=0;j<P.n;j++){if(!P.cn[j])continue;const y1=F.Yp(F.pa+(j+1)*P.bin),y2=F.Yp(F.pa+j*P.bin),y=Math.min(y1,y2),hh=Math.max(1,Math.abs(y2-y1)-(rowH>4?1:0));
+    const inVA=j>=P.vl&&j<=P.vh,col=j===P.poc?"#f5be37":b.color;let c=0;
+    for(let q=0;q<P.nP;q++){if(!P.fl[j*P.nP+q])continue;const x=F.dir>0?F.ax+c*cell:F.ax-(c+1)*cell;c++;
+      if(letters){ctx.fillStyle=dttRgba(col,inVA||j===P.poc?1:.7);ctx.fillText(DTT_LETTERS[q%52],x+cell/2,y+hh/2+.5)}
+      else{ctx.fillStyle=dttRgba(col,inVA||j===P.poc?.85:.5);ctx.fillRect(x,y,Math.max(1,cell-.5),hh)}}}
+  dttProfileLines(b,R,F,P.base+(P.poc+.5)*P.bin,P.base+(P.vh+1)*P.bin,P.base+P.vl*P.bin);
+  ctx.restore();
+}
+function dttDrawProfiles(data,w,h){
+  const o=DTT.options;if(o.profileType==="off"||typeof m1==="undefined"||!m1.length)return;
+  for(const b of data.boxes||[]){
+    const on=b.kind==="model"?(b.mid&&o.profModels[b.mid]):b.kind==="session"?o.profSessions:false;if(!on)continue;
+    const R=dttBoxRect(b);if(!R||R.r<0||R.l>w||R.bt<0||R.t>h||R.r-R.l<8)continue;
+    if(o.profileType==="tpo")dttDrawTPO(b,R);else dttDrawVP(b,R);
+  }
 }
 function dttRgba(hex,a=1){const s=String(hex||"#ffffff").replace("#","");const n=parseInt(s.length===3?s.split("").map(x=>x+x).join(""):s.slice(0,6),16);const alpha=Number.isFinite(+a)?Math.max(0,Math.min(1,+a)):1;return`rgba(${n>>16&255},${n>>8&255},${n&255},${alpha})`}
 function dttDrawMarkers(list,w,h){
@@ -290,6 +389,7 @@ function drawDTT(w,h){
   try{
     const data=dttEnsureCache();dttPatchLiveBar(data);
     for(const b of data.boxes||[])dttDrawBox(b,w,h);
+    dttDrawProfiles(data,w,h);
     for(const b of data.roots||[])dttDrawBox(b,w,h);
     dttDrawMarkers(data.markers||[],w,h);
     dttRenderDashboard();
@@ -310,13 +410,27 @@ function dttBuildSettings(){
   </div>
   <div class="dtt-toggles">${check("showSessionBoxes","Khung phiên tổng (Asia / London / New York)",o.showSessionBoxes)}${check("showModelBoxes","Khung từng model",o.showModelBoxes)}${check("showRootBoxes","Root Candle rectangle kéo đến hết phiên/model",o.showRootBoxes)}${check("showInner","Inner interval markers",o.showInner)}${check("showLabels","Tên model / Root label",o.showLabels)}${check("showWeekly","Weekly macro models (xấp xỉ)",o.showWeekly)}${check("showYearly","Yearly macro models (D1)",o.showYearly)}${check("showDashboard","Digital Root dashboard",o.showDashboard)}</div>
   <div class="dtt-groups"><section><h3>New York</h3>${check("group:ny","Bật nhóm New York",o.groups.ny)}${modelRows("ny")}</section><section><h3>Asia</h3>${check("group:asia","Bật nhóm Asia",o.groups.asia)}${modelRows("asia")}</section><section><h3>London</h3>${check("group:london","Bật nhóm London",o.groups.london)}${modelRows("london")}</section></div>
+  <div class="dtt-options">
+    <label class="dtt-field">Profile cho từng model<select data-dtt="profileType"><option value="off"${o.profileType==="off"?" selected":""}>Tắt</option><option value="vp"${o.profileType==="vp"?" selected":""}>Volume Profile</option><option value="tpo"${o.profileType==="tpo"?" selected":""}>TPO (chữ cái)</option></select></label>
+    <label class="dtt-field">Vị trí profile trong box<select data-dtt="profileSide"><option value="l"${o.profileSide==="l"?" selected":""}>Bám trái</option><option value="r"${o.profileSide==="r"?" selected":""}>Bám phải</option></select></label>
+    <label class="dtt-field">Bề rộng profile (% box)<input type="number" min="20" max="100" step="5" data-dtt="profileWidth" value="${o.profileWidth}"></label>
+    <label class="dtt-field">Chu kỳ chữ TPO<select data-dtt="tpoMin">${[[0,"Tự động"],[1,"1 phút"],[2,"2 phút"],[3,"3 phút"],[5,"5 phút"],[10,"10 phút"],[15,"15 phút"],[30,"30 phút"],[60,"60 phút"]].map(x=>`<option value="${x[0]}"${+o.tpoMin===x[0]?" selected":""}>${x[1]}</option>`).join("")}</select></label>
+  </div>
+  <div class="dtt-toggles">${check("profSessions","Profile cho cả khung phiên tổng (Asia / London / New York)",o.profSessions)}</div>
+  <div class="dtt-groups">${["asia","london","ny"].map(g=>`<section><h3>Profile · ${g==="ny"?"New York":g==="asia"?"Asia":"London"}</h3>${DTT_MODEL_DEFS.filter(m=>m.group===g).map(m=>check("prof:"+m.id,m.name,o.profModels[m.id])).join("")}</section>`).join("")}</div>
   <p class="msg dtt-note">Thời gian model được diễn giải theo timezone đã chọn; các mốc trong tài liệu được trích xuất từ PDF và một số weekly/yearly là xấp xỉ. Trên chart lớn hơn M1, Root Candle là cây nến chart chứa phút mục tiêu. Yearly chỉ vẽ trên D1. Tick Size tự động dùng 10^-digits nếu cTrader chưa cung cấp min tick riêng.</p>`;
 }
 function dttSetValue(key,value){
   const o=DTT.options;
-  if(key.startsWith("model:")){const id=key.slice(6);if(id in o.models)o.models[id]=!!value}
+  if(key.startsWith("prof:")){const id=key.slice(5);if(id in o.profModels)o.profModels[id]=!!value}
+  else if(key.startsWith("model:")){const id=key.slice(6);if(id in o.models)o.models[id]=!!value}
   else if(key.startsWith("group:")){const id=key.slice(6);if(id in o.groups)o.groups[id]=!!value}
   else if(["enabled","showSessionBoxes","showModelBoxes","showRootBoxes","showInner","showLabels","showWeekly","showYearly","showDashboard"].includes(key))o[key]=!!value;
+  else if(key==="profSessions")o.profSessions=!!value;
+  else if(key==="profileType")o.profileType=["off","vp","tpo"].includes(value)?value:"vp";
+  else if(key==="profileSide")o.profileSide=value==="r"?"r":"l";
+  else if(key==="profileWidth")o.profileWidth=Math.max(20,Math.min(100,Math.round(Number(value)||80)));
+  else if(key==="tpoMin")o.tpoMin=[0,1,2,3,5,10,15,30,60].includes(+value)?+value:0;
   else if(key==="timeZone")o.timeZone=value;
   else if(key==="tickSize")o.tickSize=Math.max(0,Number(value)||0);
   else if(key==="tickAnchor")o.tickAnchor=Number(value)||0;
