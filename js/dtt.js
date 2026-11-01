@@ -138,7 +138,7 @@ function dttBuildCache(){
   if(!bars.length)return{boxes:[],roots:[],markers:[],weekRoots:[],yearly:[]};
   const firstDay=dttDateMinute(bars[0].utc,tz).key,lastDay=dttDateMinute(bars[bars.length-1].utc,tz).key;
   const boxes=[],roots=[],markers=[],weekRoots=[],yearly=[];
-  const addRangeBox=(name,start,end,color,alpha,kind)=>{const rg=dttRange(bars,start,end,tf);if(!rg)return;boxes.push({name,start,end,high:rg.high,low:rg.low,baseHigh:rg.high,baseLow:rg.low,color,alpha,kind})};
+  const addRangeBox=(name,start,end,color,alpha,kind)=>{const rg=dttRange(bars,start,end,tf);if(!rg)return;boxes.push({name,start,end,high:rg.high,low:rg.low,baseHigh:rg.high,baseLow:rg.low,color,alpha,kind,i0:from+rg.first})};
   const addRoot=(name,key,root,start,modelEnd,sessionEnd,color)=>{
     const rt=dttRootTime(key,root,start,modelEnd,tz),bar=dttBarAt(bars,rt,tf);if(!bar)return;
     // Root box kéo đến cuối MODEL (modelEndUtc), không phải cuối session.
@@ -238,7 +238,9 @@ function dttX(utcSec){
   try{const st=u2s(utcSec);return ts.logicalToCoordinate(s2l(st))}catch{return null}
 }
 function dttDrawBox(b,w,h){
-  const x0=dttX(b.start),x1=dttX(b.end),y0=cs.priceToCoordinate(b.high),y1=cs.priceToCoordinate(b.low);
+  let x0=dttX(b.start);const x1=dttX(b.end),y0=cs.priceToCoordinate(b.high),y1=cs.priceToCoordinate(b.low);
+  // Cạnh trái bám vào cây nến ĐẦU TIÊN thật sự nằm trong khung (không nội suy theo giờ), tránh box bị kéo dài sang trái khi dữ liệu có khoảng trống quanh giờ nghỉ.
+  if(b.i0!=null&&agg[b.i0]){const xi=ts.logicalToCoordinate(b.i0);if(xi!=null&&Number.isFinite(xi)&&(x0==null||!Number.isFinite(x0)||xi>x0))x0=xi}
   if(x0==null||x1==null||y0==null||y1==null||![x0,x1,y0,y1].every(Number.isFinite))return;
   const l=Math.min(x0,x1),r=Math.max(x0,x1),t=Math.min(y0,y1),bt=Math.max(y0,y1);
   if(r<0||l>w||bt<0||t>h)return;
