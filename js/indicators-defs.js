@@ -213,5 +213,59 @@ const IND={
  cvd:{n:"CVD",t:"osc",ver:2,rc:true,fm:"vol",pf:"vol",d:"Cumulative Volume Delta: delta cộng dồn theo chu kỳ neo, vẽ dạng nến. Ước lượng từ nến M1 (tick volume MT5), không phải dữ liệu tick thật.",
   p:[["anchor","Chu kỳ neo","Session","s",{o:ANCH,tt:"CVD được đặt lại về 0 mỗi khi sang chu kỳ mới (theo giờ server MT5)."}]],
   c:["@up","@dn"],L:["CVD tăng","CVD giảm"],hl:[{y:0,al:.5}],lab:p=>p.anchor,
-  f:(A,p,E,a)=>dCandles(A,perKey(p.anchor),a,E,(l,o)=>l>=o)}
+  f:(A,p,E,a)=>dCandles(A,perKey(p.anchor),a,E,(l,o)=>l>=o)},
+
+ /* =================== VSA WYCKOFF VOLUME ===================
+    Histogram volume tô màu theo 6 mức + đường Wilder MA.
+    Label pattern VSA được vẽ lên chart chính bởi vsa.js (drawVSA).
+    =========================================================== */
+ vsa:{n:"VSA Wyckoff Volume",t:"osc",ver:1,fm:"vol",pf:"vol",
+  d:"Volume tô màu 6 mức (Ultra / Very High / High / Normal / Low / Very Low) theo Wilder MA, kèm nhận diện và label tín hiệu VSA Wyckoff trực tiếp trên chart (Stopping Volume, Upthrust, No Demand, No Supply, Shakeout, Climax …).",
+  p:[
+    ["maLen","MA Length (Wilder)",20,"i",{min:2,max:500,tt:"Độ dài Wilder Moving Average áp trên volume. Giống công thức Pine: nz(ma[1]) + (vol − nz(ma[1])) / length."}],
+    ["rUltra",  "Ultra High Ratio",2.2,"n",{min:1,step:0.1,tt:"vol ≥ MA × ratio này → Ultra High (tím)"}],
+    ["rVHigh",  "Very High Ratio", 1.8,"n",{min:1,step:0.1}],
+    ["rHigh",   "High Ratio",      1.2,"n",{min:0.5,step:0.1}],
+    ["rNormal", "Normal Ratio",    0.8,"n",{min:0.1,step:0.1}],
+    ["rLow",    "Low Ratio",       0.4,"n",{min:0.1,step:0.1}],
+    ["showMA",  "Hiện đường MA",true,"b"],
+    ["syncVSA", "Đồng bộ ratio sang VSA canvas",true,"b",{tt:"Khi bật, thay đổi ratio ở đây sẽ tự cập nhật vào cài đặt VSA label (vsa.js) và xóa cache."}]
+  ],
+  c:["#aa44ff","#e02020","#e07020","#26c882","#3a7abf","#888888","#26c882"],
+  L:["Ultra High","Very High","High","Normal","Low","Very Low","Volume MA"],
+  hl:[],lab:p=>`MA ${p.maLen}`,
+  f:(A,p)=>{
+    const vols=A.v;
+    // Wilder MA
+    const maArr=new Array(vols.length).fill(null);
+    let ma=null;
+    for(let i=0;i<vols.length;i++){
+      const v=vols[i]??0;
+      ma=ma===null?v:ma+(v-ma)/Math.max(2,Math.round(p.maLen||20));
+      maArr[i]=ma;
+    }
+    // Sync ratios to VSA canvas engine if requested
+    if(p.syncVSA&&typeof VSA!=="undefined"){
+      const o=VSA.options;
+      let changed=false;
+      if(o.ratioUltra!==p.rUltra){o.ratioUltra=p.rUltra;changed=true}
+      if(o.ratioVeryHigh!==p.rVHigh){o.ratioVeryHigh=p.rVHigh;changed=true}
+      if(o.ratioHigh!==p.rHigh){o.ratioHigh=p.rHigh;changed=true}
+      if(o.ratioNormal!==p.rNormal){o.ratioNormal=p.rNormal;changed=true}
+      if(o.ratioLow!==p.rLow){o.ratioLow=p.rLow;changed=true}
+      if(o.maLen!==Math.round(p.maLen)){o.maLen=Math.round(p.maLen);changed=true}
+      if(changed)vsaSave();
+    }
+    // Color-coded histogram
+    const hist=vols.map((v,i)=>{
+      if(v==null)return null;
+      const m=maArr[i];if(!m)return{v,c:"#888888"};
+      const r=v/m;
+      const c=r>=p.rUltra?"#aa44ff":r>=p.rVHigh?"#e02020":r>=p.rHigh?"#e07020":r>=p.rNormal?"#26c882":r>=p.rLow?"#3a7abf":"#888888";
+      return{v,c};
+    });
+    const S=[{k:"h",d:hist}];
+    if(p.showMA)S.push({k:"l",d:maArr,ci:6,lw:1.5});
+    return S;
+  }}
 };

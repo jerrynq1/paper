@@ -139,9 +139,13 @@ function dttBuildCache(){
   const firstDay=dttDateMinute(bars[0].utc,tz).key,lastDay=dttDateMinute(bars[bars.length-1].utc,tz).key;
   const boxes=[],roots=[],markers=[],weekRoots=[],yearly=[];
   const addRangeBox=(name,start,end,color,alpha,kind)=>{const rg=dttRange(bars,start,end,tf);if(!rg)return;boxes.push({name,start,end,high:rg.high,low:rg.low,baseHigh:rg.high,baseLow:rg.low,color,alpha,kind})};
-  const addRoot=(name,key,root,start,modelEnd,parentEnd,color)=>{
+  const addRoot=(name,key,root,start,modelEnd,sessionEnd,color)=>{
     const rt=dttRootTime(key,root,start,modelEnd,tz),bar=dttBarAt(bars,rt,tf);if(!bar)return;
-    roots.push({name,start:bar.utc,end:parentEnd,high:bar.high,low:bar.low,baseHigh:bar.high,baseLow:bar.low,color:DTT_COLORS.root,kind:"root"});
+    // Root box kéo đến cuối MODEL (modelEndUtc), không phải cuối session.
+    // Dùng sessionEnd chỉ khi model wrap qua nửa đêm để tính đúng key.
+    const overnight=modelEnd<=start;
+    const modelEndUtc=dttUtcAt(overnight?key+1:key,modelEnd,tz);
+    roots.push({name,start:bar.utc,end:modelEndUtc,high:bar.high,low:bar.low,baseHigh:bar.high,baseLow:bar.low,color:DTT_COLORS.root,kind:"root"});
   };
   // Intraday models and session overview. Include the prior local date for Asia windows crossing midnight.
   if(tf<86400){
@@ -207,7 +211,7 @@ function dttCacheKey(){
 }
 function dttPatchLiveBar(data){
   const b=agg[agg.length-1];if(!b||!data)return;
-  const utc=s2u(b.st),end=utc+Math.max(1,+C.tf||60),all=[...(data.boxes||[]),...(data.roots||[])];
+  const utc=s2u(b.st),barEnd=utc+Math.max(1,+C.tf||60),all=[...(data.boxes||[]),...(data.roots||[])];
   for(const box of all){
     if(box.kind==="root"){
       // Chỉ cập nhật biên Root Candle khi chính cây nến gốc vẫn đang hình thành.
@@ -215,9 +219,13 @@ function dttPatchLiveBar(data){
         box.high=Math.max(box.baseHigh==null?box.high:box.baseHigh,b.high);
         box.low=Math.min(box.baseLow==null?box.low:box.baseLow,b.low);
       }
+      // Root box không bao giờ extend biên giá qua live bar — chỉ giữ nguyên hình chữ nhật gốc.
       continue;
     }
-    if(utc<box.end&&end>box.start){
+    // Chỉ extend box khi live bar THỰC SỰ nằm trong khoảng [box.start, box.end).
+    // Điều kiện barEnd > box.start đảm bảo bar chạm vào box; utc < box.end đảm bảo box chưa đóng.
+    // Thêm guard: box.end phải lớn hơn box.start (tránh trường hợp end=0 hoặc bị lỗi qua nửa đêm).
+    if(box.end>box.start&&utc<box.end&&barEnd>box.start){
       box.high=Math.max(box.baseHigh==null?box.high:box.baseHigh,b.high);
       box.low=Math.min(box.baseLow==null?box.low:box.baseLow,b.low);
     }
