@@ -1,6 +1,6 @@
 /* Binance XAU Options: direct browser WebSocket streams, normalization and dashboard tests. */
 const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
-const ids=['v-options','optExpiry','optStatus','optMetrics','optExposure','optGreeks','optChainBody','optMeta','optErrors','optRefresh','optMode','optExplain','optMethod','optExposureMetric','optExposureTitle','optExposureUnits','optFlowBody'];
+const ids=['v-options','optExpiry','optStatus','optMetrics','optExposure','optGreeks','optChainBody','optMeta','optErrors','optRefresh','optMode','optExplain','optMethod','optExposureMetric','optExposureTitle','optExposureUnits','optFlowBody','optLevels','optCopyLevels','optOIChart','optOIWall','optThetaChart','optThetaWall','optModelReset','optModelSpot','optModelDte','optModelRate','optModelYield','optSurfaceMin','optSurfaceMax','optGreekSurfaceMin','optGreekSurfaceMax','optSurface','optSurfaceNote','optSurfaceMetric','optSurfaceReset','optGreekSurface','optGreekSurfaceNote','optGreekMetric','optGreekSide','optGreekReset'];
 const els=Object.fromEntries(ids.map(id=>[id,{id,innerHTML:'',textContent:'',className:'',value:'',hidden:false,disabled:false,handlers:{},addEventListener(k,fn){this.handlers[k]=fn}}]));
 const fakeTimers=new Map();let timerId=0;
 function setTimeoutFake(fn,ms){const id=++timerId;fakeTimers.set(id,{fn,ms});return id}
@@ -45,10 +45,13 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','options.js'),'utf
   assert.strictEqual(els.optExpiry.value,String(expiry));
   const oiWs=FakeWebSocket.instances.find(ws=>ws.url.endsWith('/market/ws/xauusdt@openInterest@261106'));
   assert(oiWs,'selected-expiry OI socket created after mark universe arrives');
-  oiWs.open();
+  const tickerWs=FakeWebSocket.instances.find(ws=>ws.url.endsWith('/public/ws/xauusdt@optionTicker261106'));
+  assert(tickerWs,'selected-expiry 24h ticker socket created');
+  tickerWs.open();
   const indexWs=FakeWebSocket.instances.find(ws=>ws.url.endsWith('/!index@arr'));
   indexWs.message([{e:'indexPrice',E:Date.now(),s:'XAUUSDT',i:'4000'}]);
   oiWs.message(symbols.map((symbol,i)=>({e:'openInterest',E:Date.now(),s:symbol,o:String(100+i*10),h:'400000'})));
+  tickerWs.message({e:'24hrTicker',E:Date.now(),s:symbols[0],c:'10.6',v:'150',q:'1590',n:27,P:'3.4',h:'11',l:'9',O:Date.now()-86400000,C:Date.now()});
   const tradeWs=FakeWebSocket.instances.find(ws=>ws.url.endsWith('/public/ws/xauusdt@optionTrade'));
   tradeWs.message({e:'trade',E:Date.now(),T:Date.now(),s:symbols[0],t:123,p:'10.5',q:'2',X:'MARKET',S:'BUY',m:false});
   flushRenderTimers();
@@ -57,11 +60,21 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','options.js'),'utf
   assert.strictEqual((els.optChainBody.innerHTML.match(/<td/g)||[]).length,30,'two strikes × 15 columns');
   assert(els.optChainBody.innerHTML.includes('1.200')&&els.optChainBody.innerHTML.includes('-0.500'));
   assert(els.optExposure.innerHTML.includes('opt-gex-row'));
+  assert(els.optLevels.innerHTML.includes('GAMMA FLIP')&&els.optLevels.innerHTML.includes('OI WALL'),'key levels render');
+  assert(els.optOIChart.innerHTML.includes('<svg')&&els.optThetaChart.innerHTML.includes('<svg'),'OI and Theta strike charts render');
   assert(els.optGreeks.innerHTML.includes('Gamma Exposure')&&els.optGreeks.innerHTML.includes('Vega')&&els.optGreeks.innerHTML.includes('Theta'));
   assert(els.optMetrics.innerHTML.includes('XAU INDEX')&&els.optMetrics.innerHTML.includes('PUT / CALL'));
   assert(els.optStatus.textContent.includes('Live'));
   assert(els.optFlowBody.innerHTML.includes('BUY'));
-  assert(els.optMeta.innerHTML.includes('OI records'));
+  assert(els.optFlowBody.innerHTML.includes('24H CONTRACT ACTIVITY'));
+  assert(els.optOIWall.textContent.includes('OI Wall:'));
+  assert(els.optThetaWall.textContent.includes('Max |Theta|:'));
+  assert(context.window.optionsDebug().surfaceScenario.S===4000,'surface scenario defaults to live spot');
+  els.optModelSpot.value='4100';els.optModelDte.value='7';els.optModelRate.value='5';els.optModelYield.value='1';els.optModelSpot.handlers.input();
+  const scenario=context.window.optionsDebug().surfaceScenario;
+  assert.strictEqual(scenario.S,4100);assert.strictEqual(scenario.T,7/365);assert.strictEqual(scenario.rate,.05);assert.strictEqual(scenario.q,.01);
+  els.optModelReset.handlers.click();assert.strictEqual(context.window.optionsDebug().surfaceScenario.S,4000);
+  assert(els.optMeta.innerHTML.includes('OI:')&&els.optMeta.innerHTML.includes('records'));
   console.log('ok  Direct Binance WebSocket mark stream builds all XAU option contracts');
   console.log('ok  Index Price stream and embedded mark index update spot');
   console.log('ok  Expiry-specific Open Interest WebSocket builds OI aggregates and Exposure');
@@ -74,7 +87,12 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','options.js'),'utf
   els.optExposureMetric.value='vega';els.optExposureMetric.handlers.change();
   assert.strictEqual(els.optExposureTitle.textContent,'Vega Exposure by Strike');
   assert.strictEqual(els.optExposureUnits.textContent,'Binance native units');
-  console.log('ok  Delta / Gamma / Vega / Theta exposure selector');
+  assert(els.optLevels.innerHTML.includes('NET VGEX'),'net level follows the selected exposure metric');
+  els.optExposureMetric.value='vanna';els.optExposureMetric.handlers.change();
+  assert.strictEqual(els.optExposureTitle.textContent,'Vanna Exposure by Strike');
+  assert(els.optLevels.innerHTML.includes('NET VEX'),'net level follows Vanna exposure');
+  console.log('ok  GEX / DEX / VEX / VGEX / CHEX / THEX exposure selector');
+  console.log('ok  Key levels, Open Interest by Strike and Theta by Strike render');
 
   context.window.optionsSetActive(false);
   assert(FakeWebSocket.instances.every(ws=>ws.readyState===3),'leaving Options closes all stream sockets');

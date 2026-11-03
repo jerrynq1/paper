@@ -235,6 +235,17 @@ Gamma Exposure cho biến động 1% = Σ(Gamma × OI × contract unit × S² ×
 
 Contract unit/multiplier của XAUUSDT là 1. Vega và Theta được cộng theo native units Binance phát; không tự ý đổi scale.
 
+### Phần phân tích được bổ sung
+
+- **Key Levels**: Call Wall, Put Wall (strike có trị tuyệt đối Call/Put GEX cao nhất), Gamma Flip (điểm cumulative GEX đổi dấu), Wall của metric đang chọn, OI Wall và Net Exposure của metric đang chọn.
+- **Open Interest by Strike**: biểu đồ Call/Put OI, đánh dấu OI Wall và hiển thị số hợp đồng; **Theta by Strike**: Call/Put Theta × OI, có đường zero và Max |Theta|.
+- **Exposure selector**: GEX, DEX, VEX, VGEX, CHEX, THEX. GEX/DEX/VGEX/THEX dựa trên Greeks Binance; VEX/CHEX là ước lượng Black–Scholes vì mark stream không cung cấp Vanna/Charm.
+- **Copy Levels**: sao chép Spot, CW/PW, Gamma Flip, OI Wall, top 10 GEX strikes và các metric walls; thêm Net GEX/Net metric đang chọn.
+- **Exposure Surface / Greek Surface**: mô phỏng strike × time-to-expiry bằng Three.js; có thể xoay bằng kéo, zoom bằng wheel/pinch và reset camera. Greek Surface chọn Greek và Call/Put riêng.
+- **Surface Scenario Parameters**: thay đổi Spot (S), DTE, risk-free rate (r) và yield (q). Để trống dùng Spot/expiry/rate live và q = 0; Auto / Reset khôi phục chế độ này. Các giả định chỉ tác động Surface, không ghi đè dữ liệu realtime ở Option Chain, OI hay Exposure bars.
+- Surface giữ Mark IV và OI cố định; Delta/Gamma/Vega/Theta được scale-calibrate theo mark Greeks Binance ở điều kiện live rồi mới chiếu sang kịch bản. Vanna/Charm vẫn là model estimate; expiry settlement time được ước tính theo ngày lịch vì feed không cung cấp timestamp settlement chính xác.
+
+
 Open Interest không xác định bên Long/Short hay vị thế dealer. Exposure Scenario Long/Short chỉ là hai giả định đảo dấu trên cùng OI, không phải dealer positioning thật. XAU Commodity Options là hợp đồng European-style, USDT-settled; retail chỉ được mở vị thế mua.
 
 ### Vận hành
