@@ -1,6 +1,6 @@
 /* ================= MARKET PROFILE / TPO CHART =================
-   Standalone TPO profile. It only reads the existing M1/footprint feed and
-   draws to the existing overlay canvas; it never changes candle series,
+   Standalone TPO profile workspace. It only reads the existing M1/footprint feed
+   and draws in its own PRICE x TIME table; it never changes candle series,
    price/time scales, chart data, replay state, or drawing objects.
 
    Source basis: CBOT Market Profile Study Guide (1996). Where only cTrader
@@ -14,7 +14,7 @@ const TPO_DEFAULTS={
   periodMin:30,letterMode:"cbot24",sessionPick:"current",rowStep:0,
   valueArea:70,valueMode:"tpo",ibMinutes:60,side:"r",widthPct:48,cellWidth:9,
   showValueArea:true,showIB:true,showSinglePrints:true,showStats:true,
-  showPriceLabels:true,showCounts:false,showDayType:true,showFairPrice:true,
+  showPriceLabels:true,showCounts:true,showDayType:true,showFairPrice:true,
   showRangeExtension:true,showPioneerRange:false
 };
 function tpoLoadSettings(){
@@ -37,8 +37,6 @@ function tpoLoadSettings(){
   return o;
 }
 const TPO={options:tpoLoadSettings(),cache:new Map(),last:null};
-function tpoSave(){try{localStorage.setItem(TPO_STORE_KEY,JSON.stringify(TPO.options))}catch{}TPO.cache.clear();TPO.last=null;tpoSyncButton();if(!TPO.options.enabled)tpoHideDash();if(typeof dirty!=="undefined")dirty=true}
-function tpoSyncButton(){const b=$("tpoBtn");if(!b)return;b.classList.toggle("on",!!TPO.options.enabled);b.setAttribute("aria-pressed",TPO.options.enabled?"true":"false")}
 function tpoTimeParts(sec,tz){
   const d=new Date(sec*1000),p={};
   new Intl.DateTimeFormat("en-US",{timeZone:tz,year:"numeric",month:"numeric",day:"numeric",hour:"numeric",minute:"numeric",second:"numeric",hourCycle:"h23"}).formatToParts(d).forEach(x=>{if(x.type!=="literal")p[x.type]=+x.value});
@@ -169,128 +167,191 @@ function tpoProfileForView(){
   const last=m1.length-1;if(last<0)return null;
   const ts0=typeof s2u==="function"?s2u(m1[last][0]):m1[last][0],s0=tpoSessionForTimestamp(ts0,o),session=o.sessionPick==="previous"?tpoPreviousSession(s0,o):s0,tail=m1[m1.length-1];
   const fph=typeof FPH==="undefined"?0:FPH, fplv=typeof FPLV==="undefined"?0:FPLV, fpv=typeof FPV==="undefined"?0:FPV;
-  const sig=[session.start,session.end,m1.length,tail[0],tail[2],tail[3],tail[4],tail[5],fph,fplv,fpv,JSON.stringify(o),typeof RP!=="undefined"&&RP.on?"replay":"live"].join("|");
-  const c=TPO.cache.get("profile");if(c&&c.sig===sig)return c.P;
-  const P=tpoCalcProfile(m1,o,session);TPO.cache.set("profile",{sig,P});TPO.last=P;if(TPO.cache.size>4)TPO.cache.delete(TPO.cache.keys().next().value);return P;
+  const symbol=typeof C!=="undefined"?C.sym:"",sig=[symbol,session.start,session.end,m1.length,tail[0],tail[2],tail[3],tail[4],tail[5],fph,fplv,fpv,JSON.stringify(o),typeof RP!=="undefined"&&RP.on?"replay":"live"].join("|");
+  const c=TPO.cache.get("profile");if(c&&c.sig===sig){TPO._profileSig=sig;return c.P}
+  const P=tpoCalcProfile(m1,o,session);TPO.cache.set("profile",{sig,P});TPO.last=P;TPO._profileSig=sig;if(TPO.cache.size>4)TPO.cache.delete(TPO.cache.keys().next().value);return P;
 }
 function tpoFmt(v){if(v==null||v===""||!Number.isFinite(Number(v)))return"—";return Number(v).toFixed(typeof PDIG==="function"?PDIG():2)}
-function tpoDrawLine(y,w,color,dash,label,xText){
-  if(y==null||!Number.isFinite(y))return;ctx.save();ctx.strokeStyle=color;ctx.lineWidth=1.1;ctx.setLineDash(dash||[]);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();ctx.setLineDash([]);
-  if(label){ctx.font="600 9px 'Space Grotesk',sans-serif";ctx.textAlign="left";ctx.textBaseline="bottom";ctx.fillStyle=color;ctx.fillText(label,xText==null?4:xText,y-2)}ctx.restore();
+function tpoEsc(v){return String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function tpoActivate(on){
+  on=!!on;if(TPO.options.enabled===on){if(on)tpoRenderStandalone(true);return}
+  TPO.options.enabled=on;TPO.cache.clear();TPO.last=null;
+  try{localStorage.setItem(TPO_STORE_KEY,JSON.stringify(TPO.options))}catch{}
+  if(on)tpoRenderStandalone(true);
 }
-function tpoEnsureDash(){
-  if(TPO.dash)return TPO.dash;
-  const el=document.createElement("div");el.id="tpoDash";el.className="tpo-dash";el.setAttribute("aria-label","Market Profile TPO summary");$("chart").appendChild(el);TPO.dash=el;return el;
+function tpoSetCanvas(canvas,w,h){
+  if(!canvas)return null;const dpr=Math.max(1,Math.min(3,(typeof window!=="undefined"&&window.devicePixelRatio)||1));
+  canvas.style.width=w+"px";canvas.style.height=h+"px";
+  const W=Math.max(1,Math.round(w*dpr)),H=Math.max(1,Math.round(h*dpr));
+  if(canvas.width!==W)canvas.width=W;if(canvas.height!==H)canvas.height=H;
+  const g=canvas.getContext("2d");if(!g)return null;g.setTransform(dpr,0,0,dpr,0,0);return g;
 }
-function tpoHideDash(){if(TPO.dash)TPO.dash.style.display="none"}
-function tpoRenderDash(profile){
-  const o=TPO.options,el=tpoEnsureDash();if(!o.showStats||!profile){el.style.display="none";return}
-  const fmt=tpoFmt,mode=profile.valueModeUsed==="tpo"? (o.valueMode==="tick"?"TPO count (no tick volume)":"TPO count") : "M1 tick-volume proxy";
-  const html=`<div class="tpo-dash-head"><b>MARKET PROFILE · TPO</b><span>${profile.session.label} · ${o.periodMin}m</span></div>
-    <div class="tpo-dash-row"><b>POC</b> ${fmt(profile.pocPrice)} <span>FAIR ${fmt(profile.fairPrice)}</span></div>
-    <div class="tpo-dash-row"><b>VAH</b> ${fmt(profile.vah)} <span><b>VAL</b> ${fmt(profile.val)} · ${o.valueArea}% ${mode}</span></div>
-    <div class="tpo-dash-row"><b>IBH</b> ${fmt(profile.ibHigh)} <span><b>IBL</b> ${fmt(profile.ibLow)} · RE↑ ${fmt(profile.rangeExtensionUp)} / RE↓ ${fmt(profile.rangeExtensionDown)}</span></div>
-    <div class="tpo-dash-row"><b>${o.showDayType?profile.dayType:"TPO"}</b> <span>${profile.imbalance} · Double prints ↑${profile.above} / ↓${profile.below}</span></div>
-    <div class="tpo-dash-foot">${profile.source}${profile.coverage?" · footprint coverage "+Math.round(profile.coverage*100)+"%":""} · Dữ liệu CFD/cTrader, không phải futures tape</div>`;
-  if(el.dataset.html!==html){el.innerHTML=html;el.dataset.html=html}
-  el.style.left=o.side==="r"?"54px":"auto";el.style.right=o.side==="l"?"54px":"auto";el.style.display="block";
+function tpoStatsMarkup(P){
+  if(!P)return [
+    ["POC","—","Point of Control"],["VALUE AREA","—","VAH / VAL"],["INITIAL BALANCE","—","IBH / IBL"],["FAIR PRICE","—","Fairest price"],["SESSION TYPE","—","Day structure"]
+  ].map(x=>`<div class="tpo-metric"><span>${x[0]}</span><b>${x[1]}</b><small>${x[2]}</small></div>`).join("");
+  const va=TPO.options.showValueArea?`${tpoFmt(P.vah)} <i>—</i> ${tpoFmt(P.val)}`:"Ẩn",ib=TPO.options.showIB?`${tpoFmt(P.ibHigh)} <i>—</i> ${tpoFmt(P.ibLow)}`:"Ẩn";
+  return `<div class="tpo-metric is-poc"><span>POINT OF CONTROL</span><b>${tpoFmt(P.pocPrice)}</b><small>${P.counts[P.poc]} TPO · ${P.totalTpo} tổng TPO</small></div>
+  <div class="tpo-metric is-va"><span>VALUE AREA · ${TPO.options.valueArea}%</span><b>${va}</b><small>VAH ở trên · VAL ở dưới</small></div>
+  <div class="tpo-metric is-ib"><span>INITIAL BALANCE</span><b>${ib}</b><small>RE ↑ ${tpoFmt(P.rangeExtensionUp)} · RE ↓ ${tpoFmt(P.rangeExtensionDown)}</small></div>
+  <div class="tpo-metric is-fair"><span>FAIREST PRICE</span><b>${TPO.options.showFairPrice?tpoFmt(P.fairPrice):"Ẩn"}</b><small>${TPO.options.showFairPrice?`↑ ${P.above} double prints · ↓ ${P.below}`:"Đã tắt hiển thị"}</small></div>
+  <div class="tpo-metric is-day"><span>SESSION STRUCTURE</span><b>${TPO.options.showDayType?tpoEsc(P.dayType):"—"}</b><small>${tpoEsc(P.imbalance)} imbalance · ${P.topSingles}/${P.botSingles} single prints</small></div>`;
 }
-function drawTPO(w,h){
-  const o=TPO.options;if(!o.enabled||!agg.length||!m1.length){tpoHideDash();return}
-  let saved=false;
-  try{
-    const profile=tpoProfileForView();if(!profile||!profile.totalTpo){tpoHideDash();return}
-    tpoRenderDash(profile);
-    const xMax=Math.max(0,w),wantW=xMax*o.widthPct/100,labelW=o.showPriceLabels?52:8,cell=Math.max(.2,Math.min(o.cellWidth,(wantW-labelW-12)/Math.max(1,profile.nP))),panelW=Math.min(xMax,Math.max(100,labelW+cell*profile.nP+12));
-    const x0=o.side==="r"?Math.max(0,xMax-panelW):0,cellX=x0+labelW;
-    const dark=typeof P!=="undefined"&&P.theme==="dark";
-    ctx.save();saved=true;
-    ctx.fillStyle=dark?"rgba(17,22,31,.88)":"rgba(255,252,244,.91)";ctx.strokeStyle=dark?"rgba(185,168,126,.28)":"rgba(101,78,36,.28)";ctx.lineWidth=1;ctx.fillRect(x0,2,panelW,Math.max(0,h-4));ctx.strokeRect(x0+.5,2.5,panelW-1,Math.max(0,h-5));
-    const bin=Math.max(1,Math.round(profile.step*TPO_SCALE)),baseBin=Math.round(profile.base*TPO_SCALE);
-    const ibHi=profile.ibHigh==null?null:Math.floor(Math.round(profile.ibHigh*TPO_SCALE)/bin)-Math.floor(baseBin/bin),ibLo=profile.ibLow==null?null:Math.floor(Math.round(profile.ibLow*TPO_SCALE)/bin)-Math.floor(baseBin/bin);
-    // Very light column dividers help distinguish adjacent time brackets without hiding letters.
-    for(let p=0;p<=profile.nP;p+=Math.max(1,Math.ceil(profile.nP/12))){const x=cellX+p*cell;ctx.strokeStyle=dark?"rgba(190,175,144,.10)":"rgba(108,88,54,.10)";ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(x,2);ctx.lineTo(x,h-2);ctx.stroke()}
-    // Profile rows map directly to Lightweight Charts' price scale and therefore follow zoom/pan.
-    for(let q=0;q<profile.n;q++){
-      const low=profile.base+q*profile.step,high=low+profile.step,y1=cs.priceToCoordinate(low),y2=cs.priceToCoordinate(high);if(y1==null||y2==null||!Number.isFinite(y1+y2))continue;
-      const y=Math.min(y1,y2),hh=Math.max(1,Math.abs(y2-y1));if(y+hh<0||y>h)continue;
-      const inVA=q>=profile.va.lo&&q<=profile.va.hi,isPoc=q===profile.poc,isSingle=profile.counts[q]===1,extUp=ibHi!=null&&q>ibHi&&profile.rangeExtensionUp>0,extDn=ibLo!=null&&q<ibLo&&profile.rangeExtensionDown>0;
-      if(o.showRangeExtension&&extUp){ctx.fillStyle=dark?"rgba(56,181,145,.13)":"rgba(40,153,119,.10)";ctx.fillRect(x0,y,panelW,hh)}
-      if(o.showRangeExtension&&extDn){ctx.fillStyle=dark?"rgba(224,99,99,.13)":"rgba(190,55,55,.10)";ctx.fillRect(x0,y,panelW,hh)}
-      if(o.showValueArea&&inVA){ctx.fillStyle=dark?"rgba(53,166,220,.14)":"rgba(53,142,197,.12)";ctx.fillRect(x0,y,panelW,hh)}
-      if(o.showSinglePrints&&isSingle){ctx.fillStyle=dark?"rgba(255,112,112,.17)":"rgba(190,55,55,.12)";ctx.fillRect(x0,y,panelW,hh)}
-      if(isPoc){ctx.fillStyle=dark?"rgba(245,190,55,.25)":"rgba(245,190,55,.30)";ctx.fillRect(x0,y,panelW,hh)}
-      ctx.strokeStyle=dark?"rgba(190,175,144,.08)":"rgba(108,88,54,.10)";ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(cellX,y+hh);ctx.lineTo(Math.min(x0+panelW,cellX+profile.nP*cell),y+hh);ctx.stroke();
-      if(o.showPriceLabels&&(q===0||q===profile.n-1||q===profile.poc||q===profile.va.lo||q===profile.va.hi||q%Math.max(1,Math.round(profile.n/16))===0)){
-        ctx.font=(isPoc?"700 ":"500 ")+"8px 'Space Grotesk',sans-serif";ctx.textAlign="right";ctx.textBaseline="middle";ctx.fillStyle=isPoc?"#d49b22":dark?"#b9ad92":"#6e5a3a";ctx.fillText(tpoFmt(profile.base+(q+.5)*profile.step),x0+labelW-5,y+hh/2);
-      }
-      if(profile.counts[q]>0){
-        for(let p=0;p<profile.nP;p++)if(profile.cells[q*profile.nP+p]){
-          const x=cellX+p*cell;if(x+cell>x0+panelW)continue;
-          const bp=tpoTimeParts(profile.session.start+p*profile.periodSec,o.timeZone),mins=bp.hour*60+bp.minute,label=tpoLetter(p,mins,profile.periodMin,o.letterMode),fs=Math.min(10,Math.max(6,Math.min(hh-1,cell*.78)));
-          if(cell>=5.3&&hh>=7){ctx.font="600 "+fs.toFixed(1)+"px 'Space Grotesk',monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle=isPoc?"#e0a91e":isSingle?(dark?"#ff8e8e":"#b23d3d"):dark?(inVA?"#d9e7ef":"#8e9aa6"):(inVA?"#234f6a":"#6a7075");ctx.fillText(label,x+cell/2,y+hh/2+.4)}
-          else{ctx.fillStyle=isPoc?"#e0a91e":dark?"#81a9c0":"#557d96";ctx.fillRect(x,y,Math.max(.2,cell-.15),hh)}
-        }
-      }
-      if(o.showCounts&&profile.counts[q]>0){ctx.font="8px 'Space Grotesk',sans-serif";ctx.textAlign="right";ctx.textBaseline="middle";ctx.fillStyle=dark?"#a99c80":"#806d4c";ctx.fillText(String(profile.counts[q]),Math.min(x0+panelW-3,cellX+profile.nP*cell),y+hh/2)}
+function tpoDrawHeader(P,width,colW,countW,dark){
+  const cv=$("tpoHeaderCanvas"),h=38,g=tpoSetCanvas(cv,width,h);if(!g)return;
+  const bg=dark?"#151d29":"#f7f0e2",line=dark?"rgba(195,178,143,.22)":"rgba(112,88,49,.20)",mut=dark?"#a9b8c5":"#806a45",ink=dark?"#e5eaf0":"#332713";
+  g.clearRect(0,0,width,h);g.fillStyle=bg;g.fillRect(0,0,width,h);g.font="700 10px 'Space Grotesk',sans-serif";g.textAlign="center";g.textBaseline="middle";
+  for(let p=0;p<P.nP;p++){
+    const x=p*colW,bp=tpoTimeParts(P.session.start+p*P.periodSec,TPO.options.timeZone),letter=tpoLetter(p,bp.hour*60+bp.minute,P.periodMin,TPO.options.letterMode);
+    g.fillStyle=p===0?(dark?"rgba(212,165,67,.15)":"rgba(211,157,48,.16)"):(p%2?(dark?"rgba(255,255,255,.018)":"rgba(89,69,39,.025)") : "transparent");g.fillRect(x,0,colW,h);
+    g.strokeStyle=line;g.beginPath();g.moveTo(x+.5,0);g.lineTo(x+.5,h);g.stroke();
+    g.fillStyle=ink;g.font="700 11px 'Space Grotesk',sans-serif";g.fillText(letter,x+colW/2,12);
+    g.fillStyle=mut;g.font="8px 'Space Grotesk',sans-serif";g.fillText(String(bp.hour).padStart(2,"0")+":"+String(bp.minute).padStart(2,"0"),x+colW/2,27);
+  }
+  const x=P.nP*colW;if(countW>0){g.strokeStyle=line;g.beginPath();g.moveTo(x+.5,0);g.lineTo(x+.5,h);g.stroke();g.fillStyle=ink;g.font="700 9px 'Space Grotesk',sans-serif";g.fillText("TPO",x+countW/2,h/2)}
+  g.strokeStyle=line;g.beginPath();g.moveTo(0,h-.5);g.lineTo(width,h-.5);g.stroke();
+}
+function tpoDrawAxis(P,height,rowH,dark){
+  const cv=$("tpoAxisCanvas"),width=82,g=tpoSetCanvas(cv,width,height);if(!g)return;
+  const bg=dark?"#17212c":"#fbf5e8",line=dark?"rgba(195,178,143,.16)":"rgba(112,88,49,.15)",mut=dark?"#b7c2cc":"#806a45";
+  g.clearRect(0,0,width,height);g.fillStyle=bg;g.fillRect(0,0,width,height);
+  for(let r=0;r<P.n;r++){
+    const q=P.n-1-r,y=r*rowH,inVA=TPO.options.showValueArea&&q>=P.va.lo&&q<=P.va.hi,isPoc=q===P.poc,isSingle=TPO.options.showSinglePrints&&P.counts[q]===1,isFair=TPO.options.showFairPrice&&q===P.fair;
+    g.fillStyle=isPoc?(dark?"rgba(221,168,53,.24)":"rgba(225,172,64,.25)"):isFair?(dark?"rgba(164,123,212,.17)":"rgba(164,123,212,.14)"):inVA?(dark?"rgba(54,157,205,.15)":"rgba(60,151,193,.13)"):isSingle?(dark?"rgba(220,99,99,.17)":"rgba(190,66,66,.12)"):(r%2?(dark?"rgba(255,255,255,.015)":"rgba(85,65,35,.018)"):bg);
+    g.fillRect(0,y,width,rowH);g.strokeStyle=line;g.beginPath();g.moveTo(0,y+rowH-.5);g.lineTo(width,y+rowH-.5);g.stroke();
+    if(TPO.options.showPriceLabels){g.font=(isPoc?"700 ":"500 ")+"10px 'Space Grotesk',sans-serif";g.textAlign="right";g.textBaseline="middle";g.fillStyle=isPoc?(dark?"#f3c45b":"#a56b0e"):isFair?(dark?"#c9a9f4":"#8554b5"):inVA?mut:(dark?"#95a3af":"#806a45");g.fillText(tpoFmt(P.base+(q+.5)*P.step),width-7,y+rowH/2)}
+  }
+  g.strokeStyle=line;g.beginPath();g.moveTo(width-.5,0);g.lineTo(width-.5,height);g.stroke();
+}
+function tpoDrawGrid(P,width,height,rowH,colW,countW,dark){
+  const cv=$("tpoGridCanvas"),g=tpoSetCanvas(cv,width,height);if(!g)return;
+  const bg=dark?"#121a24":"#fffaf0",line=dark?"rgba(195,178,143,.14)":"rgba(112,88,49,.14)",mut=dark?"#8e9eac":"#766346",blue=dark?"#b8ddeb":"#315d75",gold=dark?"#f0c65a":"#9a6812",red=dark?"#ffaaaa":"#a84343";
+  let maxCount=1;for(const c of P.counts)maxCount=Math.max(maxCount,c);
+  g.clearRect(0,0,width,height);g.fillStyle=bg;g.fillRect(0,0,width,height);
+  const bin=Math.max(1,Math.round(P.step*TPO_SCALE)),baseI=Math.round(P.base*TPO_SCALE),ibHi=P.ibHigh==null?null:Math.floor(Math.round(P.ibHigh*TPO_SCALE)/bin)-Math.floor(baseI/bin),ibLo=P.ibLow==null?null:Math.floor(Math.round(P.ibLow*TPO_SCALE)/bin)-Math.floor(baseI/bin);
+  for(let r=0;r<P.n;r++){
+    const q=P.n-1-r,y=r*rowH,inVA=TPO.options.showValueArea&&q>=P.va.lo&&q<=P.va.hi,isPoc=q===P.poc,isFair=TPO.options.showFairPrice&&q===P.fair,isSingle=TPO.options.showSinglePrints&&P.counts[q]===1,extUp=TPO.options.showRangeExtension&&ibHi!=null&&q>ibHi,extDn=TPO.options.showRangeExtension&&ibLo!=null&&q<ibLo;
+    g.fillStyle=isPoc?(dark?"rgba(220,169,62,.23)":"rgba(224,174,67,.22)"):isFair?(dark?"rgba(164,123,212,.13)":"rgba(164,123,212,.11)"):inVA?(dark?"rgba(52,153,203,.13)":"rgba(63,151,195,.12)"):isSingle?(dark?"rgba(213,92,92,.16)":"rgba(190,66,66,.11)"):extUp?(dark?"rgba(47,165,128,.09)":"rgba(46,151,117,.07)"):extDn?(dark?"rgba(207,76,76,.09)":"rgba(190,66,66,.07)"):(r%2?(dark?"rgba(255,255,255,.012)":"rgba(90,70,40,.015)"):bg);
+    g.fillRect(0,y,P.nP*colW+countW,rowH);g.strokeStyle=line;g.beginPath();g.moveTo(0,y+rowH-.5);g.lineTo(width,y+rowH-.5);g.stroke();
+    for(let p=0;p<P.nP;p++)if(P.cells[q*P.nP+p]){
+      const x=p*colW,cellFill=isPoc?(dark?"rgba(224,171,55,.40)":"rgba(224,171,55,.34)"):isSingle?(dark?"rgba(214,102,102,.23)":"rgba(190,66,66,.17)"):inVA?(dark?"rgba(64,159,207,.19)":"rgba(63,151,195,.17)"):(dark?"rgba(160,178,194,.075)":"rgba(105,117,130,.07)");
+      g.fillStyle=cellFill;g.fillRect(x+1,y+2,colW-2,rowH-4);
+      if(TPO.options.showPioneerRange&&p===0){g.strokeStyle=dark?"rgba(194,169,119,.75)":"rgba(148,112,53,.65)";g.lineWidth=1;g.strokeRect(x+1,y+2,colW-2,rowH-4)}
+      const bp=tpoTimeParts(P.session.start+p*P.periodSec,TPO.options.timeZone),label=tpoLetter(p,bp.hour*60+bp.minute,P.periodMin,TPO.options.letterMode);
+      g.fillStyle=isPoc?gold:isSingle?red:inVA?blue:mut;g.font="600 "+(colW<23?9:10)+"px 'Space Grotesk',monospace";g.textAlign="center";g.textBaseline="middle";g.fillText(label,x+colW/2,y+rowH/2+.3);
     }
-    // Key levels and IB / range-extension references are separate from the profile cells.
-    const lineY=price=>cs.priceToCoordinate(price);
-    tpoDrawLine(lineY(profile.pocPrice),w,"#e9ad26",[],"POC",4);
-    if(o.showValueArea){tpoDrawLine(lineY(profile.vah),w,"rgba(53,166,220,.95)",[5,4],"VAH",4);tpoDrawLine(lineY(profile.val),w,"rgba(53,166,220,.95)",[5,4],"VAL",4)}
-    if(o.showFairPrice)tpoDrawLine(lineY(profile.fairPrice),w,"rgba(182,133,220,.95)",[2,4],"FAIR",4);
-    if(o.showIB&&profile.ibHigh!=null){tpoDrawLine(lineY(profile.ibHigh),w,"rgba(44,180,133,.9)",[3,3],"IBH",4);tpoDrawLine(lineY(profile.ibLow),w,"rgba(226,105,105,.9)",[3,3],"IBL",4)}
-    if(o.showPioneerRange&&profile.pioneerHigh!=null){tpoDrawLine(lineY(profile.pioneerHigh),w,"rgba(160,170,190,.85)",[1,4],"PION H",4);tpoDrawLine(lineY(profile.pioneerLow),w,"rgba(160,170,190,.85)",[1,4],"PION L",4)}
-    if(o.showSinglePrints){
-      const topSingleStart=Math.max(0,profile.n-profile.topSingles),botSingleEnd=Math.min(profile.n-1,profile.botSingles-1);
-      if(profile.topSingles>=2){const yy=lineY(profile.base+(topSingleStart+.5)*profile.step);ctx.fillStyle="#df7777";ctx.font="600 9px 'Space Grotesk',sans-serif";ctx.textAlign="left";ctx.textBaseline="bottom";if(yy!=null)ctx.fillText("TOP SINGLE ×"+profile.topSingles,Math.max(4,x0-panelW*.18),yy-2)}
-      if(profile.botSingles>=2){const yy=lineY(profile.base+(botSingleEnd+.5)*profile.step);ctx.fillStyle="#df7777";ctx.font="600 9px 'Space Grotesk',sans-serif";ctx.textAlign="left";ctx.textBaseline="top";if(yy!=null)ctx.fillText("BOT SINGLE ×"+profile.botSingles,Math.max(4,x0-panelW*.18),yy+2)}
+    if(countW>0&&TPO.options.showCounts){const bx=P.nP*colW+6,bw=countW-23,barW=Math.max(0,bw*P.counts[q]/maxCount);
+      g.fillStyle=dark?"rgba(150,164,178,.12)":"rgba(112,98,74,.10)";g.fillRect(bx,y+6,bw,6);
+      g.fillStyle=isPoc?gold:inVA?(dark?"#4e9cc4":"#5795b2"):mut;g.fillRect(bx,y+6,barW,6);
+      g.fillStyle=isPoc?gold:mut;g.font=(isPoc?"700 ":"500 ")+"9px 'Space Grotesk',sans-serif";g.textAlign="right";g.fillText(String(P.counts[q]),width-5,y+rowH/2);
     }
-  }catch(e){if(typeof chErr==="function")chErr("TPO",e);else console.warn("TPO render",e)}
-  finally{if(saved)ctx.restore()}
+    if(TPO.options.showIB&&ibHi!=null&&q===ibHi){g.strokeStyle=dark?"#36bd96":"#159b72";g.lineWidth=1.4;g.beginPath();g.moveTo(0,y+.5);g.lineTo(width,y+.5);g.stroke()}
+    if(TPO.options.showIB&&ibLo!=null&&q===ibLo){g.strokeStyle=dark?"#e48686":"#ca5b5b";g.lineWidth=1.4;g.beginPath();g.moveTo(0,y+rowH-.5);g.lineTo(width,y+rowH-.5);g.stroke()}
+  }
+  // Vertical separators for time brackets and a separate TPO-count column.
+  for(let p=0;p<=P.nP;p++){const x=p*colW;g.strokeStyle=line;g.beginPath();g.moveTo(x+.5,0);g.lineTo(x+.5,height);g.stroke()}
+  const x=P.nP*colW;g.strokeStyle=dark?"rgba(214,178,101,.35)":"rgba(157,117,49,.35)";g.beginPath();g.moveTo(x+.5,0);g.lineTo(x+.5,height);g.stroke();
 }
-function tpoCheck(key,label,on){return`<label class="dtt-check"><input type="checkbox" data-tpo="${key}"${on?" checked":""}><span>${label}</span></label>`}
+function tpoClearStandaloneCanvases(){
+  for(const id of ["tpoHeaderCanvas","tpoAxisCanvas","tpoGridCanvas"]){
+    const cv=$(id);if(!cv)continue;cv.width=1;cv.height=1;cv.style.width="0px";cv.style.height="0px";
+  }
+  TPO._drawSig=null;
+}
+function tpoRenderStandalone(force=false){
+  if(typeof document==="undefined"||document.body?.dataset?.v!=="tpo")return null;
+  const title=$("tpoSessionTitle"),meta=$("tpoSessionMeta"),stats=$("tpoSummary"),foot=$("tpoProfileFoot"),empty=$("tpoEmpty"),emptyText=$("tpoEmptyText"),feed=$("tpoFeedStatus");
+  if(!TPO.options.enabled)TPO.options.enabled=true;
+  if(force){TPO.cache.clear();TPO.last=null}
+  const P=tpoProfileForView();
+  if(!P||!P.totalTpo){
+    tpoClearStandaloneCanvases();
+    if(title)title.textContent="Market Profile · TPO";if(meta)meta.textContent="Chưa có dữ liệu trong phiên đang chọn.";
+    if(stats)stats.innerHTML=tpoStatsMarkup(null);if(empty){empty.hidden=false;if(emptyText)emptyText.textContent=(!m1||!m1.length)?"Đang chờ dữ liệu M1 từ cTrader. Hãy kết nối tài khoản và mở Chart để tải lịch sử.":"Không tìm thấy nến M1 trong khoảng phiên này. Hãy thử chọn Phiên hiện tại hoặc thay đổi giờ bắt đầu / độ dài phiên."}
+    if(feed){feed.textContent="Chưa có dữ liệu";feed.classList.add("is-empty")};if(foot)foot.textContent="TPO chưa được dựng vì thiếu dữ liệu trong khoảng thời gian đã chọn.";return null;
+  }
+  const o=TPO.options,isDark=document.documentElement.dataset.theme==="dark";
+  if(title)title.textContent=(typeof C!=="undefined"?C.sym:"Market")+" · "+P.session.label;
+  if(meta)meta.textContent=`${o.sessionHours} giờ · ${o.periodMin} phút/bracket · ${o.timeZone.replace("America/"," ").replace("Asia/"," ").replace("Europe/"," ").replace("Etc/"," ")}`;
+  if(stats)stats.innerHTML=tpoStatsMarkup(P);if(empty)empty.hidden=true;
+  if(feed){feed.textContent=P.tickMinutes?`Footprint ${Math.round(P.coverage*100)}%`:`M1 OHLC · ước lượng`;feed.classList.toggle("is-empty",!P.tickMinutes)}
+  const mode=P.valueModeUsed==="tpo"?(o.valueMode==="tick"?"TPO count · fallback":"TPO count"):"M1 tick-volume proxy";
+  if(foot)foot.textContent=`${P.source} · ${P.totalMinutes} phút M1 · ${P.totalTpo} TPO · ${mode}. CFD/cTrader không phải dữ liệu giao dịch futures tập trung.`;
+  const hdr=$("tpoHeaderScroll"),grid=$("tpoGridScroll"),body=$("tpoBodyScroll");if(!hdr||!grid||!body)return P;
+  const oldX=grid.scrollLeft,oldY=body.scrollTop,rowH=18,countW=o.showCounts?68:0,axisW=82;
+  const viewWidth=document.getElementById("v-tpo")?.clientWidth||window.innerWidth;
+  const available=Math.max(280,viewWidth-axisW-50),colW=Math.max(22,Math.min(34,Math.floor((available-Math.max(26,countW))/Math.max(1,P.nP))));
+  const width=P.nP*colW+countW,height=P.n*rowH;
+  const drawSig=[TPO._profileSig||"",P.session.start,P.session.end,P.n,P.nP,P.step,P.totalTpo,P.poc,viewWidth,colW,countW,rowH,isDark,JSON.stringify(o)].join("|");
+  if(!force&&TPO._drawSig===drawSig)return P;
+  tpoDrawHeader(P,width,colW,countW,isDark);tpoDrawAxis(P,height,rowH,isDark);tpoDrawGrid(P,width,height,rowH,colW,countW,isDark);TPO._drawSig=drawSig;
+  const hc=$("tpoHeaderCanvas"),gc=$("tpoGridCanvas"),ac=$("tpoAxisCanvas");if(hc&&gc&&ac){hc.dataset.sig=gc.dataset.sig=ac.dataset.sig=[P.session.start,P.session.end,P.n,P.nP,P.step,P.totalTpo,P.poc,oldX,oldY].join("|")}
+  if(grid.scrollWidth>grid.clientWidth)grid.scrollLeft=Math.min(oldX,grid.scrollWidth-grid.clientWidth);if(body.scrollHeight>body.clientHeight)body.scrollTop=Math.min(oldY,body.scrollHeight-body.clientHeight);
+  return P;
+}
+function tpoCheck(key,label,on){return`<label class="tpo-setting-check"><input type="checkbox" data-tpo="${key}"${on?" checked":""}><span>${label}</span></label>`}
 function tpoBuildSettings(){
   const el=$("tpoSettings");if(!el)return;const o=TPO.options;
   const opt=(list,v)=>list.map(([k,n])=>`<option value="${k}"${String(v)===String(k)?" selected":""}>${n}</option>`).join("");
-  el.innerHTML=`<div class="dtt-head"><div><h2>Market Profile · TPO Chart <span class="pill">CBOT framework</span></h2><p class="msg">Biểu đồ Time/Price Opportunity độc lập. Một ký tự = một bracket thời gian mà giá đã giao dịch; có POC, Value Area, Initial Balance, single prints và thống kê cấu trúc phiên.</p></div><button type="button" class="btn sm ${o.enabled?"":"ghost"}" data-tpo="enabled">${o.enabled?"Đang bật":"Đang tắt"}</button></div>
-  <div class="dtt-options">
-    <label class="dtt-field">Múi giờ phiên<select data-tpo="timeZone">${opt([["America/New_York","New York"],["America/Chicago","Chicago"],["Europe/London","London"],["Asia/Ho_Chi_Minh","Việt Nam (UTC+7)"],["Etc/UTC","UTC"]],o.timeZone)}</select></label>
-    <label class="dtt-field">Giờ bắt đầu phiên<input type="time" data-tpo="sessionStart" value="${o.sessionStart}"></label>
-    <label class="dtt-field">Độ dài profile<select data-tpo="sessionHours">${opt([[1,"1 giờ"],[2,"2 giờ"],[3,"3 giờ"],[4,"4 giờ"],[6,"6 giờ"],[8,"8 giờ"],[12,"12 giờ"],[24,"24 giờ (CBOT/Globex)"]],o.sessionHours)}</select></label>
-    <label class="dtt-field">Profile cần xem<select data-tpo="sessionPick">${opt([["current","Phiên hiện tại"],["previous","Phiên trước"]],o.sessionPick)}</select></label>
-    <label class="dtt-field">TPO time bracket<select data-tpo="periodMin">${opt([[1,"1 phút"],[5,"5 phút"],[10,"10 phút"],[15,"15 phút"],[30,"30 phút (CBOT)"],[60,"60 phút"]],o.periodMin)}</select></label>
-    <label class="dtt-field">Ký tự TPO<select data-tpo="letterMode">${opt([["cbot24","CBOT 24h: A–X / a–x"],["session","A–Z / a–z theo phiên"]],o.letterMode)}</select></label>
-    <label class="dtt-field">Bước giá mỗi hàng (0 = tự động ~70 hàng)<input type="number" min="0" step="any" data-tpo="rowStep" value="${o.rowStep}"></label>
-    <label class="dtt-field">Value Area (%)<input type="number" min="50" max="90" step="1" data-tpo="valueArea" value="${o.valueArea}"></label>
-    <label class="dtt-field">Cách tính Value Area<select data-tpo="valueMode">${opt([["tpo","Theo số TPO (mặc định)"],["tick","Theo tick volume M1 (proxy)"]],o.valueMode)}</select></label>
-    <label class="dtt-field">Initial Balance<select data-tpo="ibMinutes">${opt([[30,"30 phút"],[60,"60 phút (CBOT cơ bản)"],[90,"90 phút"],[100,"100 phút"],[120,"120 phút"]],o.ibMinutes)}</select></label>
-    <label class="dtt-field">Vị trí profile<select data-tpo="side">${opt([["r","Bên phải"],["l","Bên trái"]],o.side)}</select></label>
-    <label class="dtt-field">Bề rộng profile (% vùng chart)<input type="number" min="20" max="80" step="1" data-tpo="widthPct" value="${o.widthPct}"></label>
-    <label class="dtt-field">Độ rộng mỗi cột (px)<input type="number" min="5" max="18" step="1" data-tpo="cellWidth" value="${o.cellWidth}"></label>
-  </div>
-  <div class="dtt-toggles">${tpoCheck("showValueArea","Tô vùng Value Area",o.showValueArea)}${tpoCheck("showIB","Hiện IBH / IBL",o.showIB)}${tpoCheck("showSinglePrints","Đánh dấu Single Prints và extreme ≥ 2 hàng",o.showSinglePrints)}${tpoCheck("showStats","Bảng thống kê profile",o.showStats)}${tpoCheck("showPriceLabels","Nhãn giá",o.showPriceLabels)}${tpoCheck("showCounts","Số bracket tại mỗi mức giá",o.showCounts)}${tpoCheck("showDayType","Phân loại Normal / Normal Variation / Trend / Neutral",o.showDayType)}${tpoCheck("showFairPrice","Đường Fairest Price / Imbalance",o.showFairPrice)}${tpoCheck("showRangeExtension","Tô vùng Range Extension trên / dưới IB",o.showRangeExtension)}${tpoCheck("showPioneerRange","Đánh dấu Pioneer Range (bracket đầu tiên)",o.showPioneerRange)}</div>
-  <p class="msg dtt-note">Theo CBOT: bracket mặc định 30 phút; với profile 24 giờ, ký tự viết hoa A–X ứng với 00:00–12:00 và chữ thường a–x ứng với 12:00–24:00. Initial Balance là thời gian đầu phiên (thường 60 phút trong ví dụ CBOT), không phải quy tắc cố định cho mọi thị trường. Normal / Normal Variation / Trend / Neutral được suy ra từ range extension so với IB và vị trí đóng cửa. Fair price chọn mức có nhiều bracket nhất bên trong Value Area; số double prints ở hai phía được dùng để đọc imbalance theo cách CBOT. CBOT LDB trong phần phụ lục tính Value Area theo 70% nonspread contract volume; đây không phải thuật toán TPO-count. Tick volume cTrader chỉ là số lần cập nhật/báo giá, không phải volume futures tập trung. Khi có Footprint, module ưu tiên các mức giá từ FPM; khi không có, nó trải TPO qua High–Low M1 nên có thể bao gồm mức giá chỉ nằm trong râu nến. Bật TPO sẽ kích hoạt cơ chế tải tick cTrader dùng chung (tối đa 3 ngày gần nhất, như Footprint); nếu chưa kết nối hoặc không có tick, module tự fallback sang M1. Chế độ Replay chỉ dùng M1 để tránh đọc tick tương lai.</p>`;
+  const wasOpen=!!el.querySelector?.(".tpo-settings-details")?.open;
+  el.innerHTML=`<details class="tpo-settings-details"${wasOpen?" open":""}><summary><span><b>Cài đặt TPO</b><small>Phiên · độ phân giải · Value Area · hiển thị</small></span><span class="tpo-settings-caret">⌄</span></summary><div class="tpo-settings-body">
+    <section class="tpo-setting-group"><h4>1. Phiên giao dịch</h4><div class="tpo-config-grid">
+      <label>Múi giờ<select data-tpo="timeZone">${opt([["America/New_York","New York"],["America/Chicago","Chicago"],["Europe/London","London"],["Asia/Ho_Chi_Minh","Việt Nam (UTC+7)"],["Etc/UTC","UTC"]],o.timeZone)}</select></label>
+      <label>Giờ bắt đầu phiên<input type="time" data-tpo="sessionStart" value="${o.sessionStart}"></label>
+      <label>Độ dài phiên<select data-tpo="sessionHours">${opt([[1,"1 giờ"],[2,"2 giờ"],[3,"3 giờ"],[4,"4 giờ"],[6,"6 giờ"],[8,"8 giờ"],[12,"12 giờ"],[24,"24 giờ"]],o.sessionHours)}</select></label>
+      <label>Phiên hiển thị<select data-tpo="sessionPick">${opt([["current","Phiên hiện tại"],["previous","Phiên trước"]],o.sessionPick)}</select></label>
+    </div></section>
+    <section class="tpo-setting-group"><h4>2. Độ phân giải TPO</h4><div class="tpo-config-grid">
+      <label>Time bracket<select data-tpo="periodMin">${opt([[5,"5 phút"],[10,"10 phút"],[15,"15 phút"],[30,"30 phút · CBOT"],[60,"60 phút"]],o.periodMin)}</select></label>
+      <label>Hệ ký tự<select data-tpo="letterMode">${opt([["cbot24","CBOT 24h · A–X / a–x"],["session","A–Z / a–z theo phiên"]],o.letterMode)}</select></label>
+      <label>Bước giá mỗi hàng (0 = tự động)<input type="number" min="0" step="any" data-tpo="rowStep" value="${o.rowStep}"></label>
+      <label>Value Area (%)<input type="number" min="50" max="90" step="1" data-tpo="valueArea" value="${o.valueArea}"></label>
+      <label>Cách tính Value Area<select data-tpo="valueMode">${opt([["tpo","Theo số TPO · chuẩn profile"],["tick","Theo tick volume M1 · proxy"]],o.valueMode)}</select></label>
+      <label>Initial Balance<select data-tpo="ibMinutes">${opt([[30,"30 phút"],[60,"60 phút · CBOT cơ bản"],[90,"90 phút"],[100,"100 phút"],[120,"120 phút"]],o.ibMinutes)}</select></label>
+    </div></section>
+    <section class="tpo-setting-group"><h4>3. Các thành phần hiển thị</h4><div class="tpo-setting-toggles">
+      ${tpoCheck("showValueArea","Tô vùng Value Area",o.showValueArea)}${tpoCheck("showIB","Hiện Initial Balance",o.showIB)}${tpoCheck("showSinglePrints","Đánh dấu Single Prints",o.showSinglePrints)}${tpoCheck("showCounts","Hiện số TPO và histogram",o.showCounts)}${tpoCheck("showDayType","Phân loại Normal / Normal Variation / Trend / Neutral",o.showDayType)}${tpoCheck("showFairPrice","Hiện Fair Price / Imbalance",o.showFairPrice)}${tpoCheck("showRangeExtension","Tô Range Extension trên / dưới IB",o.showRangeExtension)}${tpoCheck("showPioneerRange","Đánh dấu Pioneer Range",o.showPioneerRange)}${tpoCheck("showPriceLabels","Hiện nhãn giá",o.showPriceLabels)}
+    </div></section>
+    <div class="tpo-settings-actions"><button class="btn ghost sm" type="button" data-tpo-action="reset">Khôi phục mặc định</button><span>Thiết lập được lưu tự động trên thiết bị này.</span></div>
+    <p class="tpo-source-note">Nguyên tắc theo CBOT: bracket cơ bản 30 phút; IB thường dùng 60 phút trong ví dụ CBOT; Value Area TPO được tính từ POC mở rộng dần tới tỷ lệ đã chọn. Fair Price là mức có nhiều bracket nhất trong Value Area; double prints phía trên/dưới được dùng để quan sát imbalance. Khi chỉ có M1 OHLC, vùng High–Low được dùng làm khoảng giá xấp xỉ. Tick volume cTrader là proxy, không phải volume hợp đồng futures. Bật TPO Chart sẽ dùng chung bộ tải tick của Footprint, giới hạn lịch sử theo vùng chart và tối đa 3 ngày; Replay chỉ dùng M1 để không đọc dữ liệu tương lai.</p>
+  </div></details>`;tpoSyncControls();
+}
+function tpoSyncControls(){
+  const root=$("v-tpo");if(!root)return;
+  root.querySelectorAll?.("[data-tpo]").forEach(el=>{const k=el.dataset.tpo,v=TPO.options[k];if(el.type==="checkbox")el.checked=!!v;else if(v!=null&&String(el.value)!==String(v))el.value=String(v)});
+}
+function tpoSave(){
+  try{localStorage.setItem(TPO_STORE_KEY,JSON.stringify(TPO.options))}catch{}
+  TPO.cache.clear();TPO.last=null;if(typeof dirty!=="undefined")dirty=true;
+  if(typeof document!=="undefined"&&document.body?.dataset?.v==="tpo")tpoRenderStandalone(true);
 }
 function tpoSetValue(key,value){
-  const o=TPO.options,checks=["enabled","showValueArea","showIB","showSinglePrints","showStats","showPriceLabels","showCounts","showDayType","showFairPrice","showRangeExtension","showPioneerRange"];
+  const o=TPO.options,checks=["showValueArea","showIB","showSinglePrints","showStats","showPriceLabels","showCounts","showDayType","showFairPrice","showRangeExtension","showPioneerRange"];
   if(checks.includes(key))o[key]=!!value;
   else if(key==="timeZone"){if(["America/New_York","America/Chicago","Etc/UTC","Europe/London","Asia/Ho_Chi_Minh"].includes(value))o.timeZone=value}
   else if(key==="sessionStart"){if(/^([01]\d|2[0-3]):[0-5]\d$/.test(value))o.sessionStart=value}
   else if(key==="sessionHours")o.sessionHours=[1,2,3,4,6,8,12,24].includes(+value)?+value:24;
   else if(key==="sessionPick")o.sessionPick=value==="previous"?"previous":"current";
-  else if(key==="periodMin")o.periodMin=[1,5,10,15,30,60].includes(+value)?+value:30;
+  else if(key==="periodMin")o.periodMin=[5,10,15,30,60].includes(+value)?+value:30;
   else if(key==="letterMode")o.letterMode=value==="session"?"session":"cbot24";
   else if(key==="rowStep")o.rowStep=Math.max(0,Math.min(1e6,Number(value)||0));
   else if(key==="valueArea")o.valueArea=Math.max(50,Math.min(90,Math.round(+value||70)));
   else if(key==="valueMode")o.valueMode=value==="tick"?"tick":"tpo";
   else if(key==="ibMinutes")o.ibMinutes=[30,60,90,100,120].includes(+value)?+value:60;
-  else if(key==="side")o.side=value==="l"?"l":"r";
-  else if(key==="widthPct")o.widthPct=Math.max(20,Math.min(80,Math.round(+value||48)));
-  else if(key==="cellWidth")o.cellWidth=Math.max(5,Math.min(18,Math.round(+value||9)));
-  tpoSave();tpoBuildSettings();
+  tpoSave();tpoSyncControls();
 }
-const tpoPanel=$("tpoSettings");if(tpoPanel)tpoPanel.addEventListener("change",e=>{const t=e.target,k=t&&t.dataset&&t.dataset.tpo;if(!k)return;tpoSetValue(k,t.type==="checkbox"?t.checked:t.value)});
-if(tpoPanel)tpoPanel.addEventListener("click",e=>{const b=e.target.closest("button[data-tpo='enabled']");if(b)tpoSetValue("enabled",!TPO.options.enabled)});
-const tpoBtn=$("tpoBtn");if(tpoBtn)tpoBtn.addEventListener("click",()=>tpoSetValue("enabled",!TPO.options.enabled));
-tpoSyncButton();tpoBuildSettings();
+const tpoView=$("v-tpo");
+if(tpoView){
+  tpoView.addEventListener("change",e=>{const t=e.target,k=t&&t.dataset&&t.dataset.tpo;if(!k)return;tpoSetValue(k,t.type==="checkbox"?t.checked:t.value)});
+  tpoView.addEventListener("click",e=>{
+    const b=e.target.closest("[data-tpo-action]");if(!b)return;
+    if(b.dataset.tpoAction==="refresh"){TPO.cache.clear();TPO.last=null;tpoRenderStandalone(true)}
+    else if(b.dataset.tpoAction==="reset"){const was=TPO.options.enabled;TPO.options={...TPO_DEFAULTS,enabled:was};tpoSave();tpoBuildSettings()}
+    else if(b.dataset.tpoAction==="go-chart"&&typeof show==="function")show("chart");
+  });
+}
+const tpoHeadScroll=$("tpoHeaderScroll"),tpoGridScroll=$("tpoGridScroll");
+if(tpoHeadScroll&&tpoGridScroll){let lock=false;tpoHeadScroll.addEventListener("scroll",()=>{if(lock)return;lock=true;tpoGridScroll.scrollLeft=tpoHeadScroll.scrollLeft;lock=false});tpoGridScroll.addEventListener("scroll",()=>{if(lock)return;lock=true;tpoHeadScroll.scrollLeft=tpoGridScroll.scrollLeft;lock=false})}
+tpoBuildSettings();
+if(typeof document!=="undefined"&&document.body?.dataset?.v==="tpo")tpoActivate(true);else if(TPO.options.enabled)tpoActivate(false);
+if(typeof window!=="undefined")window.setInterval(()=>{if(document.body?.dataset?.v==="tpo")tpoRenderStandalone(false)},2000);
