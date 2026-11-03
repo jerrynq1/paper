@@ -2,7 +2,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
 const source=fs.readFileSync(path.join(__dirname,'..','js','tpo.js'),'utf8');
 const element=()=>({innerHTML:'',dataset:{},style:{},children:[],classList:{toggle(){},contains(){return false}},setAttribute(){},addEventListener(){},appendChild(x){this.children.push(x)}});
-const elements={tpoSettings:element(),tpoBtn:element(),"v-ind":element()};
+const elements={tpoSettings:element(),"v-tpo":element(),"v-ind":element()};
 const storage=new Map();
 const ctx={Math,Number,Array,String,Object,Date,JSON,Intl,Map,Set,Uint8Array,Int32Array,Float64Array,Infinity,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},
   $:id=>elements[id]||null,PDIG:()=>2,s2u:x=>x,RP:{on:false},m1:[],agg:[],FPM:new Map(),FPH:0,FPLV:0,FPV:0,dirty:false,P:{theme:'dark'},console};
@@ -80,13 +80,17 @@ ok('Footprint dùng đúng server timestamp; Replay không đọc tick map có t
 assert.strictEqual(run(`TPO.options.showFairPrice`),true);run(`tpoSetValue('showFairPrice',false)`);assert.strictEqual(run(`TPO.options.showFairPrice`),false);
 ok('Các toggle Fair Price / Range Extension / Pioneer Range hoạt động');
 
-// ---------- Canvas renderer integration smoke test ----------
+// ---------- Dedicated TPO workspace: no chart overlay ----------
 ctx.s2u=x=>x;ctx.m1=bars;ctx.agg=[{st:bars[0][0]}];ctx.FPM=new Map();ctx.RP.on=false;
-const chartEl=element();elements.chart=chartEl;ctx.document={createElement:()=>element()};
-let drawCalls=0;ctx.ctx={save(){},restore(){},setLineDash(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillRect(){drawCalls++},strokeRect(){drawCalls++},fillText(){drawCalls++}};
-ctx.cs={priceToCoordinate:p=>200-p};
-run(`TPO.options={...TPO.options,enabled:true,timeZone:'Etc/UTC',sessionStart:'00:00',sessionHours:24,sessionPick:'current',periodMin:30,rowStep:1,showStats:true};drawTPO(800,400)`);
-assert.ok(drawCalls>0);assert.ok(chartEl.children.some(x=>x.id==='tpoDash'));assert.strictEqual(run(`TPO.dash.style.display`),'block');
-ok('Canvas overlay + dashboard render với dữ liệu M1 mô phỏng');
+run(`TPO.options={...TPO.options,enabled:true,timeZone:'Etc/UTC',sessionStart:'00:00',sessionHours:24,sessionPick:'current',periodMin:30,rowStep:1}`);
+const standalone=J(run(`tpoProfileForView()`));assert.ok(standalone&&standalone.totalTpo>0);
+assert.strictEqual(run(`typeof drawTPO`),'undefined');assert.strictEqual(run(`typeof tpoRenderStandalone`),'function');
+assert.ok(elements.tpoSettings.innerHTML.includes('Cài đặt TPO'));
+assert.ok(elements.tpoSettings.innerHTML.includes('Time bracket'));
+assert.ok(elements.tpoSettings.innerHTML.includes('Value Area'));
+run(`tpoSetValue('showFairPrice',false)`);assert.strictEqual(run(`TPO.options.showFairPrice`),false);
+run(`tpoActivate(false)`);assert.strictEqual(run(`TPO.options.enabled`),false);
+run(`tpoActivate(true)`);assert.strictEqual(run(`TPO.options.enabled`),true);
+ok('TPO Profile được tính độc lập, trang cài đặt gọn theo nhóm; không còn hàm vẽ lên chart nến');
 
 console.log(`\n${n} nhóm kiểm thử TPO đạt`);
