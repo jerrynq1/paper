@@ -1,6 +1,6 @@
 # Indicator Lab
 
-Bản rút gọn của signal-bridge chỉ giữ **chart**, **indicator** (kể cả Orderflow: Footprint, Big Trade, Statistic) và **kết nối cTrader Open API**. Không còn đăng nhập Discord, Journal, TPO, Lịch kinh tế, nhiều chart, đa ngôn ngữ hay worker.
+Bản rút gọn của signal-bridge giữ **Chart**, **TPO Chart độc lập**, **Indicator** (kể cả Orderflow: Footprint, Big Trade, Statistic) và **kết nối cTrader Open API**. Không còn đăng nhập Discord, Journal, Lịch kinh tế, nhiều chart, đa ngôn ngữ hay worker.
 
 ## Chạy
 
@@ -167,7 +167,7 @@ Khác bản Pine: vẽ thành thanh trên chart thay vì mở pane riêng (cùng
 
 ## Market Profile · TPO Chart (CBOT framework)
 
-Bật bằng nút **▦ TPO** trên thanh công cụ hoặc trong **Indicator** → **Market Profile · TPO Chart**. TPO là overlay độc lập trên chart; module chỉ đọc dữ liệu M1/footprint hiện có và không sửa nến, trục giá/thời gian, Replay hay các drawing khác.
+Mở **TPO Chart** ở thanh điều hướng bên trái, ngay dưới **Chart**. TPO là một workspace riêng, không vẽ đè lên nến và không chiếm canvas chart. Bảng profile có trục giá cố định bên trái, các bracket thời gian cuộn ngang, tiêu đề bracket đồng bộ khi cuộn và vùng giá cuộn dọc. Các thẻ POC, Value Area, Initial Balance, Fair Price và cấu trúc phiên nằm phía trên; thiết lập nâng cao được gom vào các nhóm có thể thu gọn. Bộ lọc nhanh Phiên hiện tại/Phiên trước và Time bracket nằm ngay trên profile.
 
 - **TPO matrix**: một ô được ghi nhận một lần cho mỗi cặp *time bracket × price row*, dù trong cùng bracket có nhiều nến M1 chạm cùng mức giá. Mặc định bracket 30 phút. Với chế độ CBOT 24h và bracket 30 phút, A–X ứng với 00:00–12:00, a–x ứng với 12:00–24:00 theo múi giờ đã chọn. Các bracket khác dùng chuỗi ký tự liên tục A–Z, a–z.
 - **Session / time zone**: New York, Chicago, London, UTC hoặc Việt Nam; tùy chỉnh giờ bắt đầu phiên, độ dài profile 1–24 giờ, xem phiên hiện tại hoặc phiên trước. Mốc phiên dùng IANA timezone nên tự áp dụng DST. Với Forex/CFD, có thể chọn giờ rollover phù hợp broker; không nên mặc định coi ngày lịch là phiên giao dịch.
