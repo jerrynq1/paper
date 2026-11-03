@@ -56,8 +56,10 @@
       const bits=[];
       bits.push(`<span>Mark: ${markFresh?'Live':'Stale / waiting'}</span>`);
       bits.push(`<span>Index: ${indexFresh?'Live':'Mark fallback / waiting'}</span>`);
-      bits.push(`<span>OI: ${state.oi.size?(state.lastOIUpdate?'Live / last update':'Received'):'Unavailable / waiting'}</span>`);
-      bits.push(`<span>Flow: ${state.trades.length} trades cached</span>`);
+      const oiWs=state.sockets.get('oi'),tradeWs=state.sockets.get('trade');
+      const socketState=ws=>!ws?'not started':ws.readyState===WebSocket.OPEN?'connected':ws.readyState===WebSocket.CONNECTING?'connecting':ws.readyState===WebSocket.CLOSING?'closing':'reconnecting';
+      bits.push(`<span>OI: ${state.oi.size?`${state.oi.size} records · ${new Date(state.lastOIUpdate).toLocaleTimeString('vi-VN')}`:`${socketState(oiWs)} · waiting first update (60s stream)`}</span>`);
+      bits.push(`<span>Flow: ${state.trades.length?`${state.trades.length} trades cached`:`${socketState(tradeWs)} · waiting new trades`}</span>`);
       bits.push(`<span>Updated: ${state.lastMarkTime?new Date(state.lastMarkTime).toLocaleTimeString('vi-VN'):'—'}</span>`);
       meta.innerHTML=bits.join('');
     }
@@ -247,8 +249,8 @@
     root.innerHTML=[
       metric('XAU INDEX',spot==null?'—':'$'+fmt(spot,2),'Binance underlying index'),
       metric('ATM IMPLIED VOL',atmIV==null?'—':fmt(atmIV*100,2)+'%','Mark IV · nearest strike'),
-      metric('CALL OPEN INTEREST',compact(a.callOI),'Selected expiry'),
-      metric('PUT OPEN INTEREST',compact(a.putOI),'Selected expiry'),
+      metric('CALL OPEN INTEREST',a.hasOI?compact(a.callOI):'—',a.hasOI?'Selected expiry':'Waiting for Binance OI update'),
+      metric('PUT OPEN INTEREST',a.hasOI?compact(a.putOI):'—',a.hasOI?'Selected expiry':'Waiting for Binance OI update'),
       metric('PUT / CALL',a.pc==null?'—':fmt(a.pc,3),'OI ratio'),
       metric('MAX PAIN',pain?'$'+fmt(pain.strike,2):'—','OI-weighted expiry estimate')
     ].join('');
@@ -258,7 +260,10 @@
     const el=$o('optExposure');if(!el)return;
     const metricKey=state.exposureMetric,labels={gamma:['Gamma Exposure by Strike','USDT / 1% XAU move'],delta:['Delta Exposure by Strike','USDT notional'],vega:['Vega Exposure by Strike','Binance native units'],theta:['Theta Exposure by Strike','Binance native units']};
     const title=$o('optExposureTitle'),units=$o('optExposureUnits');if(title)title.textContent=labels[metricKey][0];if(units)units.textContent=labels[metricKey][1];
-    if(!a.hasOI||state.index==null){el.innerHTML='<div class="opt-empty">Đang chờ Open Interest và Underlying Index. Greeks vẫn có thể xem trong Option Chain.</div>';return;}
+    if(!a.hasOI||state.index==null){
+      const oiWs=state.sockets.get('oi'),connected=oiWs&&oiWs.readyState===WebSocket.OPEN;
+      el.innerHTML=`<div class="opt-empty">${!a.hasOI?(connected?'Đã kết nối OI stream; Binance cập nhật OI theo chu kỳ khoảng 60 giây. Đang chờ bản tin đầu tiên.':'Đang chờ kết nối Open Interest.'):'Đang chờ Underlying Index.'} Exposure sẽ tự tính khi đủ OI và Index.</div>`;return;
+    }
     const sign=state.mode==='short'?-1:1,spot=state.index;
     const value=x=>{if(!x||x.oi==null)return 0;const oi=x.oi;
       if(metricKey==='delta')return x.delta==null?0:sign*x.delta*oi*spot;
@@ -271,7 +276,10 @@
   }
   function renderGreeks(a){
     const el=$o('optGreeks');if(!el)return;
-    if(!a.hasOI){el.innerHTML='<div class="opt-empty">Đang chờ OI để tổng hợp Exposure. Dữ liệu từng hợp đồng có trong Option Chain.</div>';return;}
+    if(!a.hasOI){
+      const oiWs=state.sockets.get('oi'),connected=oiWs&&oiWs.readyState===WebSocket.OPEN;
+      el.innerHTML=`<div class="opt-empty">${connected?'OI stream đã kết nối. Đang chờ bản tin OI đầu tiên (chu kỳ cập nhật khoảng 60 giây).':'Đang chờ kết nối OI stream.'} Greeks từng hợp đồng vẫn có trong Option Chain.</div>`;return;
+    }
     el.innerHTML=`<div class="opt-greek-line"><span>Delta Notional</span><b>${fmt(a.delta,2)} USDT</b></div>
       <div class="opt-greek-line"><span>Gamma Exposure · 1% move</span><b>${fmt(a.gex,2)} USDT</b></div>
       <div class="opt-greek-line"><span>Aggregate Gamma</span><b>${fmt(a.gamma,6)}</b></div>
@@ -288,12 +296,17 @@
   }
   function renderFlow(){
     const el=$o('optFlowBody');if(!el)return;
-    if(!state.trades.length){el.innerHTML='<div class="opt-empty">Đang chờ giao dịch Options…</div>';return;}
+    if(!state.trades.length){
+      const tradeWs=state.sockets.get('trade'),connected=tradeWs&&tradeWs.readyState===WebSocket.OPEN;
+      el.innerHTML=`<div class="opt-empty">${connected?'Trade stream đã kết nối. Chưa có giao dịch mới kể từ lúc mở Options; Binance không gửi lịch sử giao dịch ban đầu qua stream này.':'Đang kết nối Options Trade stream…'}</div>`;return;
+    }
     el.innerHTML=state.trades.slice(0,20).map(t=>`<div class="opt-flow-row"><span class="${t.side==='BUY'?'pos-t':'neg-t'}">${t.side}</span><b>${esc(t.symbol)}</b><span>$${fmt(t.price,4)}</span><span>${fmt(t.qty,4)}</span><small>${esc(t.type)}</small><time>${new Date(t.time).toLocaleTimeString('vi-VN')}</time></div>`).join('');
   }
   function renderMeta(rows,a){
     const el=$o('optMeta');if(!el)return;
-    el.innerHTML=`<span>Expiry: ${esc(state.expiry?dateLabel(Number(state.expiry)):'—')}</span><span>${rows.length} strikes</span><span>${state.marks.size} live mark records</span><span>${state.oi.size} OI records</span><span>${state.trades.length} recent trades</span><span>Mark time: ${state.lastMarkTime?new Date(state.lastMarkTime).toLocaleTimeString('vi-VN'):'—'}</span>`;
+    const oiWs=state.sockets.get('oi'),tradeWs=state.sockets.get('trade');
+    const wsLabel=ws=>!ws?'not started':ws.readyState===WebSocket.OPEN?'connected':ws.readyState===WebSocket.CONNECTING?'connecting':'reconnecting';
+    el.innerHTML=`<span>Expiry: ${esc(state.expiry?dateLabel(Number(state.expiry)):'—')}</span><span>${rows.length} strikes</span><span>${state.marks.size} live mark records</span><span>${state.oi.size} OI records · ${wsLabel(oiWs)}</span><span>${state.trades.length} recent trades · ${wsLabel(tradeWs)}</span><span>Mark time: ${state.lastMarkTime?new Date(state.lastMarkTime).toLocaleTimeString('vi-VN'):'—'}</span>`;
   }
   function renderInitial(){
     const body=$o('optChainBody');if(body)body.innerHTML='<tr><td colspan="15" class="opt-empty">Đang kết nối Binance Options WebSocket…</td></tr>';
@@ -315,7 +328,7 @@
     state.marks.clear();state.contracts=[];state.oi.clear();state.trades=[];state.lastMarkTime=0;state.lastOIUpdate=0;state.lastTradeTime=0;state.expiry=null;state.oiExpiry=null;
     closeAll();activate(true);
   }
-  function debug(){return {active:state.active,connections:[...state.sockets].map(([key,ws])=>({key,state:ws.readyState,url:ws.url})),contractCount:state.contracts.length,markCount:state.markCount,oiCount:state.oiCount,tradeCount:state.trades.length,index:state.index,expiry:state.expiry,lastMarkTime:state.lastMarkTime,lastOIUpdate:state.lastOIUpdate,lastTradeTime:state.lastTradeTime,error:state.error}}
+  function debug(){return {active:state.active,connections:[...state.sockets].map(([key,ws])=>({key,state:ws.readyState,stateLabel:['CONNECTING','OPEN','CLOSING','CLOSED'][ws.readyState]||'UNKNOWN',url:ws.url})),contractCount:state.contracts.length,markCount:state.markCount,oiCount:state.oiCount,tradeCount:state.trades.length,index:state.index,expiry:state.expiry,oiExpiry:state.oiExpiry,lastMarkTime:state.lastMarkTime,lastOIUpdate:state.lastOIUpdate,lastTradeTime:state.lastTradeTime,error:state.error}}
   function init(){
     if(!$o('v-options'))return;
     const expiry=$o('optExpiry');if(expiry)expiry.addEventListener('change',()=>{state.expiry=Number(expiry.value)||null;ensureOISocket();scheduleRender()});
