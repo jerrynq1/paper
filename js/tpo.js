@@ -28,7 +28,7 @@ function tpoLoadSettings(){
   o.sessionPick=o.sessionPick==="previous"?"previous":"current";
   o.rowStep=Math.max(0,Math.min(1e6,Number(o.rowStep)||0));
   o.valueArea=Math.max(50,Math.min(90,Math.round(+o.valueArea||70)));
-  o.valueMode=o.valueMode==="tick"?"tick":"tpo";
+  o.valueMode=["tick","quote"].includes(o.valueMode)?o.valueMode:"tpo";
   o.ibMinutes=[30,60,90,100,120].includes(+o.ibMinutes)?+o.ibMinutes:60;
   o.side=o.side==="l"?"l":"r";
   o.widthPct=Math.max(20,Math.min(80,Math.round(+o.widthPct||48)));
@@ -98,6 +98,28 @@ function tpoFindFairPrice(counts,lo,hi,profileMid){
   for(let i=lo;i<=hi;i++)if(counts[i]>best||(counts[i]===best&&Math.abs(i-profileMid)<Math.abs(pick-profileMid))){best=counts[i];pick=i}
   return pick;
 }
+// CBOT LDB 70% range method (Study Guide Part II): start at the
+// highest-volume price, compare the next two rows above with the next two
+// below, then add the larger pair until the target is reached. This helper is
+// only used for M1 tick-volume / quote-count proxies; it never labels them as
+// actual futures contract volume.
+function tpoLdbValueArea(metric,poc,targetPct){
+  const n=metric?.length||0;if(!n||poc<0||poc>=n)return{lo:0,hi:0,total:0,covered:0};
+  let total=0;for(const v of metric)total+=Math.max(0,+v||0);
+  const target=total*Math.max(1,Math.min(100,targetPct))/100;let lo=poc,hi=poc,covered=Math.max(0,+metric[poc]||0);
+  const pair=(start,dir)=>{let sum=0;for(let k=1;k<=2;k++){const i=start+dir*k;if(i>=0&&i<n)sum+=Math.max(0,+metric[i]||0)}return sum};
+  while(covered+1e-9<target&&(lo>0||hi<n-1)){
+    const up=pair(hi,1),down=pair(lo,-1);
+    if(up<0&&down<0)break;
+    if(up>down){for(let k=1;k<=2&&hi<n-1;k++){hi++;covered+=Math.max(0,+metric[hi]||0)}}
+    else if(down>up){for(let k=1;k<=2&&lo>0;k++){lo--;covered+=Math.max(0,+metric[lo]||0)}}
+    else{
+      let moved=false;for(let k=1;k<=2;k++){if(hi<n-1){hi++;covered+=Math.max(0,+metric[hi]||0);moved=true}if(lo>0){lo--;covered+=Math.max(0,+metric[lo]||0);moved=true}}
+      if(!moved)break;
+    }
+  }
+  return{lo,hi,total,covered};
+}
 function tpoClassifyDay(P){
   if(!P||!P.ibReady||!(P.ibRange>0))return"IB đang hình thành";
   const up=Math.max(0,P.high-P.ibHigh),dn=Math.max(0,P.ibLow-P.low),full=P.high-P.low,inside=P.ibRange/Math.max(full,P.step);
@@ -124,7 +146,7 @@ function tpoCalcProfile(bars,o,session){
   const tick=Math.pow(10,-Math.max(0,Math.min(8,typeof PDIG==="function"?PDIG():2)));let step=o.rowStep>0?Math.max(tick,o.rowStep):tpoNiceStep(Math.max(max-min,tick),tick),binI=Math.max(1,Math.round(step*TPO_SCALE));
   step=binI/TPO_SCALE;let baseI=Math.floor(Math.round(min*TPO_SCALE)/binI),topI=Math.floor(Math.round(max*TPO_SCALE)/binI),n=topI-baseI+1;
   if(n>900){const mult=Math.ceil(n/900);binI=Math.max(1,Math.round(step*mult*TPO_SCALE));step=binI/TPO_SCALE;baseI=Math.floor(Math.round(min*TPO_SCALE)/binI);topI=Math.floor(Math.round(max*TPO_SCALE)/binI);n=topI-baseI+1}
-  const dur=session.end-session.start,periodSec=o.periodMin*60,nP=Math.max(1,Math.ceil(dur/periodSec)),cells=new Uint8Array(n*nP),metric=new Float64Array(n),counts=new Int32Array(n),rowOf=p=>Math.floor(Math.round(p*TPO_SCALE)/Math.max(1,Math.round(step*TPO_SCALE)))-baseI;
+  const dur=session.end-session.start,periodSec=o.periodMin*60,nP=Math.max(1,Math.ceil(dur/periodSec)),cells=new Uint8Array(n*nP),metric=new Float64Array(n),quoteMetric=new Float64Array(n),buyQuote=new Float64Array(n),sellQuote=new Float64Array(n),counts=new Int32Array(n),rowOf=p=>Math.floor(Math.round(p*TPO_SCALE)/Math.max(1,Math.round(step*TPO_SCALE)))-baseI;
   let ibHigh=-Infinity,ibLow=Infinity,ibBars=0,ibEnd=session.start+o.ibMinutes*60,close=+last[4],fpmMins=0,pioneerHigh=-Infinity,pioneerLow=Infinity;
   for(let i=i0;i<i1;i++){
     const b=bars[i],serverTime=+b[0],t=typeof s2u==="function"?s2u(serverTime):serverTime;if(!(t>=session.start&&t<session.end))continue;
@@ -133,7 +155,7 @@ function tpoCalcProfile(bars,o,session){
     // FPM keys use the same server-time minute stamp as m1[i][0]; t is UTC only for session math.
     const fp=useFootprint?FPM.get(serverTime):null;
     if(fp&&fp.length){
-      const seen=new Set();for(const r of fp){const p=+r[0];if(!Number.isFinite(p))continue;const q=rowOf(p);if(q>=0&&q<n)seen.add(q)}
+      const seen=new Set();for(const r of fp){const p=+r[0];if(!Number.isFinite(p))continue;const q=rowOf(p);if(q>=0&&q<n){seen.add(q);const bq=Math.max(0,+r[1]||0),sq=Math.max(0,+r[2]||0);buyQuote[q]+=bq;sellQuote[q]+=sq;quoteMetric[q]+=bq+sq}}
       if(seen.size){touched=[...seen];fpmMins++}
     }
     if(!touched.length){let a=Math.max(0,rowOf(low)),z=Math.min(n-1,rowOf(high));for(let q=a;q<=z;q++)touched.push(q)}
@@ -146,18 +168,19 @@ function tpoCalcProfile(bars,o,session){
   for(let q=0;q<n;q++){
     let c=0;for(let p=0;p<nP;p++)c+=cells[q*nP+p];counts[q]=c;totalTpo+=c;
   }
-  let tickMetricTotal=0;for(const v of metric)tickMetricTotal+=Math.max(0,v);
-  const valueModeUsed=o.valueMode==="tick"&&tickMetricTotal>0?"tick":"tpo";
+  let tickMetricTotal=0,quoteMetricTotal=0;for(let q=0;q<n;q++){tickMetricTotal+=Math.max(0,metric[q]);quoteMetricTotal+=Math.max(0,quoteMetric[q])}
+  const valueModeUsed=o.valueMode==="tick"&&tickMetricTotal>0?"tick":o.valueMode==="quote"&&quoteMetricTotal>0?"quote":"tpo";
+  const selectedMetric=valueModeUsed==="tick"?metric:valueModeUsed==="quote"?quoteMetric:counts;
   for(let q=0;q<n;q++){
-    const val=valueModeUsed==="tick"?metric[q]:counts[q];
+    const val=selectedMetric[q];
     if(val>mx+1e-9||(Math.abs(val-mx)<=1e-9&&Math.abs(q-mid)<Math.abs(poc-mid))){mx=val;poc=q}
   }
-  const vaMetric=valueModeUsed==="tick"?metric:counts,va=tpoValueArea(vaMetric,poc,o.valueArea),fair=tpoFindFairPrice(counts,va.lo,va.hi,mid);
+  const vaMetric=selectedMetric,va=valueModeUsed==="tpo"?tpoValueArea(vaMetric,poc,o.valueArea):tpoLdbValueArea(vaMetric,poc,o.valueArea),valueAreaMethod=valueModeUsed==="tpo"?"TPO-count adjacent-row expansion":"CBOT two-row volume-range method · proxy",fair=tpoFindFairPrice(counts,va.lo,va.hi,mid);
   let above=0,below=0;for(let q=0;q<n;q++)if(counts[q]>=2){if(q>fair)above++;else if(q<fair)below++}
   const imbalance=above<below?"Buyer":below<above?"Seller":"Balanced";
   let topSingles=0,botSingles=0;for(let q=n-1;q>=0&&counts[q]===1;q--)topSingles++;for(let q=0;q<n&&counts[q]===1;q++)botSingles++;
   const haveIB=ibBars>0&&ibHigh>-Infinity&&ibLow<Infinity,ibRange=haveIB?ibHigh-ibLow:0;
-  const P={session,base:baseI*binI/TPO_SCALE,step,n,nP,periodMin:o.periodMin,periodSec,cells,counts,metric,totalTpo,poc,va,vaMetric,valueModeUsed,fair,above,below,imbalance,high:max,low:min,close,ibHigh:haveIB?ibHigh:null,ibLow:haveIB?ibLow:null,ibRange,ibBars,pioneerHigh:Number.isFinite(pioneerHigh)?pioneerHigh:null,pioneerLow:Number.isFinite(pioneerLow)?pioneerLow:null,rangeExtensionUp:haveIB?Math.max(0,max-ibHigh):null,rangeExtensionDown:haveIB?Math.max(0,ibLow-min):null,ibReady:haveIB&&(typeof s2u==="function"?s2u(last[0]):last[0])>=ibEnd,topSingles,botSingles,tickMinutes:fpmMins,totalMinutes,source:fpmMins?"M1 + footprint quote rows":"M1 OHLC High–Low",approx:true};
+  const P={session,base:baseI*binI/TPO_SCALE,step,n,nP,periodMin:o.periodMin,periodSec,cells,counts,metric,quoteMetric,buyQuote,sellQuote,totalTpo,poc,va,vaMetric,valueModeUsed,valueAreaMethod,fair,above,below,imbalance,high:max,low:min,close,ibHigh:haveIB?ibHigh:null,ibLow:haveIB?ibLow:null,ibRange,ibBars,pioneerHigh:Number.isFinite(pioneerHigh)?pioneerHigh:null,pioneerLow:Number.isFinite(pioneerLow)?pioneerLow:null,rangeExtensionUp:haveIB?Math.max(0,max-ibHigh):null,rangeExtensionDown:haveIB?Math.max(0,ibLow-min):null,ibReady:haveIB&&(typeof s2u==="function"?s2u(last[0]):last[0])>=ibEnd,topSingles,botSingles,tickMinutes:fpmMins,totalMinutes,quoteCoverage:totalMinutes?fpmMins/totalMinutes:0,source:fpmMins?"M1 + footprint quote rows":"M1 OHLC High–Low",approx:true};
   P.pocPrice=P.base+(P.poc+.5)*step;P.vah=P.base+(P.va.hi+1)*step;P.val=P.base+P.va.lo*step;P.fairPrice=P.base+(P.fair+.5)*step;P.dayType=tpoClassifyDay(P);P.coverage=totalMinutes?fpmMins/totalMinutes:0;
   return P;
 }
@@ -275,8 +298,8 @@ function tpoRenderStandalone(force=false){
   if(meta)meta.textContent=`${o.sessionHours} giờ · ${o.periodMin} phút/bracket · ${o.timeZone.replace("America/"," ").replace("Asia/"," ").replace("Europe/"," ").replace("Etc/"," ")}`;
   if(stats)stats.innerHTML=tpoStatsMarkup(P);if(empty)empty.hidden=true;
   if(feed){feed.textContent=P.tickMinutes?`Footprint ${Math.round(P.coverage*100)}%`:`M1 OHLC · ước lượng`;feed.classList.toggle("is-empty",!P.tickMinutes)}
-  const mode=P.valueModeUsed==="tpo"?(o.valueMode==="tick"?"TPO count · fallback":"TPO count"):"M1 tick-volume proxy";
-  if(foot)foot.textContent=`${P.source} · ${P.totalMinutes} phút M1 · ${P.totalTpo} TPO · ${mode}. CFD/cTrader không phải dữ liệu giao dịch futures tập trung.`;
+  const mode=P.valueModeUsed==="tpo"?(o.valueMode!=="tpo"?"TPO count · fallback":"TPO count"):P.valueModeUsed==="quote"?"Bid/Ask quote-event proxy":"M1 tick-volume proxy";
+  if(foot)foot.textContent=`${P.source} · ${P.totalMinutes} phút M1 · ${P.totalTpo} TPO · ${mode}; VA: ${P.valueAreaMethod}. CFD/cTrader không phải dữ liệu giao dịch futures tập trung.`;
   const hdr=$("tpoHeaderScroll"),grid=$("tpoGridScroll"),body=$("tpoBodyScroll");if(!hdr||!grid||!body)return P;
   const oldX=grid.scrollLeft,oldY=body.scrollTop,rowH=18,countW=o.showCounts?68:0,axisW=82;
   const viewWidth=document.getElementById("v-tpo")?.clientWidth||window.innerWidth;
@@ -306,7 +329,7 @@ function tpoBuildSettings(){
       <label>Hệ ký tự<select data-tpo="letterMode">${opt([["cbot24","CBOT 24h · A–X / a–x"],["session","A–Z / a–z theo phiên"]],o.letterMode)}</select></label>
       <label>Bước giá mỗi hàng (0 = tự động)<input type="number" min="0" step="any" data-tpo="rowStep" value="${o.rowStep}"></label>
       <label>Value Area (%)<input type="number" min="50" max="90" step="1" data-tpo="valueArea" value="${o.valueArea}"></label>
-      <label>Cách tính Value Area<select data-tpo="valueMode">${opt([["tpo","Theo số TPO · chuẩn profile"],["tick","Theo tick volume M1 · proxy"]],o.valueMode)}</select></label>
+      <label>Cách tính Value Area<select data-tpo="valueMode">${opt([["tpo","Theo số TPO · chuẩn profile"],["tick","Theo tick volume M1 · proxy"],["quote","Theo quote events Bid/Ask · proxy"]],o.valueMode)}</select></label>
       <label>Initial Balance<select data-tpo="ibMinutes">${opt([[30,"30 phút"],[60,"60 phút · CBOT cơ bản"],[90,"90 phút"],[100,"100 phút"],[120,"120 phút"]],o.ibMinutes)}</select></label>
     </div></section>
     <section class="tpo-setting-group"><h4>3. Các thành phần hiển thị</h4><div class="tpo-setting-toggles">
@@ -336,7 +359,7 @@ function tpoSetValue(key,value){
   else if(key==="letterMode")o.letterMode=value==="session"?"session":"cbot24";
   else if(key==="rowStep")o.rowStep=Math.max(0,Math.min(1e6,Number(value)||0));
   else if(key==="valueArea")o.valueArea=Math.max(50,Math.min(90,Math.round(+value||70)));
-  else if(key==="valueMode")o.valueMode=value==="tick"?"tick":"tpo";
+  else if(key==="valueMode")o.valueMode=["tick","quote"].includes(value)?value:"tpo";
   else if(key==="ibMinutes")o.ibMinutes=[30,60,90,100,120].includes(+value)?+value:60;
   tpoSave();tpoSyncControls();
 }
