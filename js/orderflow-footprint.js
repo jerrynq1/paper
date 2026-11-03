@@ -9,11 +9,13 @@ const FPU=1e5,fpSI=step=>Math.max(1,Math.round(step*FPU));
 const fpQ=(p,step)=>Math.floor(Math.round(p*FPU)/fpSI(step));      // chỉ số hàng chứa giá p
 const fpYp=(q,step)=>(q+.5)*fpSI(step)/FPU;                         // giá ở tâm hàng q (để vẽ)
 const fpOn=()=>ACT.find(x=>x.key==="fpr"&&isOn(x)),btOn=()=>ACT.find(x=>x.key==="bt"&&isOn(x));
+// TPO can consume the same cTrader quote rows without enabling the visual Footprint indicator.
+const tpoOn=()=>typeof TPO!=="undefined"&&!!TPO.options.enabled&&!(typeof RP!=="undefined"&&RP.on);
 const fpRgb=h=>{const m=/^#?([0-9a-f]{6})$/i.exec(h||"");const n=m?parseInt(m[1],16):8421504;return(n>>16)+","+((n>>8)&255)+","+(n&255)};
 const fpFm=v=>{const a=Math.abs(v);return(v<0?"-":"")+(a>=1e4?(a/1e3).toFixed(1)+"K":Math.round(a))};
 const btGap=()=>{const b=btOn();return b?Math.max(50,Math.min(5000,Math.round(+b.p.gap)||300)):300};   // khoảng nghỉ tối đa (ms) giữa 2 tick của 1 chuỗi Big Trade
 async function fpSync(){
-  const a=fpOn()||btOn()||stOn()||haOn()||domVpOn();if(!a||SUB()||fpBusy||!ctReady()||!m1.length||Date.now()<fpRetry)return;fpBusy=true;const gp=btGap();
+  const a=fpOn()||btOn()||stOn()||haOn()||domVpOn()||tpoOn();if(!a||SUB()||fpBusy||!ctReady()||!m1.length||Date.now()<fpRetry)return;fpBusy=true;const gp=btGap();
   try{
     if(fpSym!==C.sym||fpEpoch!==CT.epoch||fpGap!==gp){FPM.clear();BTE.clear();fpSym=C.sym;fpEpoch=CT.epoch;fpGap=gp;BTG.gap=gp;fpLast=0;fpStart=0;fpCov=null;FPH++;ctFpReset()}
     const ok=()=>C.sym===fpSym&&fpEpoch===CT.epoch&&btGap()===fpGap&&ctReady();
