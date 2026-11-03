@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Unbounded:wght@800&family=Sora:wght@500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/options.css">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body class="nt">
@@ -58,6 +59,54 @@
   <div class="card tpo-settings-card" id="tpoSettings"></div>
 </section>
 
+<section class="view" id="v-options">
+  <div class="options-head">
+    <div><div class="options-eyebrow">DERIVATIVES ANALYTICS · BINANCE</div><h2>Options <span>· XAU</span></h2><p class="msg">Option Chain, Greeks và Exposure của Gold Commodity Options. Dữ liệu thị trường công khai từ Binance; không cần API key.</p></div>
+    <div class="opt-actions"><span id="optStatus" class="opt-status">Chưa đồng bộ</span><button class="btn sm" id="optRefresh" type="button">↻ Làm mới</button></div>
+  </div>
+  <div id="optErrors" class="opt-errors" hidden></div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="opt-toolbar">
+      <div class="opt-control"><label for="optExpiry">EXPIRATION</label><select id="optExpiry"><option value="">Đang tải kỳ hạn…</option></select></div>
+      <div class="opt-control"><label for="optMode">EXPOSURE SCENARIO</label><select id="optMode"><option value="long">Long options · Buyer side</option><option value="short">Short options · Counterparty</option></select></div>
+      <div class="opt-source">Underlying: <b>XAUUSDT</b> · Settlement: <b>USDT</b> · Source: Binance Options API</div>
+    </div>
+    <div id="optMetrics" class="opt-metrics"></div>
+  </div>
+  <div class="opt-main-grid">
+    <div class="card">
+      <div class="opt-card-title"><h3 id="optExposureTitle">Gamma Exposure by Strike</h3><select id="optExposureMetric" class="opt-exposure-select" aria-label="Chọn loại Exposure"><option value="gamma">Gamma</option><option value="delta">Delta</option><option value="vega">Vega</option><option value="theta">Theta</option></select></div>
+      <small id="optExposureUnits" class="opt-exposure-units">USDT / 1% XAU move</small>
+      <div id="optExposure" class="opt-gex-chart"><div class="opt-empty">Đang tải Exposure…</div></div>
+      <p class="opt-mode-note">Giá trị từng strike được tổng hợp từ OI × Greek × contract unit; riêng Gamma được quy đổi theo biến động 1% của underlying. Dấu +/- tuỳ thuộc kịch bản Long/Short đang chọn.</p>
+    </div>
+    <div class="card">
+      <div class="opt-card-title"><h3>Aggregate Greeks</h3><small>Selected expiry</small></div>
+      <div id="optGreeks" class="opt-greeks"><div class="opt-empty">Đang tải Greeks…</div></div>
+    </div>
+  </div>
+  <div class="card opt-chain-card">
+    <div class="opt-card-title"><h3>Option Chain · XAU</h3><small>Call / Put · Mark IV &amp; Greeks</small></div>
+    <div class="opt-table-wrap">
+      <table class="opt-chain">
+        <thead><tr><th rowspan="2">STRIKE</th><th class="call-head" colspan="7">CALL</th><th class="put-head" colspan="7">PUT</th></tr>
+        <tr><th>Mark</th><th>OI</th><th>Delta</th><th>Gamma</th><th>Vega</th><th>Theta</th><th>IV</th><th>Mark</th><th>OI</th><th>Delta</th><th>Gamma</th><th>Vega</th><th>Theta</th><th>IV</th></tr></thead>
+        <tbody id="optChainBody"><tr><td colspan="15" class="opt-empty">Đang tải Option Chain…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="opt-card-title"><h3>Data &amp; Methodology</h3><button class="btn ghost sm" id="optExplain" type="button">Giải thích cách tính</button></div>
+    <div id="optMeta" class="opt-meta"></div>
+    <div id="optMethod" class="opt-method" hidden>
+      <p><strong>Nguồn Greeks:</strong> Binance <code>/eapi/v1/mark</code> cung cấp Mark Price, Mark IV, Delta, Gamma, Vega và Theta. Không có Rho trong response hiện tại nên không tự bịa hoặc ước lượng Rho.</p>
+      <p><strong>Exposure:</strong> Delta Notional = Σ(Delta × OI × Contract Unit × XAU Index). Gamma Exposure cho biến động 1% = Σ(Gamma × OI × Contract Unit × XAU Index² × 0.01). Delta/Gamma/Vega/Theta đều có thể xem theo từng strike; Vega và Theta được cộng theo đơn vị native Binance trả về, không tự quy đổi khi tài liệu API không định nghĩa rõ scaling.</p>
+      <p><strong>Giới hạn quan trọng:</strong> Open Interest cho biết số hợp đồng đang mở, không cho biết tài khoản/nhóm nào đang Long hay Short. Vì vậy nút Exposure Scenario chỉ đảo dấu cho mô hình Long-option buyer hoặc Short-option counterparty, không phải dữ liệu dealer positioning thực tế. Gamma theo strike là mô hình có điều kiện, không phải GEX chính thức của toàn thị trường.</p>
+      <p><strong>Thị trường:</strong> XAU Commodity Options của Binance là hợp đồng European-style, thanh toán USDT, có kỳ hạn ngày/tuần. Giá underlying dùng Binance TradFi Perpetual Contract Index; sản phẩm có giờ giao dịch và thời gian đóng cửa riêng.</p>
+    </div>
+  </div>
+</section>
+
 <section class="view" id="v-ind">
   <div class="card dtt-settings" id="dttSettings" style="margin-bottom:14px"></div>
   <div class="card"><h2>Đang dùng trên chart</h2><div id="actList"></div></div>
@@ -104,6 +153,7 @@
 <script src="js/indicators-custom.js"></script>
 <script src="js/indicators-engine.js"></script>
 <script src="js/connection-ui.js"></script>
+<script src="js/options.js"></script>
 <script src="js/init.js"></script>
 <script src="js/drawings-core.js"></script>
 <script src="js/volume-profile.js"></script>

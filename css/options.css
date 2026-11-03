@@ -1,0 +1,64 @@
+/* ================= OPTIONS WORKSPACE ================= */
+.options-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin:4px 0 16px;flex-wrap:wrap}
+.options-eyebrow{font:700 10px Sora,sans-serif;letter-spacing:.16em;color:var(--acc);text-transform:uppercase}
+.options-head h2{font:800 25px Sora,"Space Grotesk",sans-serif;margin:3px 0 4px}
+.options-head h2 span{color:var(--acc)}
+.options-head .msg{max-width:760px;margin:0}
+.opt-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.opt-status{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:var(--inp);color:var(--mut);font-size:11px;white-space:nowrap}
+.opt-status:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--be)}
+.opt-status.ok{color:var(--win)}.opt-status.ok:before{background:var(--win);box-shadow:0 0 8px var(--win)}
+.opt-status.bad{color:var(--loss)}.opt-status.bad:before{background:var(--loss)}
+.opt-status.loading:before{background:var(--acc);animation:opt-pulse 1s infinite}
+@keyframes opt-pulse{50%{opacity:.25}}
+.opt-toolbar{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.opt-control{display:flex;flex-direction:column;gap:5px;min-width:150px}
+.opt-control label{font-size:11px;color:var(--mut);font-weight:700}
+.opt-control select{min-width:150px}
+.opt-source{margin-left:auto;font-size:11px;color:var(--mut)}
+.opt-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.opt-metric{min-width:0;padding:13px 14px;border:1px solid var(--line);border-radius:13px;background:var(--card);box-shadow:0 8px 24px rgba(0,0,0,.10)}
+.opt-metric span{display:block;font-size:10px;letter-spacing:.07em;font-weight:700;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.opt-metric strong{display:block;font:800 19px Sora,"Space Grotesk",sans-serif;margin:6px 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.opt-metric small{display:block;font-size:10px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.opt-main-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.85fr);gap:14px;margin-bottom:14px}
+.opt-card-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.opt-card-title h3{font:700 13px Sora,"Space Grotesk",sans-serif;margin:0}
+.opt-card-title small{color:var(--mut);font-size:10px}
+.opt-mode-note{font-size:10px;color:var(--mut);margin:10px 0 0}
+.opt-gex-chart{display:flex;flex-direction:column;gap:5px;max-height:390px;overflow:auto;padding-right:4px}
+.opt-gex-row{display:grid;grid-template-columns:66px minmax(60px,1fr) 70px;align-items:center;gap:9px;font-variant-numeric:tabular-nums}
+.opt-gex-strike{font-size:11px;color:var(--mut);text-align:right}
+.opt-gex-track{height:12px;border-radius:3px;background:var(--inp);overflow:hidden}
+.opt-gex-track i{height:100%;display:block;border-radius:3px;min-width:1px}
+.opt-gex-track i.pos{background:linear-gradient(90deg,#22b58c,#75edbd)}
+.opt-gex-track i.neg{background:linear-gradient(90deg,#df526c,#ff9a83)}
+.opt-gex-row b{font-size:10px;text-align:right;font-weight:700}
+.opt-gex-row .pos-t{color:var(--win)}.opt-gex-row .neg-t{color:var(--loss)}
+.opt-greeks{display:flex;flex-direction:column;gap:0}
+.opt-greek-line{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--line);font-size:11px}
+.opt-greek-line:last-of-type{border-bottom:0}
+.opt-greek-line span{color:var(--mut)}.opt-greek-line b{font-size:12px;font-variant-numeric:tabular-nums;text-align:right}
+.opt-footnote{font-size:10px;line-height:1.55;color:var(--mut);margin:12px 0 0}
+.opt-chain-card{margin-bottom:14px}
+.opt-table-wrap{overflow:auto;max-width:100%;border:1px solid var(--line);border-radius:10px}
+.opt-chain{width:100%;min-width:1160px;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}
+.opt-chain th,.opt-chain td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.opt-chain thead tr:first-child th{font:700 10px Sora,sans-serif;letter-spacing:.08em;text-align:center;color:var(--mut);background:var(--inp)}
+.opt-chain thead tr:nth-child(2) th{font-size:10px;color:var(--mut);background:var(--inp)}
+.opt-chain thead .call-head{color:var(--win)}.opt-chain thead .put-head{color:var(--loss)}
+.opt-chain td.strike{font-weight:800;color:var(--acc);text-align:center}
+.opt-chain td.strike small{display:inline-block;margin-left:5px;padding:1px 5px;border-radius:4px;background:var(--acc);color:var(--onacc);font-size:8px}
+.opt-chain tr.atm{background:rgba(var(--glow),.075)}
+.opt-chain tbody tr:hover{background:var(--inp)}
+.opt-chain tbody tr:last-child td{border-bottom:0}
+.opt-errors{padding:10px 12px;border:1px solid var(--loss);border-radius:10px;color:var(--loss);font-size:11px;margin-bottom:14px;background:rgba(255,80,100,.06)}
+.opt-empty{padding:28px 12px;color:var(--mut);font-size:12px;text-align:center}
+.opt-meta{display:flex;flex-wrap:wrap;gap:8px 18px;padding:11px 14px;font-size:10px;color:var(--mut)}
+.opt-method{font-size:11px;color:var(--mut);line-height:1.65;margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+.opt-method strong{color:var(--ink)}
+.opt-method code{color:var(--acc)}
+@media(max-width:1100px){.opt-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.opt-main-grid{grid-template-columns:1fr}}
+@media(max-width:620px){.options-head h2{font-size:21px}.opt-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.opt-metric{padding:11px}.opt-metric strong{font-size:17px}.opt-toolbar{align-items:stretch}.opt-control{flex:1;min-width:130px}.opt-source{margin-left:0;width:100%}.opt-gex-row{grid-template-columns:55px minmax(40px,1fr) 58px;gap:6px}}
+
+.opt-exposure-select{max-width:120px;min-width:100px;font-size:11px;padding:6px 25px 6px 9px}.opt-exposure-units{display:block;color:var(--mut);font-size:10px;margin:-6px 0 10px}

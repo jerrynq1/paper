@@ -206,3 +206,16 @@ Mở **TPO Chart** ở thanh điều hướng bên trái, ngay dưới **Chart**
 - **Replay**: advanced TPO chỉ đọc M1 đã được cắt tới thời điểm Replay; không dùng FPM lịch sử để tránh nhìn trước tương lai. Khi Replay bật, không tự tải thêm lịch sử tương lai.
 - **Đơn vị dữ liệu**: cTrader Forex/CFD không tương đương futures tập trung. OHLC range, tick volume và quote-event counts chỉ là proxy. Part VI đòi hỏi trade volume thật theo price; CTI yêu cầu feed có participant classification. Không có nguồn đó thì không được giả lập. Activity profile mới được thêm nhằm áp dụng phương pháp tổ chức của LDB lên proxy một cách minh bạch; nó không biến nguồn CFD thành volume futures.
 - Market Profile là công cụ tổ chức và phân tích auction/value, không phải hệ thống phát lệnh mua/bán. Classification, natural units và event context vẫn cần trader xác nhận.
+
+## Options · XAU Commodity Options (Binance)
+
+Mở mục **Options** ở sidebar để xem Option Chain của XAUUSDT, kỳ hạn đang niêm yết, Mark Price, Mark IV, Delta, Gamma, Vega, Theta và Open Interest (khi Binance cung cấp cho kỳ hạn đó). Biểu đồ Exposure theo Strike có thể chuyển giữa Delta, Gamma, Vega và Theta. Trang tự làm mới dữ liệu thị trường mỗi 30 giây khi đang mở; Open Interest được làm mới tối đa mỗi 60 giây. Chỉ dùng public market-data endpoints nên **không cần API key Binance**.
+
+- `GET /eapi/v1/exchangeInfo`: lọc các contract `XAU-*`, `TRADFI_OPTIONS`, `COMMODITY`, expiry và trạng thái thị trường.
+- `GET /eapi/v1/mark`: Mark Price, bid/ask/mark IV và Delta/Gamma/Vega/Theta.
+- `GET /eapi/v1/index?underlying=XAUUSDT`: underlying index dùng trong phép tính exposure.
+- `GET /eapi/v1/openInterest`: OI theo underlying + expiry. Module thử các cách ghi `XAU/USDT`, `XAU`, `XAUUSDT` để tương thích khác biệt cách định danh underlying; nếu Binance không trả OI thì Exposure sẽ báo thiếu dữ liệu thay vì tự điền số ước lượng.
+
+**Cách tính hiển thị**: Delta Notional = Σ(Delta × OI × contract unit × S); Gamma Exposure cho một biến động 1% của underlying = Σ(Gamma × OI × contract unit × S² × 0.01). Vega và Theta được cộng theo native units Binance trả về, không tự ý quy đổi sang một đơn vị khác. Binance mark API hiện cung cấp bốn Greeks Delta/Gamma/Vega/Theta; Rho không có trong response được dùng ở đây.
+
+**Giới hạn diễn giải**: Open Interest là số hợp đồng đang mở, không cho biết bên nào đang Long/Short hoặc vị thế của dealer. Bộ chọn Long option buyer / Short option counterparty chỉ là hai kịch bản đảo dấu trên cùng OI; đây không phải dealer positioning hoặc GEX chính thức của toàn thị trường. Nếu OI/index không có, module không hiển thị Exposure như thể đã tính được. Dữ liệu là Commodity Options của Binance, không phải options futures CME/COMEX.
