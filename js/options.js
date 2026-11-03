@@ -5,7 +5,10 @@
 */
 (function(){
   'use strict';
-  const API='https://eapi.binance.com';
+  // Leave empty for direct Binance access. Set a Cloudflare Worker URL in
+  // js/options-config.js to proxy public market-data requests when browser
+  // networking/CORS or regional connectivity blocks direct access.
+  const API=(window.GEXA_BINANCE_OPTIONS_API||'https://eapi.binance.com').replace(/\/+$/,'');
   const UNDERLYING='XAUUSDT';
   const $o=id=>document.getElementById(id);
   const state={active:false,busy:false,timer:null,contracts:[],marks:new Map(),oi:new Map(),index:null,expiry:null,mode:'long',exposureMetric:'gamma',lastExchange:0,lastOI:0,lastUpdate:0,error:'',oiSource:'',ticker:new Map()};
@@ -19,10 +22,18 @@
   const sideName=s=>String(s||'').toUpperCase()==='CALL'?'C':'P';
   async function api(path,params={}){
     const u=new URL(API+path);Object.entries(params).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')u.searchParams.set(k,String(v))});
-    const r=await fetch(u.toString(),{cache:'no-store',headers:{'Accept':'application/json'}});
-    let data;try{data=await r.json()}catch{throw new Error('Binance trả về dữ liệu không phải JSON (HTTP '+r.status+').')}
-    if(!r.ok)throw new Error((data&&data.msg)||('HTTP '+r.status));
-    if(data&&typeof data==='object'&&Number(data.code)<0)throw new Error(data.msg||('Binance API error '+data.code));
+    let r;
+    try{
+      r=await fetch(u.toString(),{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Accept':'application/json'}});
+    }catch(e){
+      const route=(window.GEXA_BINANCE_OPTIONS_API||'').trim()?'Cloudflare Worker':'Binance trực tiếp';
+      const detail=e&&e.message?e.message:'NetworkError';
+      throw new Error('Không kết nối được '+route+' tại '+path+'. Trình duyệt không nhận được phản hồi; kiểm tra Internet, CORS hoặc URL Worker. ('+detail+')');
+    }
+    const raw=await r.text();let data;
+    try{data=raw?JSON.parse(raw):{}}catch{throw new Error(path+' trả dữ liệu không phải JSON (HTTP '+r.status+'): '+raw.slice(0,180))}
+    if(!r.ok)throw new Error(path+' · HTTP '+r.status+' · '+((data&&data.msg)||raw.slice(0,180)||r.statusText));
+    if(data&&typeof data==='object'&&Number(data.code)<0)throw new Error(path+' · Binance API '+data.code+' · '+(data.msg||''));
     return data;
   }
   function setStatus(text,kind=''){
@@ -79,6 +90,8 @@
     setStatus('Đang đồng bộ Binance…','loading');
     const refreshBtn=$o('optRefresh');if(refreshBtn)refreshBtn.disabled=true;
     try{
+      // Separate connectivity check so the error identifies the first failed route.
+      await api('/eapi/v1/ping');
       await loadExchange(force);
       if(!state.contracts.length){state.index=null;state.marks.clear();render();setStatus('Không tìm thấy hợp đồng XAU đang niêm yết','bad');return;}
       const symbols=new Set(state.contracts.map(c=>c.symbol));
@@ -92,7 +105,8 @@
       await loadOpenInterest(force||!state.oi.size);
       state.lastUpdate=Date.now();render();
       const oiOk=state.oi.size>0;
-      setStatus('Binance API · '+state.contracts.length+' contracts · '+(oiOk?'OI synced':'OI unavailable'),'ok');
+      const route=(window.GEXA_BINANCE_OPTIONS_API||'').trim()?'Cloudflare Worker':'Binance direct';
+      setStatus(route+' · '+state.contracts.length+' contracts · '+(oiOk?'OI synced':'OI unavailable'),'ok');
     }catch(e){
       state.error=e&&e.message?e.message:String(e);renderError(state.error);
       setStatus('Không tải được dữ liệu','bad');
@@ -209,7 +223,7 @@
   }
   function renderError(message){
     const el=$o('optErrors');if(!el)return;
-    el.hidden=false;el.textContent='Binance API: '+message+' · Kiểm tra mạng, CORS hoặc tình trạng API rồi thử làm mới.';
+    el.hidden=false;el.textContent='Binance API: '+message+' · Mở F12 → Network để xem request lỗi; không cần tạo API Key cho public market data.';
   }
   function clearError(){const e=$o('optErrors');if(e){e.hidden=true;e.textContent=''}}
   function activate(on){

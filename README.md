@@ -219,3 +219,21 @@ Mở mục **Options** ở sidebar để xem Option Chain của XAUUSDT, kỳ h�
 **Cách tính hiển thị**: Delta Notional = Σ(Delta × OI × contract unit × S); Gamma Exposure cho một biến động 1% của underlying = Σ(Gamma × OI × contract unit × S² × 0.01). Vega và Theta được cộng theo native units Binance trả về, không tự ý quy đổi sang một đơn vị khác. Binance mark API hiện cung cấp bốn Greeks Delta/Gamma/Vega/Theta; Rho không có trong response được dùng ở đây.
 
 **Giới hạn diễn giải**: Open Interest là số hợp đồng đang mở, không cho biết bên nào đang Long/Short hoặc vị thế của dealer. Bộ chọn Long option buyer / Short option counterparty chỉ là hai kịch bản đảo dấu trên cùng OI; đây không phải dealer positioning hoặc GEX chính thức của toàn thị trường. Nếu OI/index không có, module không hiển thị Exposure như thể đã tính được. Dữ liệu là Commodity Options của Binance, không phải options futures CME/COMEX.
+
+
+## Fix Binance Options API connection (Cloudflare Worker)
+
+The Options page first attempts `GET /eapi/v1/ping` and reports the endpoint that fails. If the browser cannot reach Binance directly (for example, browser/network/CORS restrictions), use the included Cloudflare Worker proxy. No Binance API key or secret is needed for these public market-data endpoints.
+
+1. In Cloudflare Dashboard, open **Workers & Pages → Create → Worker → Deploy**.
+2. Open **Edit code**, replace the sample with `cloudflare/options-worker.js`, then **Save and Deploy**.
+3. Open the deployed Worker URL plus `/eapi/v1/ping`. A successful connectivity check returns `{}` (or an empty JSON object). You can also test `/eapi/v1/exchangeInfo`.
+4. Copy the Worker base URL (for example `https://gexadecimal-options-api.YOUR-SUBDOMAIN.workers.dev`) into `js/options-config.js`:
+
+   `window.GEXA_BINANCE_OPTIONS_API = 'https://YOUR-WORKER-URL';`
+
+5. Commit/push the updated source to GitHub Pages, then hard-refresh the site (Ctrl+F5).
+
+The Worker only proxies `GET` requests for `ping`, `exchangeInfo`, `mark`, `index`, and `openInterest`; other paths and query parameters are rejected. It does not expose account, order, or trading endpoints. For initial testing, `ALLOWED_ORIGIN` can remain unset (`*`); after confirming the exact website origin, optionally set that Worker variable to your exact origin, including `https://` and without a trailing slash.
+
+If the Worker URL `/eapi/v1/ping` itself returns an error, check the Worker deployment and its Logs. If it returns JSON but the website still fails, check that `js/options-config.js` contains the exact Worker base URL without a trailing slash and inspect F12 → Network.

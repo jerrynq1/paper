@@ -13,12 +13,13 @@ const calls=[];
 async function fetch(url){
   const u=new URL(url);calls.push(u.pathname+u.search);
   let data;
-  if(u.pathname.endsWith('/exchangeInfo'))data={optionSymbols:contracts};
+  if(u.pathname.endsWith('/ping'))data={};
+  else if(u.pathname.endsWith('/exchangeInfo'))data={optionSymbols:contracts};
   else if(u.pathname.endsWith('/mark'))data=marks;
   else if(u.pathname.endsWith('/index'))data={indexPrice:'4000',time:Date.now()};
   else if(u.pathname.endsWith('/openInterest'))data=oi;
   else throw new Error('Unexpected endpoint: '+url);
-  return {ok:true,status:200,json:async()=>data};
+  return {ok:true,status:200,text:async()=>JSON.stringify(data),json:async()=>data};
 }
 const context={
   document:{readyState:'complete',getElementById:id=>els[id]||null,visibilityState:'visible'},
