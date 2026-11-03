@@ -61,7 +61,7 @@
 
 <section class="view" id="v-options">
   <div class="options-head">
-    <div><div class="options-eyebrow">DERIVATIVES ANALYTICS · BINANCE</div><h2>Options <span>· XAU</span></h2><p class="msg">Option Chain, Greeks và Exposure của Gold Commodity Options. Dữ liệu thị trường công khai từ Binance; không cần API key.</p></div>
+    <div><div class="options-eyebrow">DERIVATIVES ANALYTICS · BINANCE</div><h2>Options <span>· XAU</span></h2><p class="msg">Option Chain, Greeks, Open Interest và Exposure realtime qua Binance WebSocket; kết nối trực tiếp từ trình duyệt, không cần API key hay server trung gian.</p></div>
     <div class="opt-actions"><span id="optStatus" class="opt-status">Chưa đồng bộ</span><button class="btn sm" id="optRefresh" type="button">↻ Làm mới</button></div>
   </div>
   <div id="optErrors" class="opt-errors" hidden></div>
@@ -69,7 +69,7 @@
     <div class="opt-toolbar">
       <div class="opt-control"><label for="optExpiry">EXPIRATION</label><select id="optExpiry"><option value="">Đang tải kỳ hạn…</option></select></div>
       <div class="opt-control"><label for="optMode">EXPOSURE SCENARIO</label><select id="optMode"><option value="long">Long options · Buyer side</option><option value="short">Short options · Counterparty</option></select></div>
-      <div class="opt-source">Underlying: <b>XAUUSDT</b> · Settlement: <b>USDT</b> · Source: Binance Options API</div>
+      <div class="opt-source">Underlying: <b>XAUUSDT</b> · Settlement: <b>USDT</b> · Source: Binance WebSocket</div>
     </div>
     <div id="optMetrics" class="opt-metrics"></div>
   </div>
@@ -95,14 +95,19 @@
       </table>
     </div>
   </div>
+  <div class="card opt-flow-card">
+    <div class="opt-card-title"><h3>Options Flow · XAU</h3><small>Recent trades · live stream</small></div>
+    <div id="optFlowBody" class="opt-flow-list"><div class="opt-empty">Đang chờ giao dịch Options…</div></div>
+  </div>
   <div class="card">
     <div class="opt-card-title"><h3>Data &amp; Methodology</h3><button class="btn ghost sm" id="optExplain" type="button">Giải thích cách tính</button></div>
     <div id="optMeta" class="opt-meta"></div>
     <div id="optMethod" class="opt-method" hidden>
-      <p><strong>Nguồn Greeks:</strong> Binance <code>/eapi/v1/mark</code> cung cấp Mark Price, Mark IV, Delta, Gamma, Vega và Theta. Không có Rho trong response hiện tại nên không tự bịa hoặc ước lượng Rho.</p>
+      <p><strong>Nguồn Greeks:</strong> Binance Options WebSocket <code>xauusdt@optionMarkPrice</code> phát Mark Price, Index Price, IV, Delta, Gamma, Vega và Theta. Không có Rho trong stream này nên không tự bịa hoặc ước lượng Rho.</p>
       <p><strong>Exposure:</strong> Delta Notional = Σ(Delta × OI × Contract Unit × XAU Index). Gamma Exposure cho biến động 1% = Σ(Gamma × OI × Contract Unit × XAU Index² × 0.01). Delta/Gamma/Vega/Theta đều có thể xem theo từng strike; Vega và Theta được cộng theo đơn vị native Binance trả về, không tự quy đổi khi tài liệu API không định nghĩa rõ scaling.</p>
       <p><strong>Giới hạn quan trọng:</strong> Open Interest cho biết số hợp đồng đang mở, không cho biết tài khoản/nhóm nào đang Long hay Short. Vì vậy nút Exposure Scenario chỉ đảo dấu cho mô hình Long-option buyer hoặc Short-option counterparty, không phải dữ liệu dealer positioning thực tế. Gamma theo strike là mô hình có điều kiện, không phải GEX chính thức của toàn thị trường.</p>
-      <p><strong>Thị trường:</strong> XAU Commodity Options của Binance là hợp đồng European-style, thanh toán USDT, có kỳ hạn ngày/tuần. Giá underlying dùng Binance TradFi Perpetual Contract Index; sản phẩm có giờ giao dịch và thời gian đóng cửa riêng.</p>
+      <p><strong>Nguồn dữ liệu:</strong> <code>@optionMarkPrice</code> cập nhật Greeks/IV/mark; <code>!index@arr</code> cập nhật Index Price; <code>@openInterest@YYMMDD</code> cập nhật OI theo kỳ hạn; <code>@optionTrade</code> đẩy giao dịch. Nếu một stream chưa phát dữ liệu, phần tương ứng sẽ hiển thị chưa có dữ liệu thay vì tự tạo số.</p>
+      <p><strong>Thị trường:</strong> XAU Commodity Options là hợp đồng European-style, thanh toán USDT, Contract Unit/Multiplier = 1; retail chỉ được mở vị thế mua quyền chọn. Mục Short trong dashboard là kịch bản đối ứng giả định, không phải vị thế short quan sát được trực tiếp.</p>
     </div>
   </div>
 </section>
@@ -153,7 +158,6 @@
 <script src="js/indicators-custom.js"></script>
 <script src="js/indicators-engine.js"></script>
 <script src="js/connection-ui.js"></script>
-<script src="js/options-config.js"></script>
 <script src="js/options.js"></script>
 <script src="js/init.js"></script>
 <script src="js/drawings-core.js"></script>

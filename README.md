@@ -209,31 +209,17 @@ Mở **TPO Chart** ở thanh điều hướng bên trái, ngay dưới **Chart**
 
 ## Options · XAU Commodity Options (Binance)
 
-Mở mục **Options** ở sidebar để xem Option Chain của XAUUSDT, kỳ hạn đang niêm yết, Mark Price, Mark IV, Delta, Gamma, Vega, Theta và Open Interest (khi Binance cung cấp cho kỳ hạn đó). Biểu đồ Exposure theo Strike có thể chuyển giữa Delta, Gamma, Vega và Theta. Trang tự làm mới dữ liệu thị trường mỗi 30 giây khi đang mở; Open Interest được làm mới tối đa mỗi 60 giây. Chỉ dùng public market-data endpoints nên **không cần API key Binance**.
+Mở mục **Options** ở sidebar để xem Option Chain của XAUUSDT, kỳ hạn đang được phát trên stream, Mark Price, Mark IV, Delta, Gamma, Vega, Theta, Index Price, Open Interest và Options Flow. Module kết nối trực tiếp từ trình duyệt qua Binance WebSocket; không gọi REST API, không cần API Key hay server trung gian.
 
-- `GET /eapi/v1/exchangeInfo`: lọc các contract `XAU-*`, `TRADFI_OPTIONS`, `COMMODITY`, expiry và trạng thái thị trường.
-- `GET /eapi/v1/mark`: Mark Price, bid/ask/mark IV và Delta/Gamma/Vega/Theta.
-- `GET /eapi/v1/index?underlying=XAUUSDT`: underlying index dùng trong phép tính exposure.
-- `GET /eapi/v1/openInterest`: OI theo underlying + expiry. Module thử các cách ghi `XAU/USDT`, `XAU`, `XAUUSDT` để tương thích khác biệt cách định danh underlying; nếu Binance không trả OI thì Exposure sẽ báo thiếu dữ liệu thay vì tự điền số ước lượng.
+Các luồng dữ liệu đang dùng:
 
-**Cách tính hiển thị**: Delta Notional = Σ(Delta × OI × contract unit × S); Gamma Exposure cho một biến động 1% của underlying = Σ(Gamma × OI × contract unit × S² × 0.01). Vega và Theta được cộng theo native units Binance trả về, không tự ý quy đổi sang một đơn vị khác. Binance mark API hiện cung cấp bốn Greeks Delta/Gamma/Vega/Theta; Rho không có trong response được dùng ở đây.
+- `xauusdt@optionMarkPrice` (`/market/ws/`): Mark Price, Index Price, IV, Delta, Gamma, Vega, Theta và bid/ask quote cho các hợp đồng XAU. Dùng dữ liệu hợp đồng nhận được để dựng chain và danh sách expiry, không cần `exchangeInfo` REST.
+- `!index@arr`: stream Index Price tổng hợp; mark stream cũng mang field index nên có thể làm nguồn dự phòng.
+- `xauusdt@openInterest@YYMMDD` trên `/market/ws/`: Open Interest theo expiry đang chọn, cập nhật mỗi 60 giây; payload Binance dùng `o` (số hợp đồng) và `h` (giá trị USDT).
+- `xauusdt@optionTrade` trên `/public/ws/`: Options trades theo underlying để hiển thị Options Flow; payload gồm `p`, `q`, `S` và `X`.
 
-**Giới hạn diễn giải**: Open Interest là số hợp đồng đang mở, không cho biết bên nào đang Long/Short hoặc vị thế của dealer. Bộ chọn Long option buyer / Short option counterparty chỉ là hai kịch bản đảo dấu trên cùng OI; đây không phải dealer positioning hoặc GEX chính thức của toàn thị trường. Nếu OI/index không có, module không hiển thị Exposure như thể đã tính được. Dữ liệu là Commodity Options của Binance, không phải options futures CME/COMEX.
+**Cách tính hiển thị**: Delta Notional = Σ(Delta × OI × contract unit × S); Gamma Exposure cho một biến động 1% của underlying = Σ(Gamma × OI × contract unit × S² × 0.01). XAU Commodity Options có contract unit/multiplier bằng 1 theo thông số Binance. Vega và Theta được cộng theo native units Binance phát, không tự ý quy đổi sang đơn vị khác.
 
+**Giới hạn diễn giải**: Open Interest là số hợp đồng đang mở, không cho biết bên nào đang Long/Short hoặc vị thế của dealer. Bộ chọn Long-option buyer / Short-option counterparty chỉ là hai kịch bản đảo dấu trên cùng OI; đây không phải dealer positioning hoặc GEX chính thức của toàn thị trường. Binance nêu retail Commodity Options chỉ được mở vị thế mua; mục Short chỉ để kiểm tra kịch bản đối ứng giả định. Nếu OI stream chưa phát dữ liệu, Exposure và Max Pain sẽ để trống thay vì tự điền số ước lượng. Dữ liệu là Commodity Options của Binance, không phải options futures CME/COMEX.
 
-## Fix Binance Options API connection (Cloudflare Worker)
-
-The Options page first attempts `GET /eapi/v1/ping` and reports the endpoint that fails. If the browser cannot reach Binance directly (for example, browser/network/CORS restrictions), use the included Cloudflare Worker proxy. No Binance API key or secret is needed for these public market-data endpoints.
-
-1. In Cloudflare Dashboard, open **Workers & Pages → Create → Worker → Deploy**.
-2. Open **Edit code**, replace the sample with `cloudflare/options-worker.js`, then **Save and Deploy**.
-3. Open the deployed Worker URL plus `/eapi/v1/ping`. A successful connectivity check returns `{}` (or an empty JSON object). You can also test `/eapi/v1/exchangeInfo`.
-4. Copy the Worker base URL (for example `https://gexadecimal-options-api.YOUR-SUBDOMAIN.workers.dev`) into `js/options-config.js`:
-
-   `window.GEXA_BINANCE_OPTIONS_API = 'https://YOUR-WORKER-URL';`
-
-5. Commit/push the updated source to GitHub Pages, then hard-refresh the site (Ctrl+F5).
-
-The Worker only proxies `GET` requests for `ping`, `exchangeInfo`, `mark`, `index`, and `openInterest`; other paths and query parameters are rejected. It does not expose account, order, or trading endpoints. For initial testing, `ALLOWED_ORIGIN` can remain unset (`*`); after confirming the exact website origin, optionally set that Worker variable to your exact origin, including `https://` and without a trailing slash.
-
-If the Worker URL `/eapi/v1/ping` itself returns an error, check the Worker deployment and its Logs. If it returns JSON but the website still fails, check that `js/options-config.js` contains the exact Worker base URL without a trailing slash and inspect F12 → Network.
+**Vận hành**: WebSocket tự kết nối lại khi mất mạng và tự xoay kết nối trước giới hạn tuổi kết nối 24 giờ. Các stream trade được giới hạn danh sách gần nhất để tránh làm nặng giao diện. Khi rời mục Options, các socket được đóng; khi quay lại, module kết nối lại.

@@ -1,45 +1,73 @@
-/* Binance XAU Options workspace: mocked public API contract + UI smoke tests. */
+/* Binance XAU Options: direct browser WebSocket streams, normalization and dashboard tests. */
 const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
-const ids=['v-options','optExpiry','optStatus','optMetrics','optExposure','optGreeks','optChainBody','optMeta','optErrors','optRefresh','optMode','optExplain','optMethod','optExposureMetric','optExposureTitle','optExposureUnits'];
+const ids=['v-options','optExpiry','optStatus','optMetrics','optExposure','optGreeks','optChainBody','optMeta','optErrors','optRefresh','optMode','optExplain','optMethod','optExposureMetric','optExposureTitle','optExposureUnits','optFlowBody'];
 const els=Object.fromEntries(ids.map(id=>[id,{id,innerHTML:'',textContent:'',className:'',value:'',hidden:false,disabled:false,handlers:{},addEventListener(k,fn){this.handlers[k]=fn}}]));
-const expiry=Date.UTC(2026,10,6);
-const contracts=['3950-C','3950-P','4000-C','4000-P'].map(x=>{
-  const [strike,side]=x.split('-');
-  return {symbol:`XAU-261106-${strike}-${side}`,side:side==='C'?'CALL':'PUT',strikePrice:strike,underlying:'XAUUSDT',unit:1,expiryDate:expiry,contractType:'TRADFI_OPTIONS',underlyingType:'COMMODITY',status:'TRADING'};
-});
-const marks=contracts.map((c,i)=>({symbol:c.symbol,markPrice:'10.5',markIV:'0.25',bidIV:'0.24',askIV:'0.26',delta:i%2?'-0.3':'0.7',gamma:'0.002',vega:'1.2',theta:'-0.5'}));
-const oi=contracts.map((c,i)=>({symbol:c.symbol,sumOpenInterest:String(100+i*10),sumOpenInterestUsd:'400000',timestamp:Date.now()}));
-const calls=[];
-async function fetch(url){
-  const u=new URL(url);calls.push(u.pathname+u.search);
-  let data;
-  if(u.pathname.endsWith('/ping'))data={};
-  else if(u.pathname.endsWith('/exchangeInfo'))data={optionSymbols:contracts};
-  else if(u.pathname.endsWith('/mark'))data=marks;
-  else if(u.pathname.endsWith('/index'))data={indexPrice:'4000',time:Date.now()};
-  else if(u.pathname.endsWith('/openInterest'))data=oi;
-  else throw new Error('Unexpected endpoint: '+url);
-  return {ok:true,status:200,text:async()=>JSON.stringify(data),json:async()=>data};
+const fakeTimers=new Map();let timerId=0;
+function setTimeoutFake(fn,ms){const id=++timerId;fakeTimers.set(id,{fn,ms});return id}
+function clearTimeoutFake(id){fakeTimers.delete(id)}
+function flushRenderTimers(){
+  let again=true,guard=0;
+  while(again&&guard++<20){again=false;for(const [id,t] of [...fakeTimers])if(t.ms<=250){fakeTimers.delete(id);t.fn();again=true}}
 }
+class FakeWebSocket{
+  static instances=[];
+  constructor(url){this.url=url;this.readyState=0;this.sent=[];FakeWebSocket.instances.push(this)}
+  open(){this.readyState=1;if(this.onopen)this.onopen({})}
+  message(data){if(this.onmessage)this.onmessage({data:JSON.stringify(data)})}
+  close(code=1000,reason='closed'){this.readyState=3;if(this.onclose)this.onclose({code,reason})}
+}
+const expiry=Date.UTC(2026,10,6);
+const symbols=['3950-C','3950-P','4000-C','4000-P'].map(x=>{
+  const [strike,side]=x.split('-');return `XAU-261106-${strike}-${side}`;
+});
+const markPayload=symbols.map((symbol,i)=>({
+  s:symbol,mp:'10.5',vo:'0.25',b:'0.24',a:'0.26',d:i%2?'-0.3':'0.7',g:'0.002',v:'1.2',t:'-0.5',i:'4000',E:Date.now(),e:'markPrice'
+}));
 const context={
   document:{readyState:'complete',getElementById:id=>els[id]||null,visibilityState:'visible'},
-  window:{},fetch,URL,Date,Intl,Number,Math,Map,Set,Array,String,Object,Promise,Error,console,setInterval,clearInterval
+  window:{WebSocket:FakeWebSocket},WebSocket:FakeWebSocket,
+  Date,Intl,Number,Math,Map,Set,Array,String,Object,Promise,Error,console,
+  setTimeout:setTimeoutFake,clearTimeout:clearTimeoutFake,
+  setInterval:()=>1,clearInterval:()=>{}
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','options.js'),'utf8'),context);
+
 (async()=>{
-  await context.window.optionsRefresh(true);
+  context.window.optionsSetActive(true);
+  assert(FakeWebSocket.instances.some(ws=>ws.url.endsWith('/xauusdt@optionMarkPrice')),'mark socket created');
+  assert(FakeWebSocket.instances.some(ws=>ws.url.endsWith('/!index@arr')),'index socket created');
+  assert(FakeWebSocket.instances.some(ws=>ws.url.endsWith('/public/ws/xauusdt@optionTrade')),'trade socket created');
+  FakeWebSocket.instances.forEach(ws=>ws.open());
+
+  const markWs=FakeWebSocket.instances.find(ws=>ws.url.endsWith('/xauusdt@optionMarkPrice'));
+  markWs.message(markPayload);
+  assert.strictEqual(els.optExpiry.value,String(expiry));
+  const oiWs=FakeWebSocket.instances.find(ws=>ws.url.endsWith('/market/ws/xauusdt@openInterest@261106'));
+  assert(oiWs,'selected-expiry OI socket created after mark universe arrives');
+  oiWs.open();
+  const indexWs=FakeWebSocket.instances.find(ws=>ws.url.endsWith('/!index@arr'));
+  indexWs.message([{e:'indexPrice',E:Date.now(),s:'XAUUSDT',i:'4000'}]);
+  oiWs.message(symbols.map((symbol,i)=>({e:'openInterest',E:Date.now(),s:symbol,o:String(100+i*10),h:'400000'})));
+  const tradeWs=FakeWebSocket.instances.find(ws=>ws.url.endsWith('/public/ws/xauusdt@optionTrade'));
+  tradeWs.message({e:'trade',E:Date.now(),T:Date.now(),s:symbols[0],t:123,p:'10.5',q:'2',X:'MARKET',S:'BUY',m:false});
+  flushRenderTimers();
+
   assert(els.optChainBody.innerHTML.includes('3,950.00')&&els.optChainBody.innerHTML.includes('4,000.00'));
   assert.strictEqual((els.optChainBody.innerHTML.match(/<td/g)||[]).length,30,'two strikes × 15 columns');
   assert(els.optChainBody.innerHTML.includes('1.200')&&els.optChainBody.innerHTML.includes('-0.500'));
   assert(els.optExposure.innerHTML.includes('opt-gex-row'));
   assert(els.optGreeks.innerHTML.includes('Gamma Exposure')&&els.optGreeks.innerHTML.includes('Vega')&&els.optGreeks.innerHTML.includes('Theta'));
   assert(els.optMetrics.innerHTML.includes('XAU INDEX')&&els.optMetrics.innerHTML.includes('PUT / CALL'));
-  assert(els.optStatus.textContent.includes('OI synced'));
-  assert(calls.some(x=>x.includes('/openInterest?underlyingAsset=XAU%2FUSDT')));
-  console.log('ok  XAU option chain, 15 columns with all four Greeks');
-  console.log('ok  Binance index, mark, OI and dashboard aggregation');
-  console.log('ok  gamma exposure and aggregate Greeks');
+  assert(els.optStatus.textContent.includes('Live'));
+  assert(els.optFlowBody.innerHTML.includes('BUY'));
+  assert(els.optMeta.innerHTML.includes('OI records'));
+  console.log('ok  Direct Binance WebSocket mark stream builds all XAU option contracts');
+  console.log('ok  Index Price stream and embedded mark index update spot');
+  console.log('ok  Expiry-specific Open Interest WebSocket builds OI aggregates and Exposure');
+  console.log('ok  Trade stream populates recent Options Flow');
+  console.log('ok  Chain renders all four Greeks and Mark IV for Call / Put');
+
   els.optMode.value='short';els.optMode.handlers.change();
   assert(els.optExposure.innerHTML.includes('neg-t'));
   console.log('ok  Long / short exposure scenario changes sign');
@@ -47,4 +75,8 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','options.js'),'utf
   assert.strictEqual(els.optExposureTitle.textContent,'Vega Exposure by Strike');
   assert.strictEqual(els.optExposureUnits.textContent,'Binance native units');
   console.log('ok  Delta / Gamma / Vega / Theta exposure selector');
+
+  context.window.optionsSetActive(false);
+  assert(FakeWebSocket.instances.every(ws=>ws.readyState===3),'leaving Options closes all stream sockets');
+  console.log('ok  Leaving Options cleanly closes the stream sockets');
 })().catch(e=>{console.error(e);process.exitCode=1});
