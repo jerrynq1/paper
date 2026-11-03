@@ -143,8 +143,8 @@
     }
     codes.forEach(code=>{
       const oiKey='oi:'+code,tickerKey='ticker:'+code;
-      if(!state.sockets.has(oiKey))connectStream(oiKey,`xauusdt@openInterest@${code}`);
-      if(!state.sockets.has(tickerKey))connectStream(tickerKey,`xauusdt@optionTicker${code}`);
+      if(!state.sockets.has(oiKey))connectStream(oiKey,`xauusdt@optionOpenInterest@${code}`);
+      if(!state.sockets.has(tickerKey))connectStream(tickerKey,`xauusdt@optionTicker@${code}`);
     });
     state.oiExpiryCodes=codes;
   }
