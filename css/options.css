@@ -72,3 +72,10 @@
 .opt-flow-row time{color:var(--mut);font-size:9px}
 @media(max-width:760px){.opt-flow-row{grid-template-columns:72px minmax(120px,1fr) 72px 58px 48px;gap:6px}.opt-flow-row small{display:none}}
 @media(max-width:480px){.opt-flow-row{grid-template-columns:65px minmax(95px,1fr) 62px 48px}.opt-flow-row time{display:none}}
+
+/* Options V3: distinguish historical 24h ticker summaries from live executions. */
+.opt-flow-summary{border-bottom:1px solid var(--line);margin-bottom:6px;padding-bottom:6px}
+.opt-flow-summary-title{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;color:var(--mut);font-size:9px;font-weight:800;letter-spacing:.08em}
+.opt-flow-summary-title small{font-weight:500;letter-spacing:0;text-transform:none}
+.opt-ticker-row{background:rgba(255,255,255,.16)}
+.opt-meta-error{color:#b42318!important;white-space:normal!important;grid-column:1/-1}

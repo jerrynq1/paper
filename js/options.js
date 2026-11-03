@@ -10,10 +10,11 @@
   const state={
     active:false, sockets:new Map(), reconnects:new Map(), reconnectDelay:new Map(),
     rotateTimer:null, healthTimer:null, renderTimer:null, expiry:null,
-    contracts:[], marks:new Map(), oi:new Map(), index:null, trades:[],
+    contracts:[], marks:new Map(), oi:new Map(), tickers:new Map(), index:null, trades:[],
     mode:'long', exposureMetric:'gamma', lastMarkTime:0, lastIndexTime:0,
-    lastOIUpdate:0, lastTradeTime:0, oiExpiry:null, status:'idle', error:'',
-    markCount:0, oiCount:0
+    lastOIUpdate:0, lastTradeTime:0, lastTickerUpdate:0, oiExpiryCodes:[],
+    expiryManual:false, status:'idle', error:'', socketErrors:new Map(), lastPayloads:new Map(),
+    markCount:0, oiCount:0, tickerCount:0, oiMessages:0, tradeMessages:0, tickerMessages:0
   };
   const n=x=>{if(x===null||x===undefined||x==='')return null;const v=Number(x);return Number.isFinite(v)?v:null};
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -56,10 +57,14 @@
       const bits=[];
       bits.push(`<span>Mark: ${markFresh?'Live':'Stale / waiting'}</span>`);
       bits.push(`<span>Index: ${indexFresh?'Live':'Mark fallback / waiting'}</span>`);
-      const oiWs=state.sockets.get('oi'),tradeWs=state.sockets.get('trade');
       const socketState=ws=>!ws?'not started':ws.readyState===WebSocket.OPEN?'connected':ws.readyState===WebSocket.CONNECTING?'connecting':ws.readyState===WebSocket.CLOSING?'closing':'reconnecting';
-      bits.push(`<span>OI: ${state.oi.size?`${state.oi.size} records · ${new Date(state.lastOIUpdate).toLocaleTimeString('vi-VN')}`:`${socketState(oiWs)} · waiting first update (60s stream)`}</span>`);
-      bits.push(`<span>Flow: ${state.trades.length?`${state.trades.length} trades cached`:`${socketState(tradeWs)} · waiting new trades`}</span>`);
+      const oiKeys=[...state.sockets.keys()].filter(k=>k.startsWith('oi:'));
+      const tickerKeys=[...state.sockets.keys()].filter(k=>k.startsWith('ticker:'));
+      const oiOpen=oiKeys.filter(k=>state.sockets.get(k)?.readyState===WebSocket.OPEN).length;
+      const tradeWs=state.sockets.get('trade');
+      bits.push(`<span>OI: ${state.oi.size} records · ${oiOpen}/${oiKeys.length} sockets · ${state.lastOIUpdate?new Date(state.lastOIUpdate).toLocaleTimeString('vi-VN'):'waiting first payload'}</span>`);
+      bits.push(`<span>24h ticker: ${state.tickers.size} records · ${tickerKeys.length} expiry streams</span>`);
+      bits.push(`<span>Flow: ${state.trades.length} live trades · ${socketState(tradeWs)}</span>`);
       bits.push(`<span>Updated: ${state.lastMarkTime?new Date(state.lastMarkTime).toLocaleTimeString('vi-VN'):'—'}</span>`);
       meta.innerHTML=bits.join('');
     }
@@ -86,7 +91,7 @@
     closeSocket(key,true);
     const delay=state.reconnectDelay.get(key)||1000;
     let ws;
-    const endpoint=key==='trade'?'public':'market';
+    const endpoint=(key==='trade'||key.startsWith('ticker:'))?'public':'market';
     try{ws=new WebSocket(WS_BASES[endpoint]+stream)}catch(e){
       state.error=`Không thể tạo WebSocket ${stream}: ${e.message||e}`;
       scheduleReconnect(key,stream,delay);return;
@@ -94,21 +99,28 @@
     ws.__manual=false;state.sockets.set(key,ws);
     ws.onopen=()=>{
       state.reconnectDelay.set(key,1000);
+      state.socketErrors.delete(key);
       if(key==='mark')clearError();
       statusTick();
     };
     ws.onmessage=ev=>{
-      let payload;try{payload=JSON.parse(ev.data)}catch{return}
+      let payload;try{payload=JSON.parse(ev.data)}catch(err){state.lastPayloads.set(key,{parseError:String(err),sample:String(ev.data).slice(0,300)});return}
       // Combined streams wrap payload as {stream, data}; raw streams don't.
       if(payload&&payload.data!==undefined&&payload.stream)payload=payload.data;
-      try{handleStream(key,payload)}catch(err){state.error=`${key}: ${err.message||err}`;showError(state.error)}
+      state.lastPayloads.set(key,payload);
+      if(payload&&typeof payload==='object'&&payload.code!==undefined&&payload.msg){
+        const message=`${key} Binance stream error ${payload.code}: ${payload.msg}`;state.socketErrors.set(key,message);state.error=message;showError(message);statusTick();return;
+      }
+      try{handleStream(key,payload)}catch(err){state.error=`${key}: ${err.message||err}`;state.socketErrors.set(key,state.error);showError(state.error)}
     };
     ws.onerror=()=>{
       // onclose performs the reconnect; do not create duplicate sockets here.
+      state.socketErrors.set(key,'WebSocket transport error');
       if(key==='mark'&&!state.lastMarkTime)statusTick();
     };
-    ws.onclose=()=>{
+    ws.onclose=event=>{
       if(state.sockets.get(key)===ws)state.sockets.delete(key);
+      if(!ws.__manual&&event&&event.code!==1000)state.socketErrors.set(key,`closed ${event.code}: ${event.reason||'no reason'}`);
       if(state.active&&!ws.__manual)scheduleReconnect(key,stream,delay);
       statusTick();
     };
@@ -119,17 +131,29 @@
       },23*60*60*1000+50*60*1000);
     }
   }
-  function ensureOISocket(){
-    const expiry=Number(state.expiry);if(!expiry)return;
-    const code=expiryParam(expiry);if(state.oiExpiry===code&&state.sockets.has('oi'))return;
-    closeSocket('oi',true);state.oiExpiry=code;state.lastOIUpdate=0;state.oi.clear();
-    connectStream('oi',`xauusdt@openInterest@${code}`);
+  function ensureExpiryStreams(expiries){
+    // Subscribe to OI and 24h ticker for every expiry visible in the Mark Price feed,
+    // not only the default first expiry (often today's 0D contract).
+    const codes=[...new Set((expiries||[]).map(expiryParam))].filter(Boolean).sort();
+    const wantedOI=new Set(codes.map(code=>'oi:'+code));
+    const wantedTicker=new Set(codes.map(code=>'ticker:'+code));
+    for(const key of [...state.sockets.keys()]){
+      if(key.startsWith('oi:')&&!wantedOI.has(key)){closeSocket(key,true);}
+      if(key.startsWith('ticker:')&&!wantedTicker.has(key)){closeSocket(key,true);}
+    }
+    codes.forEach(code=>{
+      const oiKey='oi:'+code,tickerKey='ticker:'+code;
+      if(!state.sockets.has(oiKey))connectStream(oiKey,`xauusdt@openInterest@${code}`);
+      if(!state.sockets.has(tickerKey))connectStream(tickerKey,`xauusdt@optionTicker${code}`);
+    });
+    state.oiExpiryCodes=codes;
   }
   function handleStream(key,payload){
     if(key==='mark')handleMark(payload);
     else if(key==='index')handleIndex(payload);
-    else if(key==='oi')handleOI(payload);
+    else if(key==='oi'||key.startsWith('oi:'))handleOI(payload);
     else if(key==='trade')handleTrade(payload);
+    else if(key.startsWith('ticker:'))handleTicker(payload);
   }
   function records(payload){
     if(Array.isArray(payload))return payload;
@@ -163,7 +187,8 @@
     const expiries=[...new Set(contracts.map(c=>c.expiryDate))].sort((a,b)=>a-b);
     if(!expiries.includes(Number(state.expiry)))state.expiry=expiries[0]||null;
     renderExpiryOptions(expiries);
-    if(state.expiry&&Number(state.expiry)!==Number(oldExpiry))ensureOISocket();
+    if(state.expiry&&Number(state.expiry)!==Number(oldExpiry))state.expiryManual=false;
+    ensureExpiryStreams(expiries);
     statusTick();scheduleRender();
   }
   function handleIndex(payload){
@@ -177,14 +202,47 @@
   }
   function handleOI(payload){
     const items=records(payload);if(!items.length)return;
+    let received=0;
     items.forEach(raw=>{
       if(!raw)return;
       const symbol=String(raw.s||raw.symbol||'').toUpperCase();if(!symbol.startsWith('XAU-'))return;
-      const qty=ensureNumber(raw,['sumOpenInterest','openInterest','oi','o']);
+      const qty=ensureNumber(raw,['o','sumOpenInterest','openInterest','oi']);
       const usd=ensureNumber(raw,['h','sumOpenInterestUsd','openInterestUsd','oiUsd']);
-      if(qty!==null)state.oi.set(symbol,{qty,usd,time:ensureNumber(raw,['E','timestamp','T'])||Date.now()});
+      if(qty!==null){state.oi.set(symbol,{qty,usd,time:ensureNumber(raw,['E','timestamp','T'])||Date.now()});received++;}
     });
-    state.lastOIUpdate=Date.now();state.oiCount=state.oi.size;statusTick();scheduleRender();
+    if(received){
+      state.oiMessages++;state.lastOIUpdate=Date.now();state.oiCount=state.oi.size;
+      // If the initial default is today's expiry and it has no OI, select the
+      // nearest expiry with a real non-zero OI snapshot until the user chooses manually.
+      if(!state.expiryManual){
+        const currentHasOI=activeExpiryContracts().some(c=>(state.oi.get(c.symbol)?.qty||0)>0);
+        if(!currentHasOI){
+          const candidates=[...new Set(state.contracts.map(c=>c.expiryDate))].sort((a,b)=>a-b);
+          const withOI=candidates.find(exp=>state.contracts.some(c=>c.expiryDate===exp&&(state.oi.get(c.symbol)?.qty||0)>0));
+          if(withOI){state.expiry=withOI;renderExpiryOptions(candidates);}
+        }
+      }
+      statusTick();scheduleRender();
+    }
+  }
+  function handleTicker(payload){
+    const items=records(payload);if(!items.length)return;
+    let received=0;
+    items.forEach(raw=>{
+      if(!raw)return;
+      const symbol=String(raw.s||raw.symbol||'').toUpperCase();if(!symbol.startsWith('XAU-'))return;
+      state.tickers.set(symbol,{
+        lastPrice:ensureNumber(raw,['c','lastPrice','price']),
+        volume:ensureNumber(raw,['v','volume']),
+        quoteVolume:ensureNumber(raw,['q','quoteVolume']),
+        trades:ensureNumber(raw,['n','count','tradeCount']),
+        changePct:ensureNumber(raw,['P','priceChangePercent']),
+        high:ensureNumber(raw,['h','highPrice']),low:ensureNumber(raw,['l','lowPrice']),
+        openTime:ensureNumber(raw,['O','openTime']),closeTime:ensureNumber(raw,['C','closeTime']),
+        time:ensureNumber(raw,['E','eventTime'])||Date.now()
+      });received++;
+    });
+    if(received){state.tickerMessages++;state.lastTickerUpdate=Date.now();state.tickerCount=state.tickers.size;statusTick();scheduleRender();}
   }
   function handleTrade(payload){
     records(payload).forEach(raw=>{
@@ -198,7 +256,7 @@
       const trade={symbol,side,price,qty,type:String(raw.X||raw.type||'MARKET').toUpperCase(),time:ensureNumber(raw,['T','E','tradeTime','timestamp'])||Date.now(),id:raw.t||raw.id||''};
       state.trades.unshift(trade);if(state.trades.length>40)state.trades.length=40;
     });
-    if(state.trades.length){state.lastTradeTime=Date.now();scheduleRender()}
+    if(state.trades.length){state.tradeMessages++;state.lastTradeTime=Date.now();scheduleRender();statusTick()}
   }
   function renderExpiryOptions(expiries){
     const el=$o('optExpiry');if(!el)return;
@@ -296,17 +354,28 @@
   }
   function renderFlow(){
     const el=$o('optFlowBody');if(!el)return;
-    if(!state.trades.length){
-      const tradeWs=state.sockets.get('trade'),connected=tradeWs&&tradeWs.readyState===WebSocket.OPEN;
-      el.innerHTML=`<div class="opt-empty">${connected?'Trade stream đã kết nối. Chưa có giao dịch mới kể từ lúc mở Options; Binance không gửi lịch sử giao dịch ban đầu qua stream này.':'Đang kết nối Options Trade stream…'}</div>`;return;
+    const contracts=selectedContracts();
+    const selectedSymbols=new Set(contracts.map(c=>c.symbol));
+    const tickerRows=[...state.tickers.entries()].filter(([symbol])=>selectedSymbols.has(symbol)).map(([symbol,t])=>({symbol,...t})).sort((a,b)=>(b.quoteVolume||0)-(a.quoteVolume||0));
+    const tickerHTML=tickerRows.length?`<div class="opt-flow-summary"><div class="opt-flow-summary-title">24H CONTRACT ACTIVITY <small>Aggregated ticker data · not a live trade tape</small></div>${tickerRows.slice(0,16).map(t=>`<div class="opt-flow-row opt-ticker-row"><span class="${t.symbol.endsWith('-C')?'pos-t':'neg-t'}">${t.symbol.endsWith('-C')?'CALL':'PUT'}</span><b>${esc(t.symbol)}</b><span>$${fmt(t.lastPrice,4)}</span><span>${fmt(t.volume,2)} ct</span><small>${compact(t.trades)} trades</small><time>$${compact(t.quoteVolume)}</time></div>`).join('')}</div>`:'';
+    if(state.trades.length){
+      el.innerHTML=tickerHTML+`<div class="opt-flow-summary-title">LIVE TRADE PRINTS <small>New executions received after subscription</small></div>`+state.trades.slice(0,20).map(t=>`<div class="opt-flow-row"><span class="${t.side==='BUY'?'pos-t':'neg-t'}">${t.side}</span><b>${esc(t.symbol)}</b><span>$${fmt(t.price,4)}</span><span>${fmt(t.qty,4)}</span><small>${esc(t.type)}</small><time>${new Date(t.time).toLocaleTimeString('vi-VN')}</time></div>`).join('');
+      return;
     }
-    el.innerHTML=state.trades.slice(0,20).map(t=>`<div class="opt-flow-row"><span class="${t.side==='BUY'?'pos-t':'neg-t'}">${t.side}</span><b>${esc(t.symbol)}</b><span>$${fmt(t.price,4)}</span><span>${fmt(t.qty,4)}</span><small>${esc(t.type)}</small><time>${new Date(t.time).toLocaleTimeString('vi-VN')}</time></div>`).join('');
+    const tradeWs=state.sockets.get('trade'),connected=tradeWs&&tradeWs.readyState===WebSocket.OPEN;
+    const waiting=`<div class="opt-empty">${connected?'Trade stream đã kết nối nhưng chưa có lệnh khớp mới trong phiên theo dõi.':'Đang kết nối Options Trade stream…'} Binance không gửi lịch sử giao dịch cũ qua WebSocket Trade.</div>`;
+    el.innerHTML=tickerHTML+waiting;
   }
   function renderMeta(rows,a){
     const el=$o('optMeta');if(!el)return;
-    const oiWs=state.sockets.get('oi'),tradeWs=state.sockets.get('trade');
-    const wsLabel=ws=>!ws?'not started':ws.readyState===WebSocket.OPEN?'connected':ws.readyState===WebSocket.CONNECTING?'connecting':'reconnecting';
-    el.innerHTML=`<span>Expiry: ${esc(state.expiry?dateLabel(Number(state.expiry)):'—')}</span><span>${rows.length} strikes</span><span>${state.marks.size} live mark records</span><span>${state.oi.size} OI records · ${wsLabel(oiWs)}</span><span>${state.trades.length} recent trades · ${wsLabel(tradeWs)}</span><span>Mark time: ${state.lastMarkTime?new Date(state.lastMarkTime).toLocaleTimeString('vi-VN'):'—'}</span>`;
+    const socketLabel=ws=>!ws?'not started':ws.readyState===WebSocket.OPEN?'OPEN':ws.readyState===WebSocket.CONNECTING?'CONNECTING':ws.readyState===WebSocket.CLOSING?'CLOSING':'CLOSED';
+    const oiKeys=[...state.sockets.keys()].filter(k=>k.startsWith('oi:'));
+    const tickerKeys=[...state.sockets.keys()].filter(k=>k.startsWith('ticker:'));
+    const oiOpen=oiKeys.filter(k=>state.sockets.get(k)?.readyState===WebSocket.OPEN).length;
+    const tickerOpen=tickerKeys.filter(k=>state.sockets.get(k)?.readyState===WebSocket.OPEN).length;
+    const tradeWs=state.sockets.get('trade');
+    const errors=[...state.socketErrors.entries()].map(([k,v])=>`${k}: ${v}`);
+    el.innerHTML=`<span>Expiry: ${esc(state.expiry?dateLabel(Number(state.expiry)):'—')}</span><span>${rows.length} strikes</span><span>${state.marks.size} live mark records</span><span>OI: ${state.oi.size} records · ${oiOpen}/${oiKeys.length} streams open · ${state.oiMessages} messages</span><span>24h ticker: ${state.tickers.size} records · ${tickerOpen}/${tickerKeys.length} streams open</span><span>Trade: ${state.trades.length} prints · ${socketLabel(tradeWs)} · ${state.tradeMessages} messages</span><span>Mark time: ${state.lastMarkTime?new Date(state.lastMarkTime).toLocaleTimeString('vi-VN'):'—'}</span>${errors.length?`<span class="opt-meta-error">${esc(errors.join(' | '))}</span>`:''}`;
   }
   function renderInitial(){
     const body=$o('optChainBody');if(body)body.innerHTML='<tr><td colspan="15" class="opt-empty">Đang kết nối Binance Options WebSocket…</td></tr>';
@@ -325,13 +394,13 @@
   }
   function refresh(){
     if(!state.active){activate(true);return;}
-    state.marks.clear();state.contracts=[];state.oi.clear();state.trades=[];state.lastMarkTime=0;state.lastOIUpdate=0;state.lastTradeTime=0;state.expiry=null;state.oiExpiry=null;
+    state.marks.clear();state.contracts=[];state.oi.clear();state.tickers.clear();state.trades=[];state.lastMarkTime=0;state.lastOIUpdate=0;state.lastTradeTime=0;state.lastTickerUpdate=0;state.expiry=null;state.oiExpiryCodes=[];state.expiryManual=false;state.oiMessages=0;state.tradeMessages=0;state.tickerMessages=0;state.socketErrors.clear();state.lastPayloads.clear();
     closeAll();activate(true);
   }
-  function debug(){return {active:state.active,connections:[...state.sockets].map(([key,ws])=>({key,state:ws.readyState,stateLabel:['CONNECTING','OPEN','CLOSING','CLOSED'][ws.readyState]||'UNKNOWN',url:ws.url})),contractCount:state.contracts.length,markCount:state.markCount,oiCount:state.oiCount,tradeCount:state.trades.length,index:state.index,expiry:state.expiry,oiExpiry:state.oiExpiry,lastMarkTime:state.lastMarkTime,lastOIUpdate:state.lastOIUpdate,lastTradeTime:state.lastTradeTime,error:state.error}}
+  function debug(){return {active:state.active,connections:[...state.sockets].map(([key,ws])=>({key,state:ws.readyState,stateLabel:['CONNECTING','OPEN','CLOSING','CLOSED'][ws.readyState]||'UNKNOWN',url:ws.url,error:state.socketErrors.get(key)||null,lastPayload:state.lastPayloads.get(key)||null})),contractCount:state.contracts.length,markCount:state.markCount,oiCount:state.oiCount,tickerCount:state.tickerCount,tradeCount:state.trades.length,oiMessages:state.oiMessages,tickerMessages:state.tickerMessages,tradeMessages:state.tradeMessages,index:state.index,expiry:state.expiry,expiryCodes:state.oiExpiryCodes,lastMarkTime:state.lastMarkTime,lastOIUpdate:state.lastOIUpdate,lastTickerUpdate:state.lastTickerUpdate,lastTradeTime:state.lastTradeTime,oiSymbols:[...state.oi.keys()].slice(0,10),tickerSymbols:[...state.tickers.keys()].slice(0,10),errors:[...state.socketErrors.entries()],error:state.error}}
   function init(){
     if(!$o('v-options'))return;
-    const expiry=$o('optExpiry');if(expiry)expiry.addEventListener('change',()=>{state.expiry=Number(expiry.value)||null;ensureOISocket();scheduleRender()});
+    const expiry=$o('optExpiry');if(expiry)expiry.addEventListener('change',()=>{state.expiry=Number(expiry.value)||null;state.expiryManual=true;scheduleRender()});
     const mode=$o('optMode');if(mode)mode.addEventListener('change',()=>{state.mode=mode.value==='short'?'short':'long';if(state.contracts.length)render()});
     const refreshBtn=$o('optRefresh');if(refreshBtn)refreshBtn.addEventListener('click',refresh);
     const info=$o('optExplain');if(info)info.addEventListener('click',()=>{$o('optMethod').hidden=!$o('optMethod').hidden});

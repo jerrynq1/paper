@@ -207,19 +207,36 @@ Mở **TPO Chart** ở thanh điều hướng bên trái, ngay dưới **Chart**
 - **Đơn vị dữ liệu**: cTrader Forex/CFD không tương đương futures tập trung. OHLC range, tick volume và quote-event counts chỉ là proxy. Part VI đòi hỏi trade volume thật theo price; CTI yêu cầu feed có participant classification. Không có nguồn đó thì không được giả lập. Activity profile mới được thêm nhằm áp dụng phương pháp tổ chức của LDB lên proxy một cách minh bạch; nó không biến nguồn CFD thành volume futures.
 - Market Profile là công cụ tổ chức và phân tích auction/value, không phải hệ thống phát lệnh mua/bán. Classification, natural units và event context vẫn cần trader xác nhận.
 
-## Options · XAU Commodity Options (Binance)
+## Options · XAU Commodity Options (Binance) — WebSocket V3
 
-Mở mục **Options** ở sidebar để xem Option Chain của XAUUSDT, kỳ hạn đang được phát trên stream, Mark Price, Mark IV, Delta, Gamma, Vega, Theta, Index Price, Open Interest và Options Flow. Module kết nối trực tiếp từ trình duyệt qua Binance WebSocket; không gọi REST API, không cần API Key hay server trung gian.
+Mục Options kết nối thẳng từ trình duyệt tới Binance WebSocket; không cần API Key, Worker hoặc Node.js.
 
-Các luồng dữ liệu đang dùng:
+### Các stream
 
-- `xauusdt@optionMarkPrice` (`/market/ws/`): Mark Price, Index Price, IV, Delta, Gamma, Vega, Theta và bid/ask quote cho các hợp đồng XAU. Dùng dữ liệu hợp đồng nhận được để dựng chain và danh sách expiry, không cần `exchangeInfo` REST.
-- `!index@arr`: stream Index Price tổng hợp; mark stream cũng mang field index nên có thể làm nguồn dự phòng.
-- `xauusdt@openInterest@YYMMDD` trên `/market/ws/`: Open Interest theo expiry đang chọn, cập nhật mỗi 60 giây; payload Binance dùng `o` (số hợp đồng) và `h` (giá trị USDT).
-- `xauusdt@optionTrade` trên `/public/ws/`: Options trades theo underlying để hiển thị Options Flow; payload gồm `p`, `q`, `S` và `X`.
+- `xauusdt@optionMarkPrice` trên `/market/ws/`: dựng Option Chain, Mark Price, Mark IV, Delta, Gamma, Vega, Theta và Index Price.
+- `!index@arr` trên `/market/ws/`: Index Price tổng hợp.
+- `xauusdt@openInterest@YYMMDD` trên `/market/ws/`: Open Interest theo từng expiry, chu kỳ 60 giây. V3 mở stream cho **tất cả expiry đang xuất hiện trong Mark Price feed**, không chỉ expiry đang được chọn; việc này tránh dashboard bị rỗng khi expiry mặc định là kỳ hạn 0D chưa có OI.
+- `xauusdt@optionTrade` trên `/public/ws/`: từng giao dịch mới phát sinh sau khi kết nối.
+- `xauusdt@optionTickerYYMMDD` trên `/public/ws/`: số liệu ticker 24 giờ của từng expiry, gồm volume hợp đồng, quote volume và số lệnh. Đây là số liệu tổng hợp 24h, không phải danh sách giao dịch/tape.
 
-**Cách tính hiển thị**: Delta Notional = Σ(Delta × OI × contract unit × S); Gamma Exposure cho một biến động 1% của underlying = Σ(Gamma × OI × contract unit × S² × 0.01). XAU Commodity Options có contract unit/multiplier bằng 1 theo thông số Binance. Vega và Theta được cộng theo native units Binance phát, không tự ý quy đổi sang đơn vị khác.
+### Cách xử lý dữ liệu
 
-**Giới hạn diễn giải**: Open Interest là số hợp đồng đang mở, không cho biết bên nào đang Long/Short hoặc vị thế của dealer. Bộ chọn Long-option buyer / Short-option counterparty chỉ là hai kịch bản đảo dấu trên cùng OI; đây không phải dealer positioning hoặc GEX chính thức của toàn thị trường. Binance nêu retail Commodity Options chỉ được mở vị thế mua; mục Short chỉ để kiểm tra kịch bản đối ứng giả định. Nếu OI stream chưa phát dữ liệu, Exposure và Max Pain sẽ để trống thay vì tự điền số ước lượng. Dữ liệu là Commodity Options của Binance, không phải options futures CME/COMEX.
+- OI được ghép theo `symbol` hợp đồng (ví dụ `XAU-YYMMDD-4000-C`) với Mark Price/Greeks cùng symbol.
+- Khi expiry người dùng chưa tự chọn và expiry mặc định không có OI dương, module tự chuyển sang expiry gần nhất đã nhận được OI dương. Người dùng có thể chọn expiry thủ công; lựa chọn thủ công được giữ nguyên.
+- OI chưa nhận bản tin sẽ hiển thị `—`, không nhầm với số 0. Binance OI stream có nhịp cập nhật 60 giây.
+- Options Flow hiển thị live trade prints khi Binance phát trade. Khi chưa có print mới, bảng hiển thị thống kê 24h từ `optionTicker` nếu có. Binance trade stream không phát lịch sử trước thời điểm subscribe; ticker 24h chỉ gửi khi thống kê của symbol thay đổi.
+- `window.optionsDebug()` trả trạng thái từng socket, URL, lỗi từ Binance, payload gần nhất, expiry codes, số bản tin OI/ticker/trade và danh sách symbol nhận được để chẩn đoán nếu một stream chưa có dữ liệu.
 
-**Vận hành**: WebSocket tự kết nối lại khi mất mạng và tự xoay kết nối trước giới hạn tuổi kết nối 24 giờ. Các stream trade được giới hạn danh sách gần nhất để tránh làm nặng giao diện. Khi rời mục Options, các socket được đóng; khi quay lại, module kết nối lại.
+### Công thức và giới hạn
+
+Delta Notional = Σ(Delta × OI × contract unit × S).
+
+Gamma Exposure cho biến động 1% = Σ(Gamma × OI × contract unit × S² × 0.01).
+
+Contract unit/multiplier của XAUUSDT là 1. Vega và Theta được cộng theo native units Binance phát; không tự ý đổi scale.
+
+Open Interest không xác định bên Long/Short hay vị thế dealer. Exposure Scenario Long/Short chỉ là hai giả định đảo dấu trên cùng OI, không phải dealer positioning thật. XAU Commodity Options là hợp đồng European-style, USDT-settled; retail chỉ được mở vị thế mua.
+
+### Vận hành
+
+WebSocket tự reconnect khi socket đóng bất thường. Các raw stream được mở riêng theo market/public endpoints; module tự đóng socket khi rời trang Options. Trade prints là event-driven; 24h ticker là snapshot thống kê gộp được đẩy khi dữ liệu thay đổi. Dữ liệu phải được kiểm tra live trên trình duyệt người dùng; test mô phỏng payload chỉ xác nhận parser/render logic, không thay thế xác nhận từ Binance.

@@ -96,7 +96,7 @@
     </div>
   </div>
   <div class="card opt-flow-card">
-    <div class="opt-card-title"><h3>Options Flow · XAU</h3><small>Recent trades · live stream</small></div>
+    <div class="opt-card-title"><h3>Options Flow · XAU</h3><small>Live trade prints · 24h ticker summary</small></div>
     <div id="optFlowBody" class="opt-flow-list"><div class="opt-empty">Đang chờ giao dịch Options…</div></div>
   </div>
   <div class="card">
@@ -106,7 +106,7 @@
       <p><strong>Nguồn Greeks:</strong> Binance Options WebSocket <code>xauusdt@optionMarkPrice</code> phát Mark Price, Index Price, IV, Delta, Gamma, Vega và Theta. Không có Rho trong stream này nên không tự bịa hoặc ước lượng Rho.</p>
       <p><strong>Exposure:</strong> Delta Notional = Σ(Delta × OI × Contract Unit × XAU Index). Gamma Exposure cho biến động 1% = Σ(Gamma × OI × Contract Unit × XAU Index² × 0.01). Delta/Gamma/Vega/Theta đều có thể xem theo từng strike; Vega và Theta được cộng theo đơn vị native Binance trả về, không tự quy đổi khi tài liệu API không định nghĩa rõ scaling.</p>
       <p><strong>Giới hạn quan trọng:</strong> Open Interest cho biết số hợp đồng đang mở, không cho biết tài khoản/nhóm nào đang Long hay Short. Vì vậy nút Exposure Scenario chỉ đảo dấu cho mô hình Long-option buyer hoặc Short-option counterparty, không phải dữ liệu dealer positioning thực tế. Gamma theo strike là mô hình có điều kiện, không phải GEX chính thức của toàn thị trường.</p>
-      <p><strong>Nguồn dữ liệu:</strong> <code>@optionMarkPrice</code> cập nhật Greeks/IV/mark; <code>!index@arr</code> cập nhật Index Price; <code>@openInterest@YYMMDD</code> cập nhật OI theo kỳ hạn; <code>@optionTrade</code> đẩy giao dịch. Nếu một stream chưa phát dữ liệu, phần tương ứng sẽ hiển thị chưa có dữ liệu thay vì tự tạo số.</p>
+      <p><strong>Nguồn dữ liệu:</strong> <code>@optionMarkPrice</code> cập nhật Greeks/IV/mark; <code>!index@arr</code> cập nhật Index Price; <code>@openInterest@YYMMDD</code> được mở đồng thời cho mọi kỳ hạn hiện có (mỗi 60 giây); <code>@optionTickerYYMMDD</code> bổ sung thống kê khối lượng/giao dịch 24 giờ; <code>@optionTrade</code> đẩy từng giao dịch mới. Ticker 24h là thống kê gộp, không phải tape giao dịch. Nếu stream chưa phát dữ liệu, phần tương ứng sẽ hiển thị trạng thái chờ thay vì tự tạo số.</p>
       <p><strong>Thị trường:</strong> XAU Commodity Options là hợp đồng European-style, thanh toán USDT, Contract Unit/Multiplier = 1; retail chỉ được mở vị thế mua quyền chọn. Mục Short trong dashboard là kịch bản đối ứng giả định, không phải vị thế short quan sát được trực tiếp.</p>
     </div>
   </div>
