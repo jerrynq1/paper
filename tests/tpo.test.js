@@ -9,6 +9,13 @@ const ctx={Math,Number,Array,String,Object,Date,JSON,Intl,Map,Set,Uint8Array,Int
 vm.createContext(ctx);vm.runInContext(source,ctx);
 const run=s=>vm.runInContext(s,ctx),J=x=>JSON.parse(JSON.stringify(x));
 let n=0;const ok=s=>{console.log('ok  ',s);n++};
+{
+  const metric=[1,1,2,10,8,7,1,1],va=J(run(`tpoLdbValueArea(${JSON.stringify(metric)},3,70)`));
+  assert.strictEqual(va.lo,3);assert.strictEqual(va.hi,5);assert.ok(va.covered>=va.total*.7);
+  const lower=J(run(`tpoLdbValueArea([1,7,8,10,2,1,1],3,70)`));assert.strictEqual(lower.lo,1);assert.strictEqual(lower.hi,3);
+  const tie=J(run(`tpoLdbValueArea([1,4,10,4,1],2,70)`));assert.strictEqual(tie.lo,0);assert.strictEqual(tie.hi,4);
+  ok('LDB 70% range proxy: compare two rows on each side, expands larger pair and both sides on tie');
+}
 const U=(y,m,d,h=0,mi=0)=>Date.UTC(y,m-1,d,h,mi)/1000;
 
 // ---------- Timezone wall-clock and session boundaries ----------
@@ -42,8 +49,8 @@ const P=J(run(`tpoCalcProfile(${JSON.stringify(bars)},${JSON.stringify(opts)},{s
 assert.ok(P&&P.n>0);assert.strictEqual(P.nP,48);assert.strictEqual(P.counts[0],2); // row 100 touched during A and B
 assert.strictEqual(P.counts[1],2);assert.strictEqual(P.totalMinutes,6);assert.strictEqual(P.ibReady,true);
 assert.ok(P.va.lo<=P.poc&&P.va.hi>=P.poc);assert.ok(P.vah>=P.val);assert.strictEqual(P.valueModeUsed,'tpo');
-const tickMode=J(run(`tpoCalcProfile(${JSON.stringify(bars)},${JSON.stringify({...opts,valueMode:'tick'})},{start:${U(2026,1,1)},end:${U(2026,1,2)},key:1,label:"01/01/2026"})`));assert.strictEqual(tickMode.valueModeUsed,'tick');
-const noVol=J(run(`tpoCalcProfile(${JSON.stringify(bars.map(b=>[...b.slice(0,5),0]))},${JSON.stringify({...opts,valueMode:'tick'})},{start:${U(2026,1,1)},end:${U(2026,1,2)},key:1,label:"01/01/2026"})`));assert.strictEqual(noVol.valueModeUsed,'tpo');
+const tickMode=J(run(`tpoCalcProfile(${JSON.stringify(bars)},${JSON.stringify({...opts,valueMode:'tick'})},{start:${U(2026,1,1)},end:${U(2026,1,2)},key:1,label:"01/01/2026"})`));assert.strictEqual(tickMode.valueModeUsed,'tick');assert.ok(tickMode.valueAreaMethod.includes('two-row'));
+const noVol=J(run(`tpoCalcProfile(${JSON.stringify(bars.map(b=>[...b.slice(0,5),0]))},${JSON.stringify({...opts,valueMode:'tick'})},{start:${U(2026,1,1)},end:${U(2026,1,2)},key:1,label:"01/01/2026"})`));assert.strictEqual(noVol.valueModeUsed,'tpo');assert.ok(noVol.valueAreaMethod.includes('TPO-count'));
 ok('Mỗi bracket chỉ cộng một TPO/mức giá dù có nhiều nến M1 trong cùng bracket');
 const ibOnly=Array.from({length:60},(_,i)=>[U(2026,1,2,0,i),100,101,99,100,1]);
 const ibWait=J(run(`tpoCalcProfile(${JSON.stringify(ibOnly)},${JSON.stringify(opts)},{start:${U(2026,1,2)},end:${U(2026,1,3)},key:2,label:"02/01/2026"})`));
