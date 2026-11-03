@@ -449,3 +449,15 @@ a.sb{text-decoration:none}
   #dttDash td,#dttDash th{padding:2px 4px}
 }
 @media(max-width:420px){.dtt-options{grid-template-columns:1fr}.dtt-head{align-items:flex-start}.dtt-head .pill{font-size:10px}}
+
+/* ================= Standalone Market Profile / TPO ================= */
+#tpoBtn.on{border-color:var(--acc);color:var(--acc);box-shadow:0 0 14px rgba(var(--glow),.22)}
+#tpoSettings .dtt-note{max-width:1100px}
+/* TPO summary is kept outside the aligned price-row profile so it cannot hide top price levels. */
+.tpo-dash{position:absolute;z-index:6;top:42px;max-width:min(380px,calc(100% - 120px));min-width:220px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 7px 20px rgba(0,0,0,.16);pointer-events:none;font:10px/1.25 'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums}
+.tpo-dash-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.tpo-dash-head span,.tpo-dash-row span,.tpo-dash-foot{color:var(--mut)}
+.tpo-dash-row{display:flex;justify-content:space-between;gap:8px;margin:2px 0;white-space:nowrap}
+.tpo-dash-row span{text-align:right}
+.tpo-dash-foot{margin-top:5px;font-size:9px;white-space:normal}
+@media(max-width:650px){.tpo-dash{top:40px;max-width:calc(100% - 64px);min-width:180px;padding:6px 7px;font-size:9px}.tpo-dash-row{gap:5px}}
