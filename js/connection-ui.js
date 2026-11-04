@@ -40,10 +40,11 @@ document.querySelectorAll("[data-show]").forEach(b=>b.onclick=()=>{const i=$(b.d
 /* ================= GIAO DIỆN: sidebar, theme, bầu trời sao ================= */
 const IC={chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M8 15l3-4 3 2 5-6"/></svg>',conn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0z"/><path d="M12 18v3"/></svg>'};
 IC.ind='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-8 5-8 8-3s5 3 10-8"/><path d="M3 21h18"/></svg>';
+IC.quant='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><path d="m7 15 3-4 3 2 5-7"/><circle cx="10" cy="11" r="1"/></svg>';
 IC.options='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg>';
 IC.tpo='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16M4 20h16"/><path d="M8 7h3M8 11h8M8 15h11M8 18h5"/></svg>';
 IC.cs='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 1.5-2.2-.5-1.2.3-2.3 1.6-2.3H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg>';
-const V=[["chart","Chart"],["options","Options"],["tpo","TPO Chart"],["ind","Indicator"],["cs","Chart Setting"],["conn","Kết nối"]];
+const V=[["chart","Chart"],["quant","Quant Lab"],["options","Options"],["tpo","TPO Chart"],["ind","Indicator"],["cs","Chart Setting"],["conn","Kết nối"]];
 let cur="chart";
 function show(v){
   const prev=cur;cur=v;document.body.dataset.v=v;

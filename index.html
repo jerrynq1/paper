@@ -60,6 +60,52 @@
   <div class="card tpo-settings-card" id="tpoSettings"></div>
 </section>
 
+<section class="view" id="v-quant">
+  <div class="ql-head">
+    <div><div class="ql-eyebrow">QUANTITATIVE RESEARCH · PHASE 1</div><h2>Quant Lab <span>· Statistical Data Explorer</span></h2><p class="msg">Phòng phân tích dữ liệu thống kê ban đầu. Nạp CSV hoặc lấy nến M1 đã tải trên Chart để kiểm tra phân phối, lợi suất và tương quan.</p></div>
+    <span class="ql-local-badge">BROWSER-ONLY MVP</span>
+  </div>
+  <div class="card ql-source-card">
+    <div class="ql-source-top"><div><h3>Data Center</h3><p class="msg">Dữ liệu được xử lý ngay trong trình duyệt ở phiên hiện tại; chưa gửi lên server và chưa lưu lâu dài.</p></div><span id="qStatus" class="ql-status">Đang nạp dữ liệu DEMO…</span></div>
+    <div class="ql-source-actions">
+      <label class="btn ql-file-btn" for="qFile">↑ Import CSV</label><input id="qFile" type="file" accept=".csv,text/csv" hidden>
+      <button class="btn ghost" id="qUseChart" type="button">Lấy M1 từ Chart</button>
+      <button class="btn ghost" id="qDemo" type="button">Dữ liệu DEMO</button>
+      <button class="btn ghost" id="qSample" type="button">Tải CSV mẫu</button>
+    </div>
+    <div id="qDataMeta" class="ql-data-meta">Đang chuẩn bị bộ dữ liệu mẫu.</div>
+  </div>
+  <div class="ql-metrics" id="qMetrics"></div>
+  <div class="card ql-analysis-card">
+    <div class="ql-panel-head"><div><h3>Descriptive Statistics</h3><p class="msg">Thống kê mô tả cho biến số được chọn.</p></div><label class="ql-select-label">VARIABLE<select id="qPriceColumn"></select></label></div>
+    <div class="ql-stat-grid">
+      <div class="ql-table-wrap"><table class="ql-table"><thead><tr><th>Statistic</th><th>Value</th></tr></thead><tbody id="qStatsTable"></tbody></table></div>
+      <div class="ql-chart-panel"><h4>Distribution · Histogram</h4><canvas id="qHistogram" class="ql-canvas"></canvas><small class="msg">Histogram được chia thành tối đa 24 bins; trục X là giá trị biến đang chọn.</small></div>
+    </div>
+    <div class="ql-analysis-note" id="qAnalysisNote"></div>
+  </div>
+  <div class="ql-two-col">
+    <div class="card ql-analysis-card">
+      <div class="ql-panel-head"><div><h3>Price / Variable Series</h3><p class="msg">Diễn biến giá trị theo thứ tự quan sát.</p></div></div>
+      <canvas id="qSeries" class="ql-canvas ql-series-canvas"></canvas>
+    </div>
+    <div class="card ql-analysis-card">
+      <div class="ql-panel-head"><div><h3>Return Analysis</h3><p class="msg">Simple return và log return của biến đang chọn.</p></div></div>
+      <div id="qReturnStats" class="ql-return-grid"></div>
+    </div>
+  </div>
+  <div class="card ql-analysis-card">
+    <div class="ql-panel-head"><div><h3>Correlation Matrix</h3><p class="msg">Pearson correlation trên các quan sát hợp lệ theo cặp; tối đa 8 biến đầu tiên.</p></div></div>
+    <div id="qCorrColumns" class="ql-corr-picker"></div>
+    <div class="ql-table-wrap" id="qCorrelation"></div>
+  </div>
+  <div class="card ql-analysis-card">
+    <div class="ql-panel-head"><div><h3>Data Preview</h3><p class="msg">12 dòng đầu tiên sau khi xử lý thứ tự thời gian (nếu nhận diện được).</p></div></div>
+    <div class="ql-table-wrap" id="qPreview"></div>
+  </div>
+  <div class="ql-footnote"><b>Phạm vi bản thử nghiệm:</b> thống kê mô tả, Pearson correlation, histogram và lợi suất. Chưa có OLS, kiểm định giả thuyết, ADF/ARIMA, ARCH/GARCH, xử lý dữ liệu lớn hay backend Python. TickVolume từ cTrader là tick-volume/quote proxy, không phải khối lượng hợp đồng Futures tập trung.</div>
+</section>
+
 <section class="view" id="v-options">
   <div class="options-head">
     <div><div class="options-eyebrow">DERIVATIVES ANALYTICS · BINANCE</div><h2>Options <span>· XAU</span></h2><p class="msg">Option Chain, Greeks, Open Interest và Exposure realtime qua Binance WebSocket; kết nối trực tiếp từ trình duyệt, không cần API key hay server trung gian.</p></div>
@@ -202,6 +248,8 @@
 <script src="js/indicators-engine.js"></script>
 <script src="js/connection-ui.js"></script>
 <script src="js/options.js"></script>
+<script src="js/quant-stats.js"></script>
+<script src="js/quant-lab.js"></script>
 <script src="js/init.js"></script>
 <script src="js/drawings-core.js"></script>
 <script src="js/volume-profile.js"></script>

@@ -251,3 +251,19 @@ Open Interest không xác định bên Long/Short hay vị thế dealer. Exposur
 ### Vận hành
 
 WebSocket tự reconnect khi socket đóng bất thường. Các raw stream được mở riêng theo market/public endpoints; module tự đóng socket khi rời trang Options. Trade prints là event-driven; 24h ticker là snapshot thống kê gộp được đẩy khi dữ liệu thay đổi. Dữ liệu phải được kiểm tra live trên trình duyệt người dùng; test mô phỏng payload chỉ xác nhận parser/render logic, không thay thế xác nhận từ Binance.
+
+## Quant Lab · Statistical Data Explorer (MVP Phase 1)
+
+Mục **Quant Lab** được thêm như một khu vực độc lập, không sửa Chart, Orderflow, Options, TPO hay Replay.
+
+- **Import CSV**: hỗ trợ file có header, dấu phân cách comma / semicolon / tab, ô có dấu nháy kép; file dùng dấu `;` hoặc tab có thể dùng dấu phẩy thập phân.
+- **Lấy M1 từ Chart**: nạp bản sao các nến M1 đang có trong bộ nhớ Chart. Nếu Replay đang bật, dữ liệu lấy theo phần lịch sử đang được Replay công khai, không tự lấy lại phần tương lai đã bị cắt.
+- **Dữ liệu DEMO**: tạo chuỗi tổng hợp để thử giao diện và phép tính; không phải dữ liệu thị trường.
+- **Descriptive Statistics**: count, mean, median, sample variance, sample standard deviation, min, Q1, Q3, max, skewness, excess kurtosis và số giá trị thiếu của biến được chọn.
+- **Return Analysis**: simple return, log return và thống kê cơ bản.
+- **Correlation Matrix**: Pearson correlation trên các quan sát hợp lệ theo cặp, tối đa 8 biến được chọn.
+- Histogram, series plot và data preview.
+
+Mở `http://localhost:8000/#quant` sau khi chạy web server tĩnh. Các phép tính hiện chạy ở trình duyệt; dữ liệu chưa được upload, lưu bền vững hoặc xử lý bằng backend. Test tính toán: `node tests/quant-stats.test.js`.
+
+**Giới hạn dữ liệu:** cột Volume lấy từ cTrader trong bản này vẫn là tick-volume/quote proxy do broker cung cấp, không phải contract volume Futures tập trung.
