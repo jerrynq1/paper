@@ -2,7 +2,7 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('p
 const J=path.join(__dirname,'..','js')+'/';
 const full=fs.readFileSync(J+'hvn-profile.js','utf8'),pure=full.split('/* ===== vẽ ===== */')[0];
 const strip=s=>s.replace(/\bconst (\w+)=/g,'var $1=');
-const ctx={Math,Float64Array,Uint8Array,Number,Array,isFinite};vm.createContext(ctx);vm.runInContext(strip(pure),ctx);
+const ctx={Math,Float64Array,Uint8Array,Number,Array,isFinite,SMP:()=>[]};vm.createContext(ctx);vm.runInContext(strip(pure),ctx);
 let n=0;const ok=x=>console.log('ok  ',x)||n++;
 const run=c=>vm.runInContext(c,ctx);
 const Q0={thr:60,smooth:2,gapr:1,minr:1,prom:15,mins:0,meth:'peak'};
@@ -78,7 +78,7 @@ ctx.z=Z(100,102,0);assert.strictEqual(run('hvnOut(z,{close:101})'),'');ok('hvnOu
   const tf=900,agg=[];
   for(let t=0;t<10800;t+=tf){const r=M.filter(x=>x[0]>=t&&x[0]<t+tf);agg.push({st:t,time:t,open:r[0][1],close:r[r.length-1][4],high:Math.max(...r.map(x=>x[2])),low:Math.min(...r.map(x=>x[3])),v:0})}
   const env={Math,Float64Array,Uint8Array,Number,Array,Object,Map,Set,isFinite,console,window:{},
-    m1:M,agg,C:{sym:'T',tf},ACT:[],isOn:()=>true,pdef:d=>Object.fromEntries(d.p.map(x=>[x[0],x[2]])),IND:{},
+    m1:M,agg,C:{sym:'T',tf},ACT:[],SMP:()=>[],isOn:()=>true,pdef:d=>Object.fromEntries(d.p.map(x=>[x[0],x[2]])),IND:{},
     cres:(a,j)=>a.c[j],hexA:(h,al)=>'rgba('+h+','+al+')',ctx:rec,pd:()=>2,vpTick:()=>0.01,font:()=>'10px x',status:()=>{},
     bucket:(t,f)=>Math.floor(t/f)*f,s2l:s=>s/tf,ts:{logicalToCoordinate:l=>l*10},cs:{priceToCoordinate:p=>1000-p*5}};
   vm.createContext(env);

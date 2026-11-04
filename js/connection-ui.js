@@ -57,6 +57,7 @@ function show(v){
   if(v==="ind"){buildInd();if(typeof dttBuildSettings==="function")dttBuildSettings()}
   if(v==="cs")buildCS();
   if(v==="conn")fillConn();
+  if(v==="quant")requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));
   document.body.classList.remove("so");
   try{history.replaceState(null,"","#"+v)}catch(e){}
 }

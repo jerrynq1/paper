@@ -2,21 +2,28 @@
 (function(){
   'use strict';
   const $q=id=>document.getElementById(id);
-  const QL={headers:[],rows:[],delimiter:',',source:'',numeric:[],priceIndex:-1,timeIndex:-1,timeSorted:false,loadedAt:null,lastRegression:null,lastTsModel:null};
+  const QL={headers:[],rows:[],delimiter:',',source:'',numeric:[],priceIndex:-1,timeIndex:-1,timeSorted:false,invalidTimestampCount:0,loadedAt:null,lastRegression:null,lastTsModel:null};
   const fmt=(v,d=4)=>Number.isFinite(v)?Number(v).toLocaleString('en-US',{maximumFractionDigits:d}):'—';
   const pct=(v,d=3)=>Number.isFinite(v)?(v*100).toFixed(d)+'%':'—';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const getValues=index=>QL.rows.map(r=>QuantStats.parseNumber(r[index],QL.delimiter));
+
   function note(s,bad=false){const e=$q('qStatus');if(e){e.textContent=s;e.classList.toggle('is-bad',bad)}}
   function setData(headers,rows,delimiter,source){
     if(!headers.length||!rows.length)throw new Error('Không tìm thấy dữ liệu có header và ít nhất một dòng.');
-    QL.headers=headers;QL.rows=rows;QL.delimiter=delimiter||',';QL.source=source;QL.loadedAt=new Date();QL.lastTsModel=null;
-    QL.numeric=QuantStats.numericColumns(headers,rows,QL.delimiter);
-    if(!QL.numeric.length)throw new Error('Không tìm thấy cột số hợp lệ. Hãy kiểm tra header và định dạng số trong CSV.');
-    const ti=QuantStats.detectTimeColumn(headers),pi=QuantStats.detectPriceColumn(headers);
-    QL.timeIndex=ti;QL.timeSorted=false;
-    QL.priceIndex=QL.numeric.some(c=>c.index===pi)?pi:(QL.numeric.find(c=>c.index!==ti)?.index??QL.numeric[0].index);
-    if(ti>=0){const parsed=rows.map((r,i)=>{const raw=String(r[ti]??'').trim(),num=Number(raw);let t=NaN;if(raw&&Number.isFinite(num)&&Math.abs(num)>=1e9)t=Math.abs(num)>=1e12?num: num*1000;else t=Date.parse(raw);return{r,i,t}});const valid=parsed.filter(x=>Number.isFinite(x.t));if(valid.length>=rows.length*.6){valid.sort((a,b)=>a.t-b.t);QL.rows=valid.map(x=>x.r);QL.timeSorted=true}}
+    const normalizedDelimiter=delimiter||',',ti=QuantStats.detectTimeColumn(headers),allNumeric=QuantStats.numericColumns(headers,rows,normalizedDelimiter),numeric=allNumeric.filter(c=>c.index!==ti);
+    if(!numeric.length)throw new Error('Không tìm thấy cột số phân tích hợp lệ sau khi loại cột thời gian. Hãy kiểm tra header và định dạng số trong CSV.');
+    const pi=QuantStats.detectPriceColumn(headers);
+    let orderedRows=rows.slice(),timeSorted=false,invalidTimestampCount=0;
+    if(ti>=0){
+      const parsed=rows.map((r,i)=>({r,i,t:QuantStats.parseTimestamp(r[ti])}));
+      const valid=parsed.filter(x=>Number.isFinite(x.t));invalidTimestampCount=parsed.length-valid.length;
+      // Never silently drop rows with missing/invalid timestamps: only sort when every row can be ordered.
+      if(valid.length===rows.length){valid.sort((a,b)=>a.t-b.t||a.i-b.i);orderedRows=valid.map(x=>x.r);timeSorted=true;}
+    }
+    QL.headers=headers;QL.rows=orderedRows;QL.delimiter=normalizedDelimiter;QL.source=source;QL.loadedAt=new Date();QL.lastTsModel=null;
+    QL.numeric=numeric;QL.timeIndex=ti;QL.timeSorted=timeSorted;QL.invalidTimestampCount=invalidTimestampCount;
+    QL.priceIndex=numeric.some(c=>c.index===pi)?pi:(numeric.find(c=>c.index!==ti)?.index??numeric[0].index);
     populateControls();render();note(`${fmt(QL.rows.length,0)} dòng · ${QL.numeric.length} cột số · ${source}`);
     if($q('qTsUnitRoot'))$q('qTsUnitRoot').innerHTML='<p class="msg">Dữ liệu đã đổi. Chạy lại ADF + PP.</p>';
     if($q('qTsModelOutput'))$q('qTsModelOutput').hidden=true;
@@ -57,12 +64,15 @@
   function timeSeriesValues(){const i=Number($q('qTsColumn').value);return{index:i,name:QL.headers[i],values:getValues(i)}}
   function timeSeriesTimeInfo(){
     if(QL.timeIndex<0)return{label:'Không có cột thời gian được nhận diện',warning:true};
-    const stamps=QL.rows.map(r=>{const raw=String(r[QL.timeIndex]??'').trim(),n=Number(raw);if(raw&&Number.isFinite(n)&&Math.abs(n)>=1e9)return Math.abs(n)>=1e12?n:n*1000;return Date.parse(raw)}).filter(Number.isFinite);
-    if(stamps.length<3)return{label:'Không đủ timestamp hợp lệ',warning:true};
-    const diffs=[];for(let i=1;i<stamps.length;i++)diffs.push(stamps[i]-stamps[i-1]);
-    const sorted=diffs.slice().sort((a,b)=>a-b),median=sorted[Math.floor(sorted.length/2)],duplicates=diffs.filter(v=>v===0).length,gaps=diffs.filter(v=>v>median*1.5).length,irregular=diffs.some(v=>v<0)||duplicates>0||gaps>Math.max(2,diffs.length*.02);
+    const parsed=QL.rows.map(r=>QuantStats.parseTimestamp(r[QL.timeIndex]));
+    const invalid=parsed.filter(v=>!Number.isFinite(v)).length;
+    if(invalid)return{label:`${invalid} dòng thiếu/không nhận diện được timestamp; dữ liệu giữ nguyên thứ tự CSV và không tự sắp xếp`,warning:true};
+    if(parsed.length<3)return{label:'Không đủ timestamp hợp lệ',warning:true};
+    const diffs=[];for(let i=1;i<parsed.length;i++)diffs.push(parsed[i]-parsed[i-1]);
+    const positive=diffs.filter(v=>v>0).slice().sort((a,b)=>a-b);if(!positive.length)return{label:'Timestamp không tăng hoặc bị trùng; hãy kiểm tra thứ tự và duplicate',warning:true};
+    const median=positive[Math.floor(positive.length/2)],duplicates=diffs.filter(v=>v===0).length,nonIncreasing=diffs.filter(v=>v<0).length,gaps=diffs.filter(v=>v>median*1.5).length,irregular=nonIncreasing>0||gaps>Math.max(2,diffs.length*.02);
     const mins=median/60000;let freq=mins<1?`${fmt(mins*60,0)} giây`:mins<60?`${fmt(mins,1)} phút`:mins<1440?`${fmt(mins/60,1)} giờ`:`${fmt(mins/1440,1)} ngày`;
-    return{label:`Khoảng cách trung vị ≈ ${freq} · ${duplicates} timestamp trùng · ${gaps} khoảng trống lớn`,warning:irregular};
+    return{label:`Khoảng cách dương trung vị ≈ ${freq} · ${duplicates} timestamp trùng · ${nonIncreasing} bước không tăng · ${gaps} khoảng trống lớn`,warning:irregular};
   }
   function tsCanvas(id){const c=$q(id);if(!c)return null;const r=c.getBoundingClientRect(),w=Math.max(260,r.width||520),h=Math.max(160,r.height||220),dpr=window.devicePixelRatio||1;c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);return{ctx,w,h}}
   function drawCorrelogram(id,values,title){
@@ -80,40 +90,59 @@
   function renderUnitRootRow(label,r,lagLabel){const c=r.critical;return`<tr><th>${label}</th><td>${fmt(r.statistic,4)}</td><td>${lagLabel}</td><td>${fmt(c['1%'],3)}</td><td>${fmt(c['5%'],3)}</td><td>${fmt(c['10%'],3)}</td><td class="${r.statistic<c['5%']?'sig':'warn'}">${critDecision(r.statistic,c['5%'])} @ 5%</td></tr>`}
   function runUnitRootTests(){
     const box=$q('qTsUnitRoot');try{const{values,name}=timeSeriesValues(),timeInfo=timeSeriesTimeInfo(),det=$q('qTsDeterministic').value,lag=Math.max(0,Math.min(20,Number($q('qTsAdfLag').value)||0)),bwRaw=String($q('qTsPpBandwidth').value).trim(),opts={deterministic:det,maxLag:lag},a=QuantTimeSeries.adf(values,opts),p=QuantTimeSeries.pp(values,{deterministic:det,bandwidth:bwRaw?Number(bwRaw):undefined});
-      box.innerHTML=`<table class="ql-table"><thead><tr><th>Test</th><th>Statistic</th><th>Lag / BW</th><th>1%</th><th>5%</th><th>10%</th><th>Decision</th></tr></thead><tbody>${renderUnitRootRow('ADF · '+a.criterion.toUpperCase(),a,`${a.lag} lags`)}${renderUnitRootRow('Phillips–Perron Zτ',p,`${p.bandwidth} NW lags`)}</tbody></table><div class="ql-analysis-note">Biến: ${esc(name)} · N: ${fmt(a.n,0)} · Deterministic: ${esc(det)} · ADF lag được chọn trong 0–${lag} bằng ${a.criterion.toUpperCase()}. PP Zρ bổ sung = ${fmt(p.zRho,4)}. ${esc(timeInfo.label)}. H₀ là có unit root; thống kê càng âm sâu so với critical value thì càng có bằng chứng bác bỏ H₀.</div>`;
+      box.innerHTML=`<table class="ql-table"><thead><tr><th>Test</th><th>Statistic</th><th>Lag / BW</th><th>1%</th><th>5%</th><th>10%</th><th>Decision</th></tr></thead><tbody>${renderUnitRootRow('ADF · '+a.criterion.toUpperCase(),a,`${a.lag} lags`)}${renderUnitRootRow('Phillips–Perron Zτ',p,`${p.bandwidth} NW lags`)}</tbody></table><div class="ql-analysis-note">Biến: ${esc(name)} · N: ${fmt(a.n,0)} · Deterministic: ${esc(det)} · ADF max lag sử dụng ${a.maxLagUsed}; lag được chọn bằng ${a.criterion.toUpperCase()}. PP Zρ bổ sung = ${fmt(p.zRho,4)}. ${esc(timeInfo.label)}. ${timeInfo.warning?'CẢNH BÁO: ADF/PP giả định quan sát cách đều; kết quả trên chuỗi có khoảng trống/duplicate timestamp cần diễn giải thận trọng.':''} H₀ là có unit root; thống kê càng âm sâu so với critical value thì càng có bằng chứng bác bỏ H₀. Critical values đang dùng là mốc tiệm cận xấp xỉ, chưa phải MacKinnon finite-sample p-value.</div>`;
     }catch(e){box.innerHTML=`<p class="ql-reg-note">${esc(e.message||String(e))}</p>`}}
   function drawForecast(history,forecastRows){
     const c=tsCanvas('qTsForecastPlot');if(!c)return;const{ctx,w,h}=c,acc=getComputedStyle(document.documentElement).getPropertyValue('--acc').trim()||'#d6a84b',mut=getComputedStyle(document.documentElement).getPropertyValue('--mut').trim()||'#89909a',line=getComputedStyle(document.documentElement).getPropertyValue('--line').trim()||'#343943';
-    ctx.clearRect(0,0,w,h);const shown=history.slice(-160),all=shown.concat(forecastRows.map(x=>x.value)),lo=Math.min(...all, ...forecastRows.map(x=>x.lower)),hi=Math.max(...all,...forecastRows.map(x=>x.upper)),range=hi-lo||1,pad={l:42,r:12,t:16,b:25},xAt=i=>pad.l+i/(all.length-1||1)*(w-pad.l-pad.r),yAt=v=>pad.t+(hi-v)/range*(h-pad.t-pad.b);
-    ctx.strokeStyle=line;ctx.beginPath();ctx.moveTo(pad.l,h-pad.b);ctx.lineTo(w-pad.r,h-pad.b);ctx.stroke();ctx.strokeStyle=acc;ctx.lineWidth=1.7;ctx.beginPath();shown.forEach((v,i)=>{const x=xAt(i),y=yAt(v);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.setLineDash([5,4]);ctx.strokeStyle=mut;ctx.beginPath();forecastRows.forEach((r,i)=>{const x=xAt(shown.length+i),y=yAt(r.value);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=mut;ctx.font='10px sans-serif';ctx.fillText('History',pad.l,11);ctx.textAlign='right';ctx.fillText('Forecast',w-pad.r,11);ctx.textAlign='left';
+    ctx.clearRect(0,0,w,h);const shown=history.slice(-160),all=shown.concat(forecastRows.map(x=>x.value)),lo=Math.min(...all,...forecastRows.map(x=>x.lower)),hi=Math.max(...all,...forecastRows.map(x=>x.upper)),range=hi-lo||1,pad={l:42,r:12,t:18,b:25},xAt=i=>pad.l+i/(all.length-1||1)*(w-pad.l-pad.r),yAt=v=>pad.t+(hi-v)/range*(h-pad.t-pad.b);
+    ctx.strokeStyle=line;ctx.beginPath();ctx.moveTo(pad.l,h-pad.b);ctx.lineTo(w-pad.r,h-pad.b);ctx.stroke();
+    if(forecastRows.length){ctx.beginPath();forecastRows.forEach((r,i)=>{const x=xAt(shown.length+i),y=yAt(r.upper);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});for(let i=forecastRows.length-1;i>=0;i--){const r=forecastRows[i];ctx.lineTo(xAt(shown.length+i),yAt(r.lower))}ctx.closePath();ctx.fillStyle='rgba(214,168,75,.14)';ctx.fill();}
+    ctx.strokeStyle=acc;ctx.lineWidth=1.7;ctx.beginPath();shown.forEach((v,i)=>{const x=xAt(i),y=yAt(v);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.setLineDash([5,4]);ctx.strokeStyle=mut;ctx.beginPath();forecastRows.forEach((r,i)=>{const x=xAt(shown.length+i),y=yAt(r.value);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=mut;ctx.font='10px sans-serif';ctx.fillText('Lịch sử',pad.l,11);ctx.textAlign='right';ctx.fillText('Dự báo · dải 95%',w-pad.r,11);ctx.textAlign='left';
   }
   function runTsModel(){
     const status=$q('qTsModelStatus'),out=$q('qTsModelOutput');try{const{values,name}=timeSeriesValues(),m=QuantTimeSeries.fitModel(values,{type:$q('qTsModelType').value,p:$q('qTsP').value,d:$q('qTsD').value,q:$q('qTsQ').value,horizon:$q('qTsHorizon').value});
-      $q('qTsModelMetrics').innerHTML=[['OBSERVATIONS',fmt(m.n,0),'Residual observations after burn-in'],['RMSE',fmt(m.rmse,6),'CSS residual standard error'],['AIC',fmt(m.aic,3),'Lower is better · compare same series'],['BIC',fmt(m.bic,3),'Penalizes model complexity']].map(x=>`<div class="ql-metric"><span>${x[0]}</span><b>${x[1]}</b><small>${x[2]}</small></div>`).join('');
+      $q('qTsModelMetrics').innerHTML=[['OBSERVATIONS',fmt(m.n,0),'Residual observations after burn-in'],['RMSE',fmt(m.rmse,6),'sqrt(SSE / N residual)'],['RESIDUAL S.E.',fmt(m.residualStdError,6),'sqrt(SSE / residual df)'],['AIC',fmt(m.aic,3),'Lower is better · same sample'],['BIC',fmt(m.bic,3),'Penalizes model complexity']].map(x=>`<div class="ql-metric"><span>${x[0]}</span><b>${x[1]}</b><small>${x[2]}</small></div>`).join('');
       $q('qTsParameters').innerHTML=`<table class="ql-table"><thead><tr><th>Parameter</th><th>Estimate</th></tr></thead><tbody>${m.parameters.map(x=>`<tr><th>${esc(x.name)}</th><td>${fmt(x.value,7)}</td></tr>`).join('')}</tbody></table>`;
-      $q('qTsForecastTable').innerHTML=`<table class="ql-table"><thead><tr><th>Horizon</th><th>Forecast</th><th>Approx. lower</th><th>Approx. upper</th></tr></thead><tbody>${m.forecastRows.map(r=>`<tr><th>t+${r.step}</th><td>${fmt(r.value,7)}</td><td>${fmt(r.lower,7)}</td><td>${fmt(r.upper,7)}</td></tr>`).join('')}</tbody></table>`;
-      drawForecast(values,m.forecastRows);QL.lastTsModel={values:values.slice(),model:m};$q('qTsModelNote').textContent=`${name} · ${m.type}(${m.order.p},${m.order.d},${m.order.q}) · ${m.converged?'optimizer converged':'đạt giới hạn iteration'} (${m.iterations} iterations). ${m.notes.join(' ')}`;
-      out.hidden=false;status.textContent=`Ước lượng xong · ${m.type}(${m.order.p},${m.order.d},${m.order.q}) · ${m.n} residual observations.`;status.classList.remove('is-bad');status.classList.add('is-good');
+      const d=m.diagnostics,fmtRoots=a=>a.length?a.map(v=>fmt(v,5)).join(', '):'Không áp dụng';
+      const diagnosticRows=[['AR roots (modulus)',fmtRoots(d.arRootModuli),d.arRootsConverged?'Nghiệm số đã hội tụ':'Thuật toán tìm nghiệm chưa hội tụ'],['Stationarity',d.stationary?'Đạt điều kiện nghiệm AR > 1':'Không đạt / chưa xác minh','Mọi nghiệm của đa thức AR phải nằm ngoài vòng tròn đơn vị'],['MA roots (modulus)',fmtRoots(d.maRootModuli),d.maRootsConverged?'Nghiệm số đã hội tụ':'Thuật toán tìm nghiệm chưa hội tụ'],['Invertibility',d.invertible?'Đạt điều kiện nghiệm MA > 1':'Không đạt / chưa xác minh','Mọi nghiệm của đa thức MA phải nằm ngoài vòng tròn đơn vị'],['Residual mean',fmt(d.residualMean,8),'Trung bình phần dư sau burn-in'],['Residual ACF(1)',fmt(d.acf1,5),'Kiểm tra sơ bộ; nên xem correlogram phần dư độc lập'],['Ljung–Box Q',d.ljungBox?fmt(d.ljungBox.statistic,5):'—',d.ljungBox?`lag=${d.ljungBox.lags}; df=${d.ljungBox.df}; p-value=${pval(d.ljungBox.pValue)}`:'Không đủ bậc tự do để kiểm định']];
+      $q('qTsModelDiagnostics').innerHTML=`<table class="ql-table"><thead><tr><th>Chẩn đoán</th><th>Kết quả</th><th>Diễn giải</th></tr></thead><tbody>${diagnosticRows.map(r=>`<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table>`;
+      $q('qTsForecastTable').innerHTML=`<table class="ql-table"><thead><tr><th>Horizon</th><th>Forecast</th><th>Forecast S.E.</th><th>Approx. lower 95%</th><th>Approx. upper 95%</th></tr></thead><tbody>${m.forecastRows.map(r=>`<tr><th>t+${r.step}</th><td>${fmt(r.value,7)}</td><td>${fmt(r.forecastStdError,7)}</td><td>${fmt(r.lower,7)}</td><td>${fmt(r.upper,7)}</td></tr>`).join('')}</tbody></table>`;
+      drawForecast(values,m.forecastRows);QL.lastTsModel={values:values.slice(),model:m};const timeInfo=timeSeriesTimeInfo();$q('qTsModelNote').textContent=`${name} · ${m.type}(${m.order.p},${m.order.d},${m.order.q}) · ${m.converged?'optimizer hội tụ':'CẢNH BÁO: optimizer đạt giới hạn iteration'}. ${timeInfo.warning?'CẢNH BÁO: timestamp không đều/không hợp lệ; mô hình đang xem mỗi dòng là một bước thời gian bằng nhau. ':''}${m.notes.join(' ')}`;
+      const warning=!m.converged||!d.stationary||!d.invertible||timeInfo.warning;out.hidden=false;status.textContent=`Ước lượng ${warning?'có cảnh báo':'hoàn tất'} · ${m.type}(${m.order.p},${m.order.d},${m.order.q}) · ${m.n} residual observations.`;status.classList.toggle('is-bad',warning);status.classList.toggle('is-good',!warning);
     }catch(e){out.hidden=true;status.textContent=e.message||String(e);status.classList.add('is-bad');status.classList.remove('is-good')}}
   function timeSeriesDemo(){
     let seed=73021;const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296},normal=()=>{const u=Math.max(1e-9,rand()),v=rand();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
     const rows=[];let stationary=0,walk=100,price=2050;for(let i=0;i<900;i++){const eps=normal();stationary=.72*stationary+eps;walk+=normal()*.8;price*=Math.exp(.00015+normal()*.0028);const t=new Date(Date.UTC(2024,0,1)+i*86400000).toISOString();rows.push([t,price.toFixed(5),stationary.toFixed(6),walk.toFixed(6)]);}
     setData(['Time','XAU_Close_SIM','Stationary_AR1','RandomWalk'],rows,',','TIME SERIES DEMO tổng hợp · 900 quan sát daily · không phải dữ liệu thị trường');
   }
+  function renderRolling(){
+    const box=$q('qRollingTable');if(!box||!QL.rows.length)return;
+    const raw=String($q('qRollingWindow')?.value??'20'),w=Number(raw);
+    if(!Number.isInteger(w)||w<2||w>1000){box.innerHTML='<p class="msg">Window phải là số nguyên từ 2 đến 1.000.</p>';return;}
+    const values=getValues(QL.priceIndex),level=QuantStats.rolling(values,w),logReturns=QuantStats.returns(values).map(r=>r.log),vol=QuantStats.rolling(logReturns,w),indices=[];
+    for(let i=values.length-1;i>=0&&indices.length<20;i--)if(level[i])indices.push(i);
+    if(!indices.length){box.innerHTML=`<p class="msg">Chưa đủ ${w} quan sát liên tiếp hợp lệ để tính rolling statistics.</p>`;return;}
+    const rows=indices.map(i=>{const vr=vol[i-1],time=QL.timeIndex>=0?QL.rows[i]?.[QL.timeIndex]:`#${i+1}`;return`<tr><th>${esc(time??`#${i+1}`)}</th><td>${fmt(values[i],7)}</td><td>${fmt(level[i].mean,7)}</td><td>${fmt(level[i].stdDev,7)}</td><td>${vr?fmt(vr.stdDev,7):'—'}</td></tr>`}).join('');
+    box.innerHTML=`<table class="ql-table"><thead><tr><th>Time / Row</th><th>Value</th><th>Rolling Mean</th><th>Rolling Std. Dev.</th><th>Rolling Log-return Std. Dev.</th></tr></thead><tbody>${rows}</tbody></table><div class="ql-analysis-note">Cửa sổ ${w} quan sát. Bảng hiển thị tối đa 20 kết quả gần nhất. Rolling log-return Std. Dev. dùng ${w} lợi suất liên tiếp (tương ứng cần ${w+1} mức giá) và chưa annualize.</div>`;
+  }
   function selectedColumnStats(){const i=Number($q('qPriceColumn').value);QL.priceIndex=i;return{index:i,values:getValues(i).filter(Number.isFinite)}}
   function render(){
     if(!QL.rows.length)return;
     const {index,values}=selectedColumnStats(),s=QuantStats.stats(values),ret=QuantStats.returns(getValues(index)),simple=ret.map(x=>x.simple).filter(Number.isFinite),logs=ret.map(x=>x.log).filter(Number.isFinite),rs=QuantStats.stats(logs),missing=QL.rows.length-values.length;
     $q('qMetrics').innerHTML=[['OBSERVATIONS',fmt(s.n,0),'Số giá trị hợp lệ'],['MEAN',fmt(s.mean),'Trung bình'],['STD. DEV.',fmt(s.stdDev),'Độ lệch chuẩn mẫu'],['MIN / MAX',`${fmt(s.min)} / ${fmt(s.max)}`,'Biên dữ liệu'],['MISSING · VAR',fmt(missing,0),'Biến đang chọn']].map(x=>`<div class="ql-metric"><span>${x[0]}</span><b>${x[1]}</b><small>${x[2]}</small></div>`).join('');
-    const statRows=[['Số quan sát',s.n],['Trung bình (Mean)',s.mean],['Trung vị (Median)',s.median],['Phương sai mẫu (Variance)',s.variance],['Độ lệch chuẩn mẫu (Std. Dev.)',s.stdDev],['Giá trị nhỏ nhất (Min)',s.min],['Q1 · 25%',s.q1],['Q3 · 75%',s.q3],['Giá trị lớn nhất (Max)',s.max],['Skewness',s.skewness],['Excess Kurtosis',s.excessKurtosis]];
-    $q('qStatsTable').innerHTML=statRows.map(([k,v])=>`<tr><td>${k}</td><td>${typeof v==='number'?fmt(v,6):'—'}</td></tr>`).join('');
+    const modeDisplay=s.modes?.length>1?s.modes.join(', '):s.mode;
+    const statRows=[['Số quan sát',s.n],['Trung bình (Mean)',s.mean],['Trung vị (Median)',s.median],['Mode (nếu có giá trị lặp)',modeDisplay],['Tần suất Mode',s.modeFrequency],['Phương sai mẫu (Variance)',s.variance],['Độ lệch chuẩn mẫu (Std. Dev.)',s.stdDev],['Giá trị nhỏ nhất (Min)',s.min],['Q1 · 25%',s.q1],['Q3 · 75%',s.q3],['Giá trị lớn nhất (Max)',s.max],['Skewness',s.skewness],['Excess Kurtosis',s.excessKurtosis]];
+    $q('qStatsTable').innerHTML=statRows.map(([k,v])=>`<tr><td>${k}</td><td>${typeof v==='number'?fmt(v,6):'—'}</td></tr>`).join('')+`<tr><td colspan=2 class="msg">Skewness và Excess Kurtosis hiện là moment coefficients chưa hiệu chỉnh độ chệch mẫu; Mode chỉ tồn tại khi giá trị lặp chính xác.</td></tr>`;
     $q('qReturnStats').innerHTML=[['Simple return mean',pct(QuantStats.stats(simple).mean)],['Log return mean',pct(rs.mean)],['Log return Std. Dev.',pct(rs.stdDev)],['Positive returns',pct(simple.filter(x=>x>0).length/Math.max(1,simple.length),1)],['Best log return',pct(rs.max)],['Worst log return',pct(rs.min)],['Return observations',fmt(logs.length,0)]].map(([k,v])=>`<div class="ql-return-item"><span>${k}</span><b>${v}</b></div>`).join('');
     const corrIndices=[...$q('qCorrColumns').querySelectorAll('input:checked')].map(x=>+x.value),cols={};corrIndices.forEach(i=>cols[QL.headers[i]]=getValues(i));
-    const cm=QuantStats.correlationMatrix(cols);$q('qCorrelation').innerHTML=cm.names.length?`<table class="ql-table ql-corr"><thead><tr><th>Variable</th>${cm.names.map(n=>`<th>${esc(n)}</th>`).join('')}</tr></thead><tbody>${cm.names.map((n,i)=>`<tr><th>${esc(n)}</th>${cm.values[i].map(v=>`<td class="${v>0.5?'pos':v<-.5?'neg':''}">${fmt(v,3)}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<p class="msg">Chọn ít nhất một biến số.</p>';
-    drawHistogram(QuantStats.histogram(values,24));drawSeries(values);
+    const cm=QuantStats.correlationMatrix(cols),cv=QuantStats.covarianceMatrix(cols);
+    const matrixHtml=m=>m.names.length?`<table class="ql-table ql-corr"><thead><tr><th>Variable</th>${m.names.map(n=>`<th>${esc(n)}</th>`).join('')}</tr></thead><tbody>${m.names.map((n,i)=>`<tr><th>${esc(n)}</th>${m.values[i].map(v=>`<td>${fmt(v,6)}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<p class="msg">Chọn ít nhất một biến số.</p>';
+    $q('qCorrelation').innerHTML=cm.names.length?`<table class="ql-table ql-corr"><thead><tr><th>Variable</th>${cm.names.map(n=>`<th>${esc(n)}</th>`).join('')}</tr></thead><tbody>${cm.names.map((n,i)=>`<tr><th>${esc(n)}</th>${cm.values[i].map(v=>`<td class="${v>0.5?'pos':v<-.5?'neg':''}">${fmt(v,3)}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<p class="msg">Chọn ít nhất một biến số.</p>';
+    if($q('qCovariance'))$q('qCovariance').innerHTML=matrixHtml(cv);
+    drawHistogram(QuantStats.histogram(values,24));drawSeries(values);renderRolling();
     $q('qPreview').innerHTML=`<table class="ql-table"><thead><tr>${QL.headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${QL.rows.slice(0,12).map(r=>`<tr>${QL.headers.map((h,i)=>`<td>${esc(r[i])}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-    $q('qDataMeta').textContent=`Nguồn: ${QL.source} · ${QL.rows.length.toLocaleString('en-US')} dòng · ${QL.headers.length} cột · ${QL.timeIndex>=0?'đã nhận diện cột thời gian':'chưa nhận diện cột thời gian'}.`;
-    $q('qAnalysisNote').textContent=`Biến đang phân tích: ${QL.headers[index]}. Lợi suất được tính theo thứ tự dòng (đã sắp theo thời gian nếu nhận diện được cột thời gian). Log return chỉ tính khi hai mức giá liên tiếp dương.`;
+    $q('qDataMeta').textContent=`Nguồn: ${QL.source} · ${QL.rows.length.toLocaleString('en-US')} dòng · ${QL.headers.length} cột · ${QL.timeIndex>=0?'đã nhận diện cột thời gian':'chưa nhận diện cột thời gian'}${QL.invalidTimestampCount?` · ${QL.invalidTimestampCount} timestamp không hợp lệ`:''}.`;
+    $q('qAnalysisNote').textContent=`Biến đang phân tích: ${QL.headers[index]}. Lợi suất được tính theo thứ tự dòng${QL.timeSorted?' (đã sắp tăng dần theo timestamp)':' (không tự sắp xếp vì thiếu/không nhận diện đủ timestamp)'}. Log return chỉ tính khi hai mức giá liên tiếp dương.`;
   }
   const pval=v=>Number.isFinite(v)?(v<.001?'<0.001':fmt(v,4)):'—';
   function runOLS(){
@@ -132,9 +161,9 @@
     const rows=[['Dependent variable',m.yName],['Included regressors',m.xNames.join(', ')],['Intercept',m.includeIntercept?'Yes':'No'],['Standard errors',m.robustHC1?'HC1 heteroskedasticity-consistent':'Classical OLS'],['Residual degrees of freedom',m.dfResidual],['Model degrees of freedom',m.dfModel],['F-statistic',fmt(m.fStat,6)],['Prob. (F-statistic)',pval(m.fP)],['SSE',fmt(m.sse,7)],['RMSE',fmt(m.rmse,7)],['Residual Std. Error',fmt(m.residualStdError,7)]];
     $q('qRegSummary').innerHTML=`<table class="ql-table"><tbody>${rows.map(([a,b])=>`<tr><th>${esc(a)}</th><td>${esc(b)}</td></tr>`).join('')}</tbody></table>`;
     const d=m.diagnostics,bp=d.breuschPagan;
-    const diag=[['Durbin–Watson',fmt(d.durbinWatson,4),'Gần 2 là dấu hiệu sơ bộ ít tự tương quan bậc 1; không phải kết luận đầy đủ.'],['Jarque–Bera statistic',fmt(d.jarqueBera,4),`p-value: ${pval(d.jarqueBeraP)}`],['Breusch–Pagan LM',bp?fmt(bp.lm,4):'—',bp?`df=${bp.df}; p-value: ${pval(bp.p)}`:'Không ước lượng được kiểm định phụ trợ.'],['Mean residual',fmt(m.residuals.reduce((a,b)=>a+b,0)/m.n,8),'Với mô hình có intercept, tổng phần dư xấp xỉ 0.'],...d.vif.map((v,i)=>[`VIF · ${m.xNames[i]}`,Number.isFinite(v.vif)?fmt(v.vif,4):'∞',v.vif>=10?'Đa cộng tuyến đáng lưu ý (ngưỡng tham khảo 10).':v.vif>=5?'Cần xem xét đa cộng tuyến (ngưỡng tham khảo 5).':'Không vượt ngưỡng tham khảo 5.'])];
+    const diag=[['Durbin–Watson',fmt(d.durbinWatson,4),d.durbinWatsonValid?'Gần 2 là dấu hiệu sơ bộ ít tự tương quan bậc 1; không phải kết luận đầy đủ.':'Không tính vì listwise deletion làm mất tính liền kề của quan sát; DW chuẩn không phù hợp.'],['Jarque–Bera statistic',fmt(d.jarqueBera,4),`p-value: ${pval(d.jarqueBeraP)}`],['Breusch–Pagan LM',bp?fmt(bp.lm,4):'—',bp?`df=${bp.df}; p-value: ${pval(bp.p)}`:'Không ước lượng được kiểm định phụ trợ.'],['Mean residual',fmt(m.residuals.reduce((a,b)=>a+b,0)/m.n,8),'Với mô hình có intercept, tổng phần dư xấp xỉ 0.'],...d.vif.map((v,i)=>[`VIF · ${m.xNames[i]}`,Number.isFinite(v.vif)?fmt(v.vif,4):'∞',v.vif>=10?'Đa cộng tuyến đáng lưu ý (ngưỡng tham khảo 10).':v.vif>=5?'Cần xem xét đa cộng tuyến (ngưỡng tham khảo 5).':'Không vượt ngưỡng tham khảo 5.'])];
     $q('qRegDiagnostics').innerHTML=`<table class="ql-table"><thead><tr><th>Diagnostic</th><th>Value</th><th>Interpretation / p-value</th></tr></thead><tbody>${diag.map(([a,b,c])=>`<tr><th>${esc(a)}</th><td>${esc(b)}</td><td>${esc(c)}</td></tr>`).join('')}</tbody></table>`;
-    $q('qRegNote').textContent=`Mô hình: ${m.yName} ~ ${m.xNames.join(' + ')}${m.includeIntercept?' + Intercept':''}. Chỉ các dòng có dữ liệu hợp lệ ở Y và toàn bộ X được dùng (listwise deletion). ${m.robustHC1?'HC1 chỉ điều chỉnh ma trận phương sai–hiệp phương sai và suy luận từng hệ số; F-test tổng thể đang hiển thị là F-test OLS cổ điển.':'Sai số chuẩn và kiểm định hệ số dùng giả định OLS cổ điển.'} Breusch–Pagan và Jarque–Bera dùng xấp xỉ tiệm cận; Durbin–Watson là chỉ báo sơ bộ. HC1 không xử lý tự tương quan. Nếu hồi quy Close theo Open/High/Low của chính cây nến đó, đây là phân tích mô tả chứ không phải dự báo realtime vì High/Low chỉ biết sau khi nến hình thành. Kết quả không tự chứng minh quan hệ nhân quả hay khả năng dự báo.`;
+    $q('qRegNote').textContent=`Mô hình: ${m.yName} ~ ${m.xNames.join(' + ')}${m.includeIntercept?' + Intercept':''}. Chỉ các dòng có dữ liệu hợp lệ ở Y và toàn bộ X được dùng (listwise deletion). ${m.robustHC1?'HC1 điều chỉnh ma trận phương sai–hiệp phương sai và suy luận từng hệ số; F-test tổng thể đang hiển thị vẫn là F-test OLS cổ điển.':'Sai số chuẩn và kiểm định hệ số dùng giả định OLS cổ điển.'} Breusch–Pagan và Jarque–Bera dùng xấp xỉ tiệm cận; Durbin–Watson chỉ tính khi các dòng đưa vào còn liền kề. HC1 không xử lý tự tương quan. Nếu hồi quy Close theo Open/High/Low của chính cây nến đó, đây là phân tích mô tả chứ không phải dự báo realtime vì High/Low chỉ biết sau khi nến hình thành. Kết quả không tự chứng minh quan hệ nhân quả hay khả năng dự báo.`;
     drawResidualPlot(m.fitted,m.residuals);
   }
   function drawResidualPlot(fitted,residuals){
@@ -174,6 +203,8 @@
     $q('qDemo').addEventListener('click',()=>{try{demo()}catch(e){note(e.message,true)}});
     $q('qSample').addEventListener('click',downloadSample);
     $q('qPriceColumn').addEventListener('change',()=>{if(QL.rows.length)render()});
+    $q('qRollingUpdate').addEventListener('click',renderRolling);
+    $q('qRollingWindow').addEventListener('change',renderRolling);
     $q('qCorrColumns').addEventListener('change',()=>{if(QL.rows.length)render()});
     $q('qRegY').addEventListener('change',()=>populateRegressionControls());
     $q('qRunOLS').addEventListener('click',runOLS);
@@ -188,6 +219,11 @@
     $q('qTsCorrelogram').addEventListener('click',renderCorrelogram);
     $q('qTsRunTests').addEventListener('click',runUnitRootTests);
     $q('qTsFitModel').addEventListener('click',runTsModel);
+    const invalidateTsModel=()=>{QL.lastTsModel=null;$q('qTsModelOutput').hidden=true;$q('qTsModelStatus').textContent='Tham số mô hình đã thay đổi. Hãy ước lượng lại.';$q('qTsModelStatus').classList.remove('is-good','is-bad')};
+    ['qTsModelType','qTsP','qTsD','qTsQ','qTsHorizon'].forEach(id=>$q(id).addEventListener('change',invalidateTsModel));
+    const invalidateUnitRoot=()=>{$q('qTsUnitRoot').innerHTML='<p class="msg">Thiết lập kiểm định đã thay đổi. Hãy chạy lại ADF + PP.</p>'};
+    ['qTsDeterministic','qTsAdfLag','qTsPpBandwidth'].forEach(id=>$q(id).addEventListener('change',invalidateUnitRoot));
+
     window.addEventListener('resize',()=>{if(QL.rows.length){const i=QL.priceIndex;drawHistogram(QuantStats.histogram(getValues(i).filter(Number.isFinite),24));drawSeries(getValues(i));if(QL.lastRegression)drawResidualPlot(QL.lastRegression.fitted,QL.lastRegression.residuals);if($q('qTsColumn'))renderCorrelogram();if(!$q('qTsModelOutput').hidden&&QL.lastTsModel){drawForecast(QL.lastTsModel.values,QL.lastTsModel.model.forecastRows)}}});
     demo();
     renderCorrelogram();

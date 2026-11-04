@@ -62,7 +62,7 @@
 
 <section class="view" id="v-quant">
   <div class="ql-head">
-    <div><div class="ql-eyebrow">QUANTITATIVE RESEARCH · PHASE 1 + 2 + 3</div><h2>Quant Lab <span>· Statistical, Regression &amp; Time Series Analysis</span></h2><p class="msg">Phân tích thống kê, hồi quy OLS, chuỗi thời gian, kiểm định tính dừng và mô hình ARIMA. Nạp CSV hoặc lấy nến M1 đã tải trên Chart.</p></div>
+    <div><div class="ql-eyebrow">QUANTITATIVE RESEARCH · PHASE 1 + 2 + 3</div><h2>Quant Lab <span>· Statistical, Regression &amp; Time Series Analysis</span></h2><p class="msg">Phân tích thống kê, rolling analysis, hồi quy OLS, chuỗi thời gian, kiểm định tính dừng và mô hình ARIMA. Nạp CSV hoặc lấy nến M1 đã tải trên Chart.</p></div>
     <span class="ql-local-badge">BROWSER-ONLY MVP</span>
   </div>
   <div class="card ql-source-card">
@@ -96,9 +96,18 @@
     </div>
   </div>
   <div class="card ql-analysis-card">
+    <div class="ql-panel-head"><div><h3>Rolling Statistics</h3><p class="msg">Rolling mean/std của biến đang chọn và rolling standard deviation của log return. Mỗi cửa sổ chỉ được tính khi đủ quan sát hợp lệ.</p></div><label class="ql-select-label">WINDOW SIZE<input id="qRollingWindow" type="number" min="2" max="1000" value="20"></label></div>
+    <div class="ql-reg-controls"><button class="btn ghost" id="qRollingUpdate" type="button">↻ Update Rolling Statistics</button><span class="msg">Log-return volatility không tự annualize; cần chọn đúng tần suất dữ liệu trước khi quy đổi.</span></div>
+    <div class="ql-table-wrap" id="qRollingTable"><p class="msg">Chưa có kết quả rolling.</p></div>
+  </div>
+  <div class="card ql-analysis-card">
     <div class="ql-panel-head"><div><h3>Correlation Matrix</h3><p class="msg">Pearson correlation trên các quan sát hợp lệ theo cặp; tối đa 8 biến đầu tiên.</p></div></div>
     <div id="qCorrColumns" class="ql-corr-picker"></div>
     <div class="ql-table-wrap" id="qCorrelation"></div>
+  </div>
+  <div class="card ql-analysis-card">
+    <div class="ql-panel-head"><div><h3>Covariance Matrix</h3><p class="msg">Hiệp phương sai mẫu trên từng cặp quan sát hợp lệ; phụ thuộc đơn vị đo của hai biến.</p></div></div>
+    <div class="ql-table-wrap" id="qCovariance"></div>
   </div>
   <div class="card ql-analysis-card ql-regression-card">
     <div class="ql-panel-head"><div><div class="ql-eyebrow">PHASE 2 · ECONOMETRICS</div><h3>Regression Laboratory · OLS</h3><p class="msg">Ước lượng hồi quy tuyến tính đơn/đa biến bằng OLS trên các dòng có đủ dữ liệu. Mặc định dùng sai số chuẩn cổ điển; có tùy chọn HC1.</p></div><span class="ql-local-badge">BROWSER COMPUTATION</span></div>
@@ -137,8 +146,8 @@
     </div>
     <div id="qTsStatus" class="ql-reg-status">Chọn một biến chuỗi thời gian. Nhấn Update ACF/PACF để tính correlogram.</div>
     <div class="ql-ts-grid">
-      <div class="ql-reg-panel"><h4>Autocorrelation Function · ACF</h4><p class="msg">Đường biên tham khảo ±1.96/√N; chỉ là xấp xỉ dưới giả định white noise.</p><canvas id="qTsAcfPlot" class="ql-canvas ql-ts-canvas"></canvas></div>
-      <div class="ql-reg-panel"><h4>Partial Autocorrelation · PACF</h4><p class="msg">PACF sử dụng thuật toán Durbin–Levinson từ ACF.</p><canvas id="qTsPacfPlot" class="ql-canvas ql-ts-canvas"></canvas></div>
+      <div class="ql-reg-panel"><h4>Autocorrelation Function · ACF</h4><p class="msg">ACF dùng ước lượng biased; đường biên ±1.96/√N chỉ là xấp xỉ dưới giả định white noise.</p><canvas id="qTsAcfPlot" class="ql-canvas ql-ts-canvas"></canvas></div>
+      <div class="ql-reg-panel"><h4>Partial Autocorrelation · PACF</h4><p class="msg">PACF sử dụng thuật toán Durbin–Levinson từ ACF. Các thanh và đường biên là xấp xỉ.</p><canvas id="qTsPacfPlot" class="ql-canvas ql-ts-canvas"></canvas></div>
     </div>
     <div class="ql-ts-grid ql-ts-section">
       <div class="ql-reg-panel">
@@ -150,7 +159,7 @@
           <button class="btn" id="qTsRunTests" type="button">▶ Run ADF + PP</button>
         </div>
         <div id="qTsUnitRoot" class="ql-table-wrap ql-ts-results"><p class="msg">Chưa chạy kiểm định.</p></div>
-        <p class="ql-reg-note">Critical values đang dùng mốc tiệm cận tham khảo theo loại deterministic term; chưa có MacKinnon finite-sample p-value. Không diễn giải đây là p-value. Kết luận phụ thuộc lựa chọn constant/trend và độ dài mẫu.</p>
+        <p class="ql-reg-note">Critical values là mốc tiệm cận tham khảo, chưa có MacKinnon finite-sample p-value. Không diễn giải trị thống kê thành p-value. Kết luận phụ thuộc lựa chọn constant/trend, lag và độ dài mẫu.</p>
       </div>
       <div class="ql-reg-panel">
         <h4>Model Estimation · AR / MA / ARMA / ARIMA</h4><p class="msg">Ước lượng Conditional Sum of Squares (CSS); AR-only dùng OLS, MA/ARMA dùng Nelder–Mead.</p>
@@ -166,6 +175,7 @@
         <div id="qTsModelOutput" class="ql-ts-model-output" hidden>
           <div id="qTsModelMetrics" class="ql-metrics ql-reg-metrics"></div>
           <div id="qTsParameters" class="ql-table-wrap"></div>
+          <div id="qTsModelDiagnostics" class="ql-table-wrap"></div>
           <div id="qTsForecastTable" class="ql-table-wrap"></div>
           <canvas id="qTsForecastPlot" class="ql-canvas ql-ts-forecast-canvas"></canvas>
           <p id="qTsModelNote" class="ql-reg-note"></p>
@@ -177,7 +187,7 @@
     <div class="ql-panel-head"><div><h3>Data Preview</h3><p class="msg">12 dòng đầu tiên sau khi xử lý thứ tự thời gian (nếu nhận diện được).</p></div></div>
     <div class="ql-table-wrap" id="qPreview"></div>
   </div>
-  <div class="ql-footnote"><b>Phạm vi Phase 1–3:</b> thống kê mô tả, lợi suất, tương quan, OLS và Time Series cơ bản gồm ACF/PACF, ADF/PP, sai phân, AR/MA/ARMA/ARIMA. Chưa có VAR/VECM, ARCH/GARCH, backend Python, kho dữ liệu bền vững hay kiểm định nghiệm AR ổn định/MA khả nghịch. TickVolume từ cTrader là tick-volume/quote proxy, không phải khối lượng hợp đồng Futures tập trung.</div>
+  <div class="ql-footnote"><b>Phạm vi Phase 1–3:</b> thống kê mô tả, lợi suất, tương quan, OLS và Time Series cơ bản gồm ACF/PACF, ADF/PP, sai phân, AR/MA/ARMA/ARIMA. Chưa có VAR/VECM, ARCH/GARCH, backend Python hoặc kho dữ liệu bền vững; Phase 3 có chẩn đoán nghiệm AR/MA sau ước lượng nhưng chưa áp đặt ràng buộc khi fit. TickVolume từ cTrader là tick-volume/quote proxy, không phải khối lượng hợp đồng Futures tập trung.</div>
 </section>
 
 <section class="view" id="v-options">

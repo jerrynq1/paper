@@ -1,20 +1,24 @@
-# Phase 3 Changelog — Time Series Laboratory
+# Phase 3 Changelog — Time Series Laboratory (đã rà soát)
 
-## Added
-- `js/quant-timeseries.js`: ACF, PACF (Durbin–Levinson), first/second differencing, ADF unit-root test, Phillips–Perron Z-tau/Z-rho with Newey–West Bartlett variance, and AR/MA/ARMA/ARIMA CSS estimation/forecasting.
-- `tests/quant-timeseries.test.js`: deterministic synthetic tests for differencing, ACF/PACF, ADF, PP, AR, MA, ARMA and ARIMA.
-- Quant Lab UI for correlograms, unit-root tests, model settings, parameter estimates, AIC/BIC and forecasts. A common burn-in is used for candidate AR/MA/ARMA orders.
-- A `Time Series DEMO` dataset containing a simulated price-like random walk, stationary AR(1) series and random walk.
-- `QUANT_PHASE3_GUIDE.md` with usage steps, assumptions and limitations.
+## Đã thêm
+- `js/quant-timeseries.js`: ACF, PACF (Durbin–Levinson), sai phân bậc 1/2, ADF, Phillips–Perron Z-tau/Z-rho với Newey–West Bartlett variance, AR/MA/ARMA/ARIMA CSS và forecast.
+- Kiểm tra nghiệm AR/MA sau ước lượng, chẩn đoán ACF(1) và Ljung–Box cho phần dư.
+- Forecast interval xấp xỉ dựa trên psi weights và tích phân theo bậc sai phân; vẫn chưa tính bất định tham số.
+- Hỗ trợ ARIMA(0,d,0), kiểm tra p/q/d và forecast horizon hợp lệ.
+- Bộ Time Series DEMO 900 dòng daily tổng hợp để học và kiểm tra.
+- Hướng dẫn đã cập nhật trong `QUANT_PHASE3_GUIDE.md` và `QUANTLAB_USER_GUIDE_VI.md`.
 
-## Existing modules
-- Phase 1 Statistical Data Explorer and Phase 2 Regression Laboratory remain included.
-- No intentional changes to Chart, cTrader, Options, Orderflow, TPO, Replay or Paper Trading behavior.
+## Các điểm được rà soát/sửa
+- ADF lag selection so sánh ứng viên trên cùng effective sample, sau đó refit lag thắng trên toàn bộ mẫu khả dụng.
+- AIC/BIC tính cả tham số phương sai nhiễu; ghi chú burn-in thực tế khác nhau giữa AR-only và model có MA.
+- Phân biệt RMSE `sqrt(SSE/N)` và Residual Standard Error `sqrt(SSE/df)`.
+- Bỏ ngưỡng hệ số tuyệt đối tùy tiện; báo nghiệm AR/MA sau khi fit.
+- Bổ sung Ljung–Box và kiểm tra forecast horizon không hợp lệ.
 
-## Verification
-- JavaScript syntax checks passed for `quant-lab.js` and `quant-timeseries.js`.
-- Quant Time Series unit tests: 11 groups passed.
-- Phase 1 Quant Stats tests: 7 groups passed.
-- Phase 2 Quant Regression tests: 10 groups passed.
-- Full existing Node test sweep: 2 pre-existing test files still fail in this environment (`hvn.test.js` missing `SMP` in test context and `price-variation.test.js` missing `GexPriceVariationMath` in test context); these failures are unrelated to Phase 3.
-- Full interactive browser automation was not completed in this environment.
+## Giới hạn
+- ADF/PP critical values là mốc tiệm cận tham khảo; chưa có MacKinnon finite-sample p-values/critical values.
+- AR-only dùng OLS; MA/ARMA dùng CSS + Nelder–Mead, chưa phải exact Maximum Likelihood.
+- Nghiệm AR/MA chỉ được chẩn đoán sau fit, chưa bị ràng buộc khi tối ưu.
+- AIC/BIC giữa model có effective sample/burn-in khác nhau cần được so sánh thận trọng.
+- Khoảng dự báo chưa tính bất định tham số hoặc ARCH/GARCH.
+- Môi trường build chưa chạy được browser end-to-end automation; cần smoke-test thủ công sau khi giải nén.

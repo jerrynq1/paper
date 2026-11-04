@@ -589,3 +589,5 @@ a.sb{text-decoration:none}
 .ql-ts-forecast-canvas{height:230px}
 @media(max-width:950px){.ql-ts-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.ql-ts-grid{grid-template-columns:1fr}}
 @media(max-width:650px){.ql-ts-controls{grid-template-columns:1fr 1fr}.ql-ts-controls .ql-select-label:first-child{grid-column:1/-1}.ql-ts-controls .btn{grid-column:1/-1}.ql-ts-test-controls .btn,.ql-ts-model-controls .btn{flex:1 1 100%}.ql-ts-model-controls .ql-select-label{min-width:65px}}
+
+@media(min-width:951px){.ql-ts-model-output>.ql-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}}

@@ -55,3 +55,18 @@ let n=0;const ok=s=>{console.log('ok  ',s);n++};
   assert.ok(Math.abs(m.coefficients[1].estimate-3.4)<.05);assert.ok(Math.abs(m.coefficients[2].estimate+.000002)<1e-8);ok('column normalization handles predictors with different numeric scales');
 }
 console.log(`\n${n} nhóm kiểm thử Quant Regression đạt`);
+{
+  assert.throws(()=>R.ols({yValues:[1,2,3],xColumns:[{name:'x',values:[1,2]}]}),/cùng số dòng/);ok('regression rejects misaligned columns instead of truncating');
+}
+{
+  const m=R.ols({yValues:[1,2,NaN,4,5,6],xColumns:[{name:'x',values:[1,2,3,4,5,6]}]});assert.strictEqual(m.diagnostics.durbinWatsonValid,false);assert.ok(Number.isNaN(m.diagnostics.durbinWatson));ok('Durbin-Watson suppressed after listwise deletion breaks row adjacency');
+}
+{
+  const m=R.ols({yValues:[2,4,6,8,10],xColumns:[{name:'x',values:[1,2,3,4,5]}]});assert.ok(Number.isNaN(m.diagnostics.durbinWatson));ok('Durbin-Watson is undefined for a zero-residual perfect fit');
+}
+{
+  const m=R.ols({yValues:[1,null,3,4,5],xColumns:[{name:'x',values:[1,2,3,4,5]}]});assert.strictEqual(m.n,4);assert.ok(Math.abs(m.coefficients[1].estimate-1)<1e-10);ok('blank/null dependent values are missing, not numeric zero');
+}
+{
+  const scale=1e-9,x=[1,2,3,4,5,6].map(v=>v*scale),y=x.map((v,i)=>2*scale+3*v+(i%2?1:-1)*1e-12);const m=R.ols({yValues:y,xColumns:[{name:'x',values:x}]});assert.ok(Number.isFinite(m.r2));assert.ok(Number.isFinite(m.fStat));assert.ok(m.r2>.999);ok('OLS fit statistics remain scale invariant for small-magnitude market return series');
+}

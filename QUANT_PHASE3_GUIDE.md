@@ -1,73 +1,90 @@
-# Gexadecimal Quant Lab — Phase 3 Guide
+# Gexadecimal Quant Lab — Phase 3 Guide (đã rà soát)
 
-## Phạm vi đã thêm
+## Phạm vi
 
-Phase 3 adds a browser-side Time Series Laboratory to the existing Phase 1 + 2 Quant Lab. It is isolated from Chart, cTrader, Orderflow, TPO, Options, Replay and Paper Trading code.
+Phase 3 bổ sung Time Series Laboratory chạy trong trình duyệt: ACF/PACF, kiểm định ADF và Phillips–Perron, sai phân bậc 1/2, và ước lượng AR, MA, ARMA, ARIMA.
 
-### 1) Correlogram
+## 1. Correlogram
 
-- ACF using the demeaned sample autocovariance ratio with a common denominator.
-- PACF calculated recursively using the Durbin–Levinson recursion.
-- ACF/PACF can be calculated on level data, first differences or second differences.
-- The displayed ±1.96/sqrt(N) lines are approximate white-noise reference bounds, not exact simultaneous confidence bands.
+- ACF sử dụng tỷ lệ giữa tự hiệp phương sai mẫu tại độ trễ k và tự hiệp phương sai tại độ trễ 0, cùng mẫu số n.
+- PACF được tính đệ quy Durbin–Levinson từ ACF.
+- Có thể xem chuỗi mức (d=0), sai phân bậc một (d=1) hoặc bậc hai (d=2).
+- Biên ±1.96/sqrt(N) chỉ là mốc tham khảo xấp xỉ dưới giả định white noise; không phải dải tin cậy đồng thời chính xác.
 
-### 2) Unit-root tests
+## 2. Kiểm định nghiệm đơn vị
 
-- ADF regression includes a choice of no constant/no trend, constant, or constant + trend.
-- ADF lag length is selected by BIC from lag 0 through the user-specified maximum (the candidate maximum is capped by a Schwert-style sample-size rule and 20 lags). Candidate regressions use a common effective sample to make the information-criterion comparison more consistent.
-- Phillips–Perron uses a Dickey–Fuller regression and a Newey–West Bartlett long-run variance estimate. The UI displays Z-tau and notes Z-rho as a supplementary statistic.
-- The interface shows asymptotic reference critical values for the selected deterministic specification. It intentionally does not fabricate MacKinnon p-values or finite-sample interpolated critical values.
-- H0 for both tests is a unit root. A statistic more negative than the selected critical value is evidence to reject H0.
+### ADF
 
-### 3) Differencing
+- Hồi quy ADF hỗ trợ ba cấu hình deterministic: không hằng số/không xu hướng, hằng số, hoặc hằng số + xu hướng.
+- Lag được chọn bằng AIC hoặc BIC trong khoảng 0 đến lag tối đa được yêu cầu (giới hạn bởi quy tắc cỡ mẫu và 20 lag).
+- Các ứng viên được so sánh trên cùng mẫu hiệu dụng để tránh ứng viên có nhiều lag bị so với mẫu khác.
+- Sau khi chọn lag, hồi quy cuối cùng được ước lượng lại trên toàn bộ mẫu khả dụng cho lag đã chọn. Kiểm thử này đã được đối chiếu với statsmodels 0.14.6 trên chuỗi AR(1) tái lập bằng seed cố định.
+- Kết quả hiển thị lag tối đa thực tế, lag được chọn, số quan sát, AIC/BIC của bước chọn.
 
-- First and second differences are available for correlogram inspection.
-- ARIMA model order d supports 0, 1 or 2 differences; forecasts are integrated back to the original level.
+### Phillips–Perron (PP)
 
-### 4) AR / MA / ARMA / ARIMA estimation
+- PP sử dụng hồi quy Dickey–Fuller không thêm lag sai phân và hiệu chỉnh thống kê bằng phương sai dài hạn Newey–West với kernel Bartlett.
+- Hiển thị Z-tau, Z-rho và bandwidth.
+- Bandwidth mặc định dùng quy tắc xấp xỉ; người dùng có thể nhập thủ công.
 
-- AR-only is estimated by OLS.
-- MA and ARMA use Conditional Sum of Squares (CSS) with a Nelder–Mead optimizer.
-- AIC and BIC are reported using a common five-observation burn-in sample across the supported p/q orders, so order-to-order comparisons use the same effective sample.
-- Forecast horizon is configurable from 1 to 100 steps.
-- The displayed forecast interval is a simple approximate band based on residual standard deviation and sqrt(h). It is not a full ARIMA forecast interval and excludes parameter uncertainty and conditional heteroskedasticity.
-- The engine does not constrain AR roots to stationarity or MA roots to invertibility. It does not automatically select p, d, q or certify a model as adequate.
+### Diễn giải và giới hạn
 
-## Important data requirements
+- H0 của ADF/PP là chuỗi có nghiệm đơn vị.
+- Thống kê nhỏ hơn (âm hơn) critical value tương ứng là bằng chứng bác bỏ H0.
+- Critical values trong MVP là mốc tiệm cận tham khảo cho ba cấu hình deterministic; không có MacKinnon p-value hoặc critical value nội suy theo kích thước mẫu. Không dùng riêng các con số này cho báo cáo học thuật/chính thức.
 
-1. A time-series column must be numeric and have no missing/non-finite values. The engine refuses to silently drop missing observations because this would change lag adjacency.
-2. Observations should be ordered and regularly spaced. The UI reports timestamp spacing, duplicate timestamps and large gaps when a time column is recognized; it does not automatically resample missing bars.
-3. Trading data often contains overnight/session gaps. Select a consistent sampling interval or explicitly document the session convention before interpreting lag-based statistics.
-4. ACF/PACF can be misleading for trending/nonstationary levels. Inspect the level series and first differences, then use unit-root tests with a suitable deterministic specification.
-5. Results from CFD tick-volume or quote-derived feeds remain broker-specific proxies, not centralized Futures traded volume.
+## 3. Sai phân
 
-## How to use
+- ACF/PACF cho phép xem mức, sai phân bậc 1 và sai phân bậc 2.
+- ARIMA hỗ trợ d = 0, 1, 2; dự báo được tích phân ngược về thang đo ban đầu.
 
-1. Extract the ZIP and open `paper-main` in VS Code.
-2. Start the site using the VS Code Live Server extension (no Python package or statistical package is required for this browser-only MVP).
-3. Open Quant Lab in the application sidebar.
-4. Click **Time Series DEMO** in Data Center. It loads 900 deterministic synthetic daily observations: `XAU_Close_SIM`, `Stationary_AR1`, and `RandomWalk`. These are synthetic data, not market prices.
-5. Select `Stationary_AR1` or `RandomWalk` in **SERIES VARIABLE**.
-6. Use **Update ACF/PACF**. Set difference to 0 to inspect levels, then 1 to inspect first differences.
-7. In **Stationarity Tests**, choose deterministic terms, set the ADF maximum lag, and click **Run ADF + PP**.
-8. In **Model Estimation**, select AR, MA, ARMA or ARIMA, set p/d/q and forecast horizon, then click **Estimate Model**.
-9. To test actual data, import a CSV with a timestamp column (for example `Time`) and one or more numeric series columns. Avoid blanks in the selected series and verify that timestamps have a consistent interval.
+## 4. AR / MA / ARMA / ARIMA
 
-## Suggested first experiments
+- AR-only được ước lượng bằng OLS.
+- MA và ARMA được ước lượng bằng Conditional Sum of Squares (CSS) và tối ưu Nelder–Mead.
+- AR-only dùng burn-in bằng p. Các mô hình có q > 0 dùng burn-in max(5,p,q).
+- AIC/BIC được tính trên phần dư sau burn-in và tính cả tham số phương sai nhiễu. Vì burn-in có thể khác giữa AR-only và mô hình có MA, không nên xem AIC/BIC giữa mọi loại/bậc là so sánh hoàn toàn đồng nhất nếu mẫu hiệu dụng khác nhau.
+- Có hỗ trợ ARIMA(0,d,0), tức mô hình chỉ có hằng số trên chuỗi sai phân.
+- Bậc p/q bị giới hạn 0–5; d bị giới hạn 0–2. Dữ liệu tối đa 15.000 quan sát cho bước ước lượng mô hình trên trình duyệt.
+- Hệ thống báo nghiệm AR và MA bằng kiểm tra nghiệm số: nghiệm AR phải nằm ngoài vòng tròn đơn vị để chuỗi AR dừng; nghiệm MA phải nằm ngoài vòng tròn đơn vị để khả nghịch. Việc ước lượng chưa áp đặt ràng buộc nghiệm, nên kết quả có thể không dừng/không khả nghịch.
+- Chẩn đoán phần dư có ACF(1) và Ljung–Box ở số lag khả dụng (tối đa 10, có điều chỉnh bậc tự do theo p+q).
+- RMSE = sqrt(SSE/N); Residual Standard Error = sqrt(SSE/df). Hai đại lượng này được báo riêng.
+- Khoảng dự báo xấp xỉ dùng psi weights của mô hình ARMA và đã tích phân theo d. Khoảng này chưa tính bất định tham số, chưa mô hình hóa phương sai có điều kiện và dựa trên giả định nhiễu phù hợp.
+- Nelder–Mead/CSS là triển khai MVP, không phải Maximum Likelihood đầy đủ. Kiểm tra trạng thái hội tụ và chẩn đoán nghiệm trước khi diễn giải.
 
-- `Stationary_AR1`: ACF should decay; PACF should be strongest at lag 1; ADF/PP should generally provide evidence against a unit root in this seeded demonstration.
-- `RandomWalk`: ACF of levels tends to decay slowly; differencing should make the series more stable; unit-root tests should generally be less likely to reject H0. In the current deterministic demo, the constant-specification ADF is about -2.76 and PP Z-tau about -2.74; both are above the 5% reference value -2.86, so the UI should say “Chưa bác bỏ H₀ @ 5%”.
-- `Stationary_AR1`: in the current deterministic demo, ADF is about -12.12 and PP Z-tau about -12.30; both are far below the 1% reference value -3.43, so the UI should say “Bác bỏ H₀ @ 5%”.
-- `XAU_Close_SIM`: it is a synthetic geometric random walk; do not interpret it as actual XAUUSD data.
-- Fit AR(1) to `Stationary_AR1`, then compare it with ARMA(1,1) using AIC/BIC. Do not pick a model based only on the lowest in-sample criterion; reserve out-of-sample data for validation.
+## 5. Yêu cầu dữ liệu
 
-## Known limitations
+1. Chuỗi được chọn phải có ít nhất 30 quan sát cho ADF/PP, tối thiểu 40 quan sát cho ước lượng ARMA/ARIMA theo giới hạn MVP, và không có giá trị thiếu/không hữu hạn. Engine không tự bỏ hàng thiếu trong chuỗi thời gian vì làm thay đổi adjacency của lag.
+2. Quan sát cần sắp theo thời gian và có tần suất phù hợp. Nếu toàn bộ timestamp được nhận diện, Quant Lab sắp xếp theo timestamp; nếu có timestamp không hợp lệ thì giữ nguyên thứ tự CSV và cảnh báo, không tự bỏ hàng.
+3. Công cụ phát hiện timestamp trùng, bước không tăng và các khoảng cách lớn. Nó không tự resample hoặc tự tạo nến bị thiếu.
+4. Cuối tuần, qua đêm và ngắt phiên của thị trường có thể tạo khoảng trống hợp lệ về kinh tế nhưng không đều theo thời gian lịch. Chọn quy ước phiên/tần suất nhất quán trước khi diễn giải lag.
+5. TickVolume của CFD/cTrader là tick-volume/quote proxy, không phải khối lượng hợp đồng Futures tập trung.
 
-- All calculations run synchronously in the browser; no Python backend, database, persistence, model service or background worker has been added.
-- The CSS/browser implementation was syntax-checked and calculation engines were tested with Node.js unit tests. A full end-to-end browser interaction pass was not available in this build environment.
-- Unit-root critical values are asymptotic reference values, not finite-sample response-surface values. Use a validated econometrics package for publication-grade inference.
-- CSS/Nelder–Mead MA/ARMA estimation is an educational MVP implementation. Cross-check important research results against a mature package such as statsmodels, R `forecast`/`tseries`, or Stata before using them for decisions.
+## 6. Cách sử dụng
 
-## Method reference used for PP implementation
+1. Giải nén ZIP và mở thư mục `paper-main` trong VS Code.
+2. Chạy bằng Live Server. Quant Lab hiện chạy browser-side, không cần cài Python package hoặc thư viện thống kê.
+3. Chọn Quant Lab trên sidebar.
+4. Nhấn **Time Series DEMO** để tải 900 quan sát tổng hợp có timestamp hàng ngày: `XAU_Close_SIM`, `Stationary_AR1`, `RandomWalk`. Đây là dữ liệu mô phỏng, không phải giá vàng thật.
+5. Chọn `Stationary_AR1` hoặc `RandomWalk` trong **SERIES VARIABLE**.
+6. Chọn difference = 0 để xem level; sau đó chọn 1 để xem first difference. Nhấn **Update ACF/PACF**.
+7. Trong **Stationarity Tests**, chọn deterministic term và ADF max lag, sau đó nhấn **Run ADF + PP**.
+8. Trong **Model Estimation**, chọn AR, MA, ARMA hoặc ARIMA; nhập p/d/q và forecast horizon; nhấn **Estimate Model**.
+9. Đọc hệ số, AIC/BIC, RMSE, kiểm tra nghiệm AR/MA, Ljung–Box, forecast và khoảng dự báo.
+10. Với dữ liệu thật, import CSV có cột thời gian (ví dụ `Time`) và cột số. Kiểm tra cảnh báo timestamp và không để trống chuỗi đang chọn.
 
-The PP implementation follows the classical Dickey–Fuller regression with Newey–West Bartlett long-run variance correction and the Z-tau/Z-rho statistics. See the [Stata Phillips–Perron methods and formulas manual](https://www.stata.com/manuals/tspperron.pdf). This app displays asymptotic reference critical values and deliberately omits MacKinnon p-values.
+## 7. Thí nghiệm gợi ý
+
+- `Stationary_AR1`: ACF thường suy giảm; PACF nổi bật ở lag 1; ADF/PP trong mẫu DEMO thường cung cấp bằng chứng chống lại nghiệm đơn vị.
+- `RandomWalk`: ACF level thường suy giảm chậm; sai phân bậc 1 có thể tạo chuỗi ổn định hơn; kiểm định thường khó bác bỏ H0.
+- `XAU_Close_SIM`: chuỗi bước ngẫu nhiên nhân tạo, không phải XAUUSD thật.
+- Fit AR(1) cho `Stationary_AR1`, sau đó thử ARMA(1,1). Không chọn mô hình chỉ bằng AIC/BIC in-sample; nên giữ lại đoạn dữ liệu cuối để đánh giá ngoài mẫu.
+
+## 8. Giới hạn đã biết
+
+- Mọi phép tính chạy đồng bộ trong browser; chưa có Python backend, database, persistence, job queue hay model service.
+- ADF/PP critical values là tham khảo tiệm cận, không có MacKinnon p-value/critical values finite-sample.
+- MA/ARMA dùng CSS + Nelder–Mead; nghiệm chỉ được chẩn đoán sau ước lượng, không bị ràng buộc trong quá trình fit.
+- Khoảng dự báo chưa tính bất định tham số và không bao gồm biến động có điều kiện như GARCH.
+- Kết quả quan trọng cần được đối chiếu với statsmodels, R hoặc Stata trước khi đưa vào nghiên cứu chính thức.
+- Kiểm thử Node.js và kiểm tra cú pháp đã chạy; môi trường build không cho phép xác minh tương tác browser end-to-end nên người dùng vẫn cần smoke-test sau khi giải nén.

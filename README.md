@@ -267,3 +267,8 @@ Mục **Quant Lab** được thêm như một khu vực độc lập, không s�
 Mở `http://localhost:8000/#quant` sau khi chạy web server tĩnh. Các phép tính hiện chạy ở trình duyệt; dữ liệu chưa được upload, lưu bền vững hoặc xử lý bằng backend. Test tính toán: `node tests/quant-stats.test.js`.
 
 **Giới hạn dữ liệu:** cột Volume lấy từ cTrader trong bản này vẫn là tick-volume/quote proxy do broker cung cấp, không phải contract volume Futures tập trung.
+
+
+## Gexadecimal Quant Lab (Phase 1–3)
+
+Bản source hiện có Quant Lab cho Statistical Data Explorer, OLS Regression và Time Series. Đọc hướng dẫn tiếng Việt và báo cáo rà soát: `QUANTLAB_USER_GUIDE_VI.md`, `QUANTLAB_AUDIT_REPORT.md`, `QUANT_LAB_MVP.md`, `QUANT_PHASE3_GUIDE.md`. Quant Lab chạy client-side; không cần Python để sử dụng.

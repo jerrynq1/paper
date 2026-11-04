@@ -43,3 +43,24 @@ const ar=[0],rw=[100];for(let i=1;i<1200;i++){ar.push(.72*ar[i-1]+noise());rw.pu
  for(const det of ['none','constant','trend']){const a=T.adf(ar,{deterministic:det,maxLag:4});const p=T.pp(ar,{deterministic:det,bandwidth:0});assert.ok(Number.isFinite(a.statistic)&&Number.isFinite(p.zTau));assert.strictEqual(p.bandwidth,0)}ok('ADF/PP deterministic specifications and zero Newey–West bandwidth');
 }
 console.log(`\n${n} nhóm kiểm thử Quant Time Series đạt`);
+{
+ const r=T.armaRootDiagnostics([0,.7],1,0);assert.strictEqual(r.stationary,true);assert.ok(Math.abs(r.arRootModuli[0]-1/.7)<1e-6);ok('AR polynomial root modulus validates a stationary AR(1)');
+}
+{
+ const r=T.armaRootDiagnostics([0,1.05],1,0);assert.strictEqual(r.stationary,false);ok('AR polynomial root modulus detects a nonstationary AR(1)');
+}
+{
+ const r=T.armaRootDiagnostics([0,.5],0,1);assert.strictEqual(r.invertible,true);assert.ok(Math.abs(r.maRootModuli[0]-2)<1e-6);ok('MA polynomial root modulus validates an invertible MA(1)');
+}
+{
+ const m=T.fitModel(ar,{type:'AR',p:1,horizon:6});assert.ok(Math.abs(m.rmse-Math.sqrt(m.sse/m.n))<1e-12);assert.ok(Number.isFinite(m.residualStdError));assert.ok(m.diagnostics.ljungBox&&Number.isFinite(m.diagnostics.ljungBox.pValue));ok('RMSE, residual standard error and Ljung-Box residual diagnostic');
+}
+{
+ const x=Array.from({length:500},(_,i)=>200+Math.sin(i/12)*.03+noise()*.01);const m=T.fitModel(x,{type:'ARIMA',p:0,d:1,q:0,horizon:4});assert.deepStrictEqual(m.order,{p:0,d:1,q:0});assert.strictEqual(m.forecast.length,4);ok('ARIMA(0,1,0) random-walk-with-drift model is supported');
+}
+{
+ assert.throws(()=>T.fitModel(ar,{type:'AR',p:7}),/p phải là số nguyên/);assert.throws(()=>T.fitModel(ar,{type:'AR',p:1,horizon:0}),/Forecast horizon/);assert.throws(()=>T.fitModel(ar,{type:'AR',p:1,horizon:1.5}),/Forecast horizon/);assert.throws(()=>T.cleanSeries([1,null,3]),/giá trị thiếu/);ok('invalid model orders, forecast horizon and null observations are rejected explicitly');
+}
+{
+ const sample=[0];let crossSeed=20261105;const crossRand=()=>{crossSeed=(crossSeed*1664525+1013904223)>>>0;return crossSeed/4294967296};const crossNoise=()=>{const u=Math.max(1e-9,crossRand()),v=crossRand();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};for(let i=1;i<600;i++)sample.push(.72*sample[i-1]+crossNoise());const r=T.adf(sample,{deterministic:'constant',maxLag:8,criterion:'bic'});assert.strictEqual(r.lag,0);assert.strictEqual(r.n,599);assert.ok(Math.abs(r.statistic-(-9.491862709098807))<1e-8);assert.strictEqual(r.candidates[0].selectionN,591);ok('ADF lag search uses common sample then refits selected lag on full available sample (cross-checked against statsmodels 0.14.6)');
+}

@@ -25,3 +25,30 @@ let n=0;const ok=s=>{console.log('ok  ',s);n++};
   const r=Q.rolling([1,2,3,4],3);assert.strictEqual(r[0],null);assert.strictEqual(r[2].mean,2);assert.strictEqual(r[3].mean,3);ok('rolling mean/std window');
 }
 console.log(`\n${n} nhóm kiểm thử Quant Stats đạt`);
+{
+  assert.strictEqual(Q.parseNumber('12.5%'),.125);assert.strictEqual(Q.parseNumber('1.234,5%', ';'),12.345);ok('percent fields are converted to decimal fractions');
+}
+{
+  const s=Q.stats([1,2,2,3,3,3]);assert.strictEqual(s.mode,3);assert.strictEqual(s.modeFrequency,3);assert.deepStrictEqual(s.modes,[3]);ok('mode and tied-frequency tracking');
+}
+{
+  assert.ok(Math.abs(Q.covariance([1,2,3],[2,4,8])-3)<1e-12);assert.throws(()=>Q.covariance([1,2],[1]),/cùng số quan sát/);ok('sample covariance and mismatched-series guard');
+}
+{
+  assert.strictEqual(Q.detectTimeColumn(['Update','Close']),-1);assert.strictEqual(Q.detectTimeColumn(['Timestamp (UTC)','Close']),0);ok('timestamp detection avoids matching the word Update');
+}
+{
+  const p=Q.parseCSV('Time,Close,Close\n2026-01-01,1,2');assert.deepStrictEqual(p.headers,['Time','Close','Close (2)']);assert.throws(()=>Q.parseCSV('Time,Close\n2026-01-01,"100'),/chưa đóng/);ok('duplicate headers and malformed quoted CSV validation');
+}
+{
+  const r=Q.returns([100,null,105,110]);assert.ok(Number.isNaN(r[0].simple));assert.ok(Number.isNaN(r[1].simple));assert.ok(Math.abs(r[2].simple-110/105+1)<1e-12);ok('returns do not coerce missing values to zero');
+}
+{
+  const r=Q.rolling([1,2,null,4,5],2);assert.strictEqual(r[1].n,2);assert.strictEqual(r[2],null);assert.strictEqual(r[3],null);assert.strictEqual(r[4].n,2);ok('rolling windows require a complete valid window');
+}
+{
+  assert.strictEqual(Q.parseTimestamp('20260131'),Date.UTC(2026,0,31));assert.strictEqual(Q.parseTimestamp('1767225600'),1767225600000);assert.strictEqual(Q.parseTimestamp('1767225600000'),1767225600000);assert.ok(Number.isNaN(Q.parseTimestamp('20260231')));ok('timestamp parser supports YYYYMMDD, Unix seconds/milliseconds and rejects invalid dates');
+}
+{
+  assert.throws(()=>Q.parseCSV('Time,Close\n2026-01-01,1\n2026-01-02,2,unexpected'),/nhiều hơn/);ok('CSV parser rejects excess fields rather than silently discarding data');
+}

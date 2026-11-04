@@ -12,6 +12,7 @@
   const transpose=A=>A[0].map((_,j)=>A.map(r=>r[j]));
   const matMul=(A,B)=>A.map(row=>B[0].map((_,j)=>sum(row.map((v,k)=>v*B[k][j]))));
   const dot=(a,b)=>sum(a.map((v,i)=>v*b[i]));
+  const toFiniteOrNaN=v=>v===null||v===undefined||String(v).trim()===''?NaN:Number(v);
 
   // Lanczos log-gamma approximation.
   function logGamma(z){
@@ -76,7 +77,7 @@
   function fitCore(X,y){
     const n=y.length,p=X[0].length,sol=qrSolve(X,y),fitted=X.map(r=>dot(r,sol.beta)),residuals=y.map((v,i)=>v-fitted[i]);
     const sse=sum(residuals.map(v=>v*v)),ym=mean(y),sst=sum(y.map(v=>(v-ym)**2)),uncentered=sum(y.map(v=>v*v));
-    const r2=sst>EPS?1-sse/sst:NaN,uncenteredR2=uncentered>EPS?1-sse/uncentered:NaN;
+    const r2=sst>0?1-sse/sst:NaN,uncenteredR2=uncentered>0?1-sse/uncentered:NaN;
     return{...sol,n,p,fitted,residuals,sse,sst,r2,uncenteredR2};
   }
   function covarianceHC1(X,residuals,invXtX){
@@ -97,9 +98,12 @@
     const {yValues,xColumns=[],includeIntercept=true,robustHC1=false}=options||{};
     if(!Array.isArray(yValues)||!Array.isArray(xColumns)||!xColumns.length)throw new Error('Hãy chọn một biến phụ thuộc Y và ít nhất một biến giải thích X.');
     if(xColumns.length>12)throw new Error('Bản thử nghiệm giới hạn tối đa 12 biến giải thích.');
-    const rowCount=Math.min(yValues.length,...xColumns.map(c=>c.values.length));
+    if(xColumns.some(c=>!c||!Array.isArray(c.values)))throw new Error('Mỗi biến X phải có mảng values hợp lệ.');
+    const expectedLength=yValues.length;
+    if(xColumns.some(c=>c.values.length!==expectedLength))throw new Error('Các cột Y và X phải có cùng số dòng; không tự cắt ngắn để tránh lệch quan sát.');
+    const rowCount=expectedLength;
     if(rowCount>250000)throw new Error('Bản thử nghiệm giới hạn 250.000 dòng cho mỗi lần ước lượng OLS để tránh treo trình duyệt.');
-    const complete=[];for(let i=0;i<rowCount;i++){const y=Number(yValues[i]),xs=xColumns.map(c=>Number(c.values[i]));if(Number.isFinite(y)&&xs.every(Number.isFinite))complete.push({y,xs,index:i});}
+    const complete=[];for(let i=0;i<rowCount;i++){const y=toFiniteOrNaN(yValues[i]),xs=xColumns.map(c=>toFiniteOrNaN(c.values[i]));if(Number.isFinite(y)&&xs.every(Number.isFinite))complete.push({y,xs,index:i});}
     const k=xColumns.length+(includeIntercept?1:0),n=complete.length;
     if(n<=k+1)throw new Error(`Không đủ quan sát hoàn chỉnh: cần nhiều hơn ${k+1}, hiện có ${n}.`);
     const y=complete.map(r=>r.y),X=complete.map(r=>[...(includeIntercept?[1]:[]),...r.xs]);
@@ -107,11 +111,14 @@
     if(dfResidual<=0||dfModel<=0)throw new Error('Bậc tự do không hợp lệ cho kiểm định F.');
     const r2=includeIntercept?fit.r2:fit.uncenteredR2;
     const adjustedR2=1-(1-r2)*(includeIntercept?(n-1):n)/dfResidual;
-    const explainedSS=includeIntercept?Math.max(0,fit.sst-fit.sse):sum(fit.fitted.map(v=>v*v)),fStat=fit.sse<=Number.EPSILON*Math.max(1,explainedSS)?Infinity:(explainedSS/dfModel)/(fit.sse/dfResidual),fP=fRightTailP(fStat,dfModel,dfResidual);
+    const explainedSS=includeIntercept?Math.max(0,fit.sst-fit.sse):sum(fit.fitted.map(v=>v*v)),totalSS=includeIntercept?fit.sst:sum(y.map(v=>v*v));
+    const perfectFitTolerance=Number.EPSILON*Math.max(Number.MIN_VALUE,Math.abs(totalSS),Math.abs(explainedSS))*10;
+    const fStat=!(totalSS>0)?NaN:fit.sse<=perfectFitTolerance?Infinity:(explainedSS/dfModel)/(fit.sse/dfResidual),fP=fRightTailP(fStat,dfModel,dfResidual);
     const sigma2=fit.sse/dfResidual,cov=robustHC1?covarianceHC1(X,fit.residuals,fit.invXtX):fit.invXtX.map(r=>r.map(v=>v*sigma2));
     const critical=tCritical95(dfResidual),paramNames=[...(includeIntercept?['Intercept']:[]),...xColumns.map(c=>c.name)];
     const coefficients=fit.beta.map((estimate,i)=>{const se=Math.sqrt(Math.max(0,cov[i][i])),t=se>0?estimate/se:NaN,p=studentTwoTailP(t,dfResidual);return{name:paramNames[i],estimate,stdError:se,t,p,ciLower:estimate-critical*se,ciUpper:estimate+critical*se};});
-    const e=fit.residuals,es=sum(e),dw=sum(e.slice(1).map((v,i)=>(v-e[i])**2))/Math.max(EPS,fit.sse);
+    const e=fit.residuals,contiguous=complete.every((r,i)=>i===0||r.index===complete[i-1].index+1);
+    const dw=contiguous&&e.length>1&&fit.sse>perfectFitTolerance?sum(e.slice(1).map((v,i)=>(v-e[i])**2))/fit.sse:NaN;
     const em=mean(e),m2=mean(e.map(v=>(v-em)**2)),skew=m2>0?mean(e.map(v=>(v-em)**3))/Math.pow(m2,1.5):NaN,excess=m2>0?mean(e.map(v=>(v-em)**4))/(m2*m2)-3:NaN;
     const jb=n/6*(skew*skew+excess*excess/4),jbP=regularizedGammaQ(1,jb/2);
     let bp=null;
@@ -120,7 +127,7 @@
     return{
       n,k,dfResidual,dfModel,includeIntercept,robustHC1,r2,adjustedR2,sse:fit.sse,rmse:Math.sqrt(fit.sse/n),residualStdError:Math.sqrt(sigma2),fStat,fP,
       coefficients,fitted:fit.fitted,residuals:fit.residuals,usedRowIndices:complete.map(r=>r.index),
-      diagnostics:{durbinWatson:dw,jarqueBera:jb,jarqueBeraP:jbP,residualSkewness:skew,residualExcessKurtosis:excess,breuschPagan:bp,vif}
+      diagnostics:{durbinWatson:dw,durbinWatsonValid:contiguous,durbinWatsonPairs:contiguous&&fit.sse>perfectFitTolerance?Math.max(0,e.length-1):0,jarqueBera:jb,jarqueBeraP:jbP,residualSkewness:skew,residualExcessKurtosis:excess,breuschPagan:bp,vif}
     };
   }
   return{ols,studentTwoTailP,fRightTailP,regularizedBeta,regularizedGammaQ,tCritical95,qrSolve};
