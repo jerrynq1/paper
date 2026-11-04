@@ -62,7 +62,7 @@
 
 <section class="view" id="v-quant">
   <div class="ql-head">
-    <div><div class="ql-eyebrow">QUANTITATIVE RESEARCH · PHASE 1</div><h2>Quant Lab <span>· Statistical Data Explorer</span></h2><p class="msg">Phòng phân tích dữ liệu thống kê ban đầu. Nạp CSV hoặc lấy nến M1 đã tải trên Chart để kiểm tra phân phối, lợi suất và tương quan.</p></div>
+    <div><div class="ql-eyebrow">QUANTITATIVE RESEARCH · PHASE 1 + 2</div><h2>Quant Lab <span>· Statistical &amp; Regression Analysis</span></h2><p class="msg">Phân tích dữ liệu, phân phối, lợi suất, tương quan và mô hình hồi quy OLS. Nạp CSV hoặc lấy nến M1 đã tải trên Chart.</p></div>
     <span class="ql-local-badge">BROWSER-ONLY MVP</span>
   </div>
   <div class="card ql-source-card">
@@ -99,11 +99,38 @@
     <div id="qCorrColumns" class="ql-corr-picker"></div>
     <div class="ql-table-wrap" id="qCorrelation"></div>
   </div>
+  <div class="card ql-analysis-card ql-regression-card">
+    <div class="ql-panel-head"><div><div class="ql-eyebrow">PHASE 2 · ECONOMETRICS</div><h3>Regression Laboratory · OLS</h3><p class="msg">Ước lượng hồi quy tuyến tính đơn/đa biến bằng OLS trên các dòng có đủ dữ liệu. Mặc định dùng sai số chuẩn cổ điển; có tùy chọn HC1.</p></div><span class="ql-local-badge">BROWSER COMPUTATION</span></div>
+    <div class="ql-reg-controls">
+      <label class="ql-select-label">DEPENDENT VARIABLE · Y<select id="qRegY"></select></label>
+      <div class="ql-reg-x"><div class="ql-reg-label">INDEPENDENT VARIABLES · X <small>Chọn ít nhất một biến giải thích</small></div><div id="qRegX" class="ql-reg-picker"></div></div>
+      <div class="ql-reg-options">
+        <label class="ql-check"><input id="qRegIntercept" type="checkbox" checked><span>Include intercept (β₀)</span></label>
+        <label class="ql-check"><input id="qRegHC1" type="checkbox"><span>HC1 robust standard errors</span></label>
+        <button class="btn" id="qRunOLS" type="button">▶ Estimate OLS</button>
+        <button class="btn ghost" id="qRegDemo" type="button">Nạp OLS DEMO</button>
+        <button class="btn ghost" id="qExportOLS" type="button" disabled>↓ Export results CSV</button>
+      </div>
+    </div>
+    <div id="qRegStatus" class="ql-reg-status">Chọn Y và X, sau đó nhấn Estimate OLS.</div>
+    <div id="qRegOutput" class="ql-reg-output" hidden>
+      <div id="qRegMetrics" class="ql-metrics ql-reg-metrics"></div>
+      <div class="ql-reg-grid">
+        <div class="ql-reg-panel"><h4>Coefficient Estimates</h4><p class="msg">t-test hai phía và khoảng tin cậy 95%.</p><div class="ql-table-wrap" id="qRegCoefficients"></div></div>
+        <div class="ql-reg-panel"><h4>Model Summary</h4><p class="msg">Mức độ phù hợp và kiểm định ý nghĩa chung của mô hình.</p><div class="ql-table-wrap" id="qRegSummary"></div></div>
+      </div>
+      <div class="ql-reg-grid">
+        <div class="ql-reg-panel"><h4>Residual Diagnostics</h4><p class="msg">Kiểm tra phần dư và phương sai thay đổi.</p><div class="ql-table-wrap" id="qRegDiagnostics"></div></div>
+        <div class="ql-reg-panel"><h4>Residuals vs Fitted</h4><p class="msg">Đồ thị chẩn đoán trực quan; đường ngang là residual = 0.</p><canvas id="qRegResidualPlot" class="ql-canvas"></canvas></div>
+      </div>
+      <p class="ql-analysis-note" id="qRegNote"></p>
+    </div>
+  </div>
   <div class="card ql-analysis-card">
     <div class="ql-panel-head"><div><h3>Data Preview</h3><p class="msg">12 dòng đầu tiên sau khi xử lý thứ tự thời gian (nếu nhận diện được).</p></div></div>
     <div class="ql-table-wrap" id="qPreview"></div>
   </div>
-  <div class="ql-footnote"><b>Phạm vi bản thử nghiệm:</b> thống kê mô tả, Pearson correlation, histogram và lợi suất. Chưa có OLS, kiểm định giả thuyết, ADF/ARIMA, ARCH/GARCH, xử lý dữ liệu lớn hay backend Python. TickVolume từ cTrader là tick-volume/quote proxy, không phải khối lượng hợp đồng Futures tập trung.</div>
+  <div class="ql-footnote"><b>Phạm vi Phase 1 + 2:</b> thống kê mô tả, lợi suất, Pearson correlation và hồi quy tuyến tính OLS đơn/đa biến, kèm t-test hệ số, F-test cổ điển, khoảng tin cậy 95%, HC1 robust standard errors, VIF và chẩn đoán phần dư. Chưa có ADF/ARIMA, VAR/VECM, ARCH/GARCH, backend Python hay kho dữ liệu bền vững. TickVolume từ cTrader là tick-volume/quote proxy, không phải khối lượng hợp đồng Futures tập trung.</div>
 </section>
 
 <section class="view" id="v-options">
@@ -249,6 +276,7 @@
 <script src="js/connection-ui.js"></script>
 <script src="js/options.js"></script>
 <script src="js/quant-stats.js"></script>
+<script src="js/quant-regression.js"></script>
 <script src="js/quant-lab.js"></script>
 <script src="js/init.js"></script>
 <script src="js/drawings-core.js"></script>
