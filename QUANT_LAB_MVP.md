@@ -87,3 +87,9 @@ Run tests from the project directory:
 node tests/quant-stats.test.js
 node tests/quant-regression.test.js
 ```
+
+---
+
+## Phase 3 — Time Series Laboratory
+
+Phase 3 adds ACF/PACF, ADF and Phillips–Perron tests, first/second differencing and AR/MA/ARMA/ARIMA CSS estimates. See `QUANT_PHASE3_GUIDE.md` for the full assumptions, limitations and user instructions. This remains a browser-only MVP; its asymptotic unit-root critical values and CSS model estimation should be cross-checked with mature econometrics software before research or trading decisions.

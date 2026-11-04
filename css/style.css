@@ -570,3 +570,22 @@ a.sb{text-decoration:none}
 .ql-reg-note{font-size:10px;color:var(--mut);line-height:1.6}
 @media(max-width:900px){.ql-reg-controls{grid-template-columns:1fr}.ql-reg-grid{grid-template-columns:1fr}.ql-reg-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.ql-reg-options{align-items:stretch}.ql-reg-options .btn{flex:1 1 140px}.ql-reg-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Quant Lab · Phase 3 Time Series */
+.ql-ts-controls{display:grid;grid-template-columns:minmax(180px,1.2fr) minmax(180px,1.1fr) minmax(90px,.45fr) auto;gap:10px;align-items:end;padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--inp)}
+.ql-ts-controls .btn{min-height:35px;white-space:nowrap}
+.ql-ts-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin-top:13px}
+.ql-ts-section{align-items:start}
+.ql-ts-canvas{height:220px}
+.ql-ts-test-controls,.ql-ts-model-controls{display:flex;align-items:end;flex-wrap:wrap;gap:9px;margin:10px 0}
+.ql-ts-test-controls .ql-select-label{min-width:125px;flex:1 1 125px}
+.ql-ts-test-controls .btn,.ql-ts-model-controls .btn{min-height:35px}
+.ql-ts-model-controls .ql-select-label{min-width:72px;flex:1 1 72px}
+.ql-ts-model-controls .ql-select-label:first-child{min-width:105px;flex:1 1 105px}
+.ql-ts-results{margin-top:9px}
+.ql-ts-results .ql-table{min-width:620px}
+.ql-ts-model-output{display:grid;gap:9px;margin-top:12px}
+.ql-ts-model-output .ql-metrics{margin:0}
+.ql-ts-forecast-canvas{height:230px}
+@media(max-width:950px){.ql-ts-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.ql-ts-grid{grid-template-columns:1fr}}
+@media(max-width:650px){.ql-ts-controls{grid-template-columns:1fr 1fr}.ql-ts-controls .ql-select-label:first-child{grid-column:1/-1}.ql-ts-controls .btn{grid-column:1/-1}.ql-ts-test-controls .btn,.ql-ts-model-controls .btn{flex:1 1 100%}.ql-ts-model-controls .ql-select-label{min-width:65px}}

@@ -2,7 +2,7 @@
 (function(){
   'use strict';
   const $q=id=>document.getElementById(id);
-  const QL={headers:[],rows:[],delimiter:',',source:'',numeric:[],priceIndex:-1,timeIndex:-1,timeSorted:false,loadedAt:null,lastRegression:null};
+  const QL={headers:[],rows:[],delimiter:',',source:'',numeric:[],priceIndex:-1,timeIndex:-1,timeSorted:false,loadedAt:null,lastRegression:null,lastTsModel:null};
   const fmt=(v,d=4)=>Number.isFinite(v)?Number(v).toLocaleString('en-US',{maximumFractionDigits:d}):'—';
   const pct=(v,d=3)=>Number.isFinite(v)?(v*100).toFixed(d)+'%':'—';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10,7 +10,7 @@
   function note(s,bad=false){const e=$q('qStatus');if(e){e.textContent=s;e.classList.toggle('is-bad',bad)}}
   function setData(headers,rows,delimiter,source){
     if(!headers.length||!rows.length)throw new Error('Không tìm thấy dữ liệu có header và ít nhất một dòng.');
-    QL.headers=headers;QL.rows=rows;QL.delimiter=delimiter||',';QL.source=source;QL.loadedAt=new Date();
+    QL.headers=headers;QL.rows=rows;QL.delimiter=delimiter||',';QL.source=source;QL.loadedAt=new Date();QL.lastTsModel=null;
     QL.numeric=QuantStats.numericColumns(headers,rows,QL.delimiter);
     if(!QL.numeric.length)throw new Error('Không tìm thấy cột số hợp lệ. Hãy kiểm tra header và định dạng số trong CSV.');
     const ti=QuantStats.detectTimeColumn(headers),pi=QuantStats.detectPriceColumn(headers);
@@ -18,12 +18,17 @@
     QL.priceIndex=QL.numeric.some(c=>c.index===pi)?pi:(QL.numeric.find(c=>c.index!==ti)?.index??QL.numeric[0].index);
     if(ti>=0){const parsed=rows.map((r,i)=>{const raw=String(r[ti]??'').trim(),num=Number(raw);let t=NaN;if(raw&&Number.isFinite(num)&&Math.abs(num)>=1e9)t=Math.abs(num)>=1e12?num: num*1000;else t=Date.parse(raw);return{r,i,t}});const valid=parsed.filter(x=>Number.isFinite(x.t));if(valid.length>=rows.length*.6){valid.sort((a,b)=>a.t-b.t);QL.rows=valid.map(x=>x.r);QL.timeSorted=true}}
     populateControls();render();note(`${fmt(QL.rows.length,0)} dòng · ${QL.numeric.length} cột số · ${source}`);
+    if($q('qTsUnitRoot'))$q('qTsUnitRoot').innerHTML='<p class="msg">Dữ liệu đã đổi. Chạy lại ADF + PP.</p>';
+    if($q('qTsModelOutput'))$q('qTsModelOutput').hidden=true;
+    if($q('qTsModelStatus')){$q('qTsModelStatus').textContent='Dữ liệu đã đổi. Hãy ước lượng lại mô hình.';$q('qTsModelStatus').classList.remove('is-good','is-bad')}
+    if($q('qTsColumn'))renderCorrelogram();
   }
   function populateControls(){
     const p=$q('qPriceColumn'),c=$q('qCorrColumns');
     p.innerHTML=QL.numeric.map(x=>`<option value="${x.index}" ${x.index===QL.priceIndex?'selected':''}>${esc(x.name)}</option>`).join('');
     const limited=QL.numeric.slice(0,8);c.innerHTML=limited.map(x=>`<label class="ql-check"><input type="checkbox" value="${x.index}" checked><span>${esc(x.name)}</span></label>`).join('');
     populateRegressionControls(undefined,true);
+    populateTimeSeriesControls();
   }
   function populateRegressionControls(preferred,resetY=false){
     const y=$q('qRegY'),x=$q('qRegX');if(!y||!x)return;
@@ -43,6 +48,57 @@
       QL.lastRegression=null;$q('qRegOutput').hidden=true;$q('qExportOLS').disabled=true;
       const st=$q('qRegStatus');st.textContent='Thiết lập mô hình đã thay đổi. Hãy nhấn Estimate OLS để tính lại.';st.classList.remove('is-bad','is-good');
     }
+  }
+  function populateTimeSeriesControls(){
+    const el=$q('qTsColumn');if(!el)return;
+    const preferred=QL.priceIndex;
+    el.innerHTML=QL.numeric.map(c=>`<option value="${c.index}" ${c.index===preferred?'selected':''}>${esc(c.name)}</option>`).join('');
+  }
+  function timeSeriesValues(){const i=Number($q('qTsColumn').value);return{index:i,name:QL.headers[i],values:getValues(i)}}
+  function timeSeriesTimeInfo(){
+    if(QL.timeIndex<0)return{label:'Không có cột thời gian được nhận diện',warning:true};
+    const stamps=QL.rows.map(r=>{const raw=String(r[QL.timeIndex]??'').trim(),n=Number(raw);if(raw&&Number.isFinite(n)&&Math.abs(n)>=1e9)return Math.abs(n)>=1e12?n:n*1000;return Date.parse(raw)}).filter(Number.isFinite);
+    if(stamps.length<3)return{label:'Không đủ timestamp hợp lệ',warning:true};
+    const diffs=[];for(let i=1;i<stamps.length;i++)diffs.push(stamps[i]-stamps[i-1]);
+    const sorted=diffs.slice().sort((a,b)=>a-b),median=sorted[Math.floor(sorted.length/2)],duplicates=diffs.filter(v=>v===0).length,gaps=diffs.filter(v=>v>median*1.5).length,irregular=diffs.some(v=>v<0)||duplicates>0||gaps>Math.max(2,diffs.length*.02);
+    const mins=median/60000;let freq=mins<1?`${fmt(mins*60,0)} giây`:mins<60?`${fmt(mins,1)} phút`:mins<1440?`${fmt(mins/60,1)} giờ`:`${fmt(mins/1440,1)} ngày`;
+    return{label:`Khoảng cách trung vị ≈ ${freq} · ${duplicates} timestamp trùng · ${gaps} khoảng trống lớn`,warning:irregular};
+  }
+  function tsCanvas(id){const c=$q(id);if(!c)return null;const r=c.getBoundingClientRect(),w=Math.max(260,r.width||520),h=Math.max(160,r.height||220),dpr=window.devicePixelRatio||1;c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);return{ctx,w,h}}
+  function drawCorrelogram(id,values,title){
+    const c=tsCanvas(id);if(!c)return;const{ctx,w,h}=c,acc=getComputedStyle(document.documentElement).getPropertyValue('--acc').trim()||'#d6a84b',mut=getComputedStyle(document.documentElement).getPropertyValue('--mut').trim()||'#89909a',line=getComputedStyle(document.documentElement).getPropertyValue('--line').trim()||'#343943';
+    ctx.clearRect(0,0,w,h);const pad={l:34,r:10,t:16,b:28},mid=pad.t+(h-pad.t-pad.b)/2,scale=(h-pad.t-pad.b)*.43,bound=1.96/Math.sqrt(Math.max(1,values.n||1));
+    ctx.strokeStyle=line;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,mid);ctx.lineTo(w-pad.r,mid);ctx.stroke();
+    ctx.setLineDash([4,4]);ctx.strokeStyle=mut;for(const v of [-bound,bound]){const y=mid-v*scale;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke()}ctx.setLineDash([]);
+    const plotW=w-pad.l-pad.r,step=plotW/Math.max(1,values.length),bw=Math.max(2,Math.min(14,step*.52));
+    values.forEach((v,i)=>{const x=pad.l+(i+.5)*step,y=mid-v*scale;ctx.fillStyle=i===0?mut:acc;ctx.fillRect(x-bw/2,Math.min(mid,y),bw,Math.max(1,Math.abs(mid-y)));if(i===0||i%Math.max(1,Math.ceil(values.length/12))===0||i===values.length-1){ctx.fillStyle=mut;ctx.font='9px sans-serif';ctx.textAlign='center';ctx.fillText(String(i),x,h-9)}});
+    ctx.fillStyle=mut;ctx.font='10px sans-serif';ctx.textAlign='left';ctx.fillText(title,pad.l,11);ctx.textAlign='right';ctx.fillText(`±${fmt(bound,3)}`,w-pad.r,11);
+  }
+  function renderCorrelogram(){
+    try{const{values,name}=timeSeriesValues(),order=Number($q('qTsCorrDiff').value)||0,maxLag=Math.max(1,Math.min(120,Number($q('qTsMaxLag').value)||24)),series=QuantTimeSeries.difference(values,order),a=QuantTimeSeries.acf(series,maxLag),p=QuantTimeSeries.pacf(series,maxLag);a.n=series.length;p.n=series.length;drawCorrelogram('qTsAcfPlot',a,`ACF · ${name} · d=${order}`);drawCorrelogram('qTsPacfPlot',p,`PACF · ${name} · d=${order}`);const ti=timeSeriesTimeInfo(),st=$q('qTsStatus');st.textContent=`${name}: ${series.length} quan sát · ${a.length-1} lags · ${ti.label}${ti.warning?' · Hãy kiểm tra tính đều đặn của timestamp.':''}`;st.classList.toggle('is-bad',ti.warning);st.classList.toggle('is-good',!ti.warning)}catch(e){['qTsAcfPlot','qTsPacfPlot'].forEach(id=>{const c=$q(id);if(c){const ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height)}});$q('qTsStatus').textContent=e.message||String(e);$q('qTsStatus').classList.add('is-bad');$q('qTsStatus').classList.remove('is-good')}}
+  const critDecision=(stat,critical)=>stat<critical?'Bác bỏ H₀':'Chưa bác bỏ H₀';
+  function renderUnitRootRow(label,r,lagLabel){const c=r.critical;return`<tr><th>${label}</th><td>${fmt(r.statistic,4)}</td><td>${lagLabel}</td><td>${fmt(c['1%'],3)}</td><td>${fmt(c['5%'],3)}</td><td>${fmt(c['10%'],3)}</td><td class="${r.statistic<c['5%']?'sig':'warn'}">${critDecision(r.statistic,c['5%'])} @ 5%</td></tr>`}
+  function runUnitRootTests(){
+    const box=$q('qTsUnitRoot');try{const{values,name}=timeSeriesValues(),timeInfo=timeSeriesTimeInfo(),det=$q('qTsDeterministic').value,lag=Math.max(0,Math.min(20,Number($q('qTsAdfLag').value)||0)),bwRaw=String($q('qTsPpBandwidth').value).trim(),opts={deterministic:det,maxLag:lag},a=QuantTimeSeries.adf(values,opts),p=QuantTimeSeries.pp(values,{deterministic:det,bandwidth:bwRaw?Number(bwRaw):undefined});
+      box.innerHTML=`<table class="ql-table"><thead><tr><th>Test</th><th>Statistic</th><th>Lag / BW</th><th>1%</th><th>5%</th><th>10%</th><th>Decision</th></tr></thead><tbody>${renderUnitRootRow('ADF · '+a.criterion.toUpperCase(),a,`${a.lag} lags`)}${renderUnitRootRow('Phillips–Perron Zτ',p,`${p.bandwidth} NW lags`)}</tbody></table><div class="ql-analysis-note">Biến: ${esc(name)} · N: ${fmt(a.n,0)} · Deterministic: ${esc(det)} · ADF lag được chọn trong 0–${lag} bằng ${a.criterion.toUpperCase()}. PP Zρ bổ sung = ${fmt(p.zRho,4)}. ${esc(timeInfo.label)}. H₀ là có unit root; thống kê càng âm sâu so với critical value thì càng có bằng chứng bác bỏ H₀.</div>`;
+    }catch(e){box.innerHTML=`<p class="ql-reg-note">${esc(e.message||String(e))}</p>`}}
+  function drawForecast(history,forecastRows){
+    const c=tsCanvas('qTsForecastPlot');if(!c)return;const{ctx,w,h}=c,acc=getComputedStyle(document.documentElement).getPropertyValue('--acc').trim()||'#d6a84b',mut=getComputedStyle(document.documentElement).getPropertyValue('--mut').trim()||'#89909a',line=getComputedStyle(document.documentElement).getPropertyValue('--line').trim()||'#343943';
+    ctx.clearRect(0,0,w,h);const shown=history.slice(-160),all=shown.concat(forecastRows.map(x=>x.value)),lo=Math.min(...all, ...forecastRows.map(x=>x.lower)),hi=Math.max(...all,...forecastRows.map(x=>x.upper)),range=hi-lo||1,pad={l:42,r:12,t:16,b:25},xAt=i=>pad.l+i/(all.length-1||1)*(w-pad.l-pad.r),yAt=v=>pad.t+(hi-v)/range*(h-pad.t-pad.b);
+    ctx.strokeStyle=line;ctx.beginPath();ctx.moveTo(pad.l,h-pad.b);ctx.lineTo(w-pad.r,h-pad.b);ctx.stroke();ctx.strokeStyle=acc;ctx.lineWidth=1.7;ctx.beginPath();shown.forEach((v,i)=>{const x=xAt(i),y=yAt(v);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.setLineDash([5,4]);ctx.strokeStyle=mut;ctx.beginPath();forecastRows.forEach((r,i)=>{const x=xAt(shown.length+i),y=yAt(r.value);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=mut;ctx.font='10px sans-serif';ctx.fillText('History',pad.l,11);ctx.textAlign='right';ctx.fillText('Forecast',w-pad.r,11);ctx.textAlign='left';
+  }
+  function runTsModel(){
+    const status=$q('qTsModelStatus'),out=$q('qTsModelOutput');try{const{values,name}=timeSeriesValues(),m=QuantTimeSeries.fitModel(values,{type:$q('qTsModelType').value,p:$q('qTsP').value,d:$q('qTsD').value,q:$q('qTsQ').value,horizon:$q('qTsHorizon').value});
+      $q('qTsModelMetrics').innerHTML=[['OBSERVATIONS',fmt(m.n,0),'Residual observations after burn-in'],['RMSE',fmt(m.rmse,6),'CSS residual standard error'],['AIC',fmt(m.aic,3),'Lower is better · compare same series'],['BIC',fmt(m.bic,3),'Penalizes model complexity']].map(x=>`<div class="ql-metric"><span>${x[0]}</span><b>${x[1]}</b><small>${x[2]}</small></div>`).join('');
+      $q('qTsParameters').innerHTML=`<table class="ql-table"><thead><tr><th>Parameter</th><th>Estimate</th></tr></thead><tbody>${m.parameters.map(x=>`<tr><th>${esc(x.name)}</th><td>${fmt(x.value,7)}</td></tr>`).join('')}</tbody></table>`;
+      $q('qTsForecastTable').innerHTML=`<table class="ql-table"><thead><tr><th>Horizon</th><th>Forecast</th><th>Approx. lower</th><th>Approx. upper</th></tr></thead><tbody>${m.forecastRows.map(r=>`<tr><th>t+${r.step}</th><td>${fmt(r.value,7)}</td><td>${fmt(r.lower,7)}</td><td>${fmt(r.upper,7)}</td></tr>`).join('')}</tbody></table>`;
+      drawForecast(values,m.forecastRows);QL.lastTsModel={values:values.slice(),model:m};$q('qTsModelNote').textContent=`${name} · ${m.type}(${m.order.p},${m.order.d},${m.order.q}) · ${m.converged?'optimizer converged':'đạt giới hạn iteration'} (${m.iterations} iterations). ${m.notes.join(' ')}`;
+      out.hidden=false;status.textContent=`Ước lượng xong · ${m.type}(${m.order.p},${m.order.d},${m.order.q}) · ${m.n} residual observations.`;status.classList.remove('is-bad');status.classList.add('is-good');
+    }catch(e){out.hidden=true;status.textContent=e.message||String(e);status.classList.add('is-bad');status.classList.remove('is-good')}}
+  function timeSeriesDemo(){
+    let seed=73021;const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296},normal=()=>{const u=Math.max(1e-9,rand()),v=rand();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+    const rows=[];let stationary=0,walk=100,price=2050;for(let i=0;i<900;i++){const eps=normal();stationary=.72*stationary+eps;walk+=normal()*.8;price*=Math.exp(.00015+normal()*.0028);const t=new Date(Date.UTC(2024,0,1)+i*86400000).toISOString();rows.push([t,price.toFixed(5),stationary.toFixed(6),walk.toFixed(6)]);}
+    setData(['Time','XAU_Close_SIM','Stationary_AR1','RandomWalk'],rows,',','TIME SERIES DEMO tổng hợp · 900 quan sát daily · không phải dữ liệu thị trường');
   }
   function selectedColumnStats(){const i=Number($q('qPriceColumn').value);QL.priceIndex=i;return{index:i,values:getValues(i).filter(Number.isFinite)}}
   function render(){
@@ -126,8 +182,15 @@
     $q('qRegHC1').addEventListener('change',invalidateOLS);
     $q('qRegDemo').addEventListener('click',()=>{try{regressionDemo()}catch(e){note(e.message,true)}});
     $q('qExportOLS').addEventListener('click',exportOLS);
-    window.addEventListener('resize',()=>{if(QL.rows.length){const i=QL.priceIndex;drawHistogram(QuantStats.histogram(getValues(i).filter(Number.isFinite),24));drawSeries(getValues(i));if(QL.lastRegression)drawResidualPlot(QL.lastRegression.fitted,QL.lastRegression.residuals)}});
+    $q('qTsDemo').addEventListener('click',()=>{try{timeSeriesDemo()}catch(e){note(e.message,true)}});
+    $q('qTsColumn').addEventListener('change',()=>{renderCorrelogram();QL.lastTsModel=null;$q('qTsUnitRoot').innerHTML='<p class="msg">Biến đã đổi. Chạy lại ADF + PP để cập nhật kết quả.</p>';$q('qTsModelOutput').hidden=true});
+    $q('qTsCorrDiff').addEventListener('change',renderCorrelogram);
+    $q('qTsCorrelogram').addEventListener('click',renderCorrelogram);
+    $q('qTsRunTests').addEventListener('click',runUnitRootTests);
+    $q('qTsFitModel').addEventListener('click',runTsModel);
+    window.addEventListener('resize',()=>{if(QL.rows.length){const i=QL.priceIndex;drawHistogram(QuantStats.histogram(getValues(i).filter(Number.isFinite),24));drawSeries(getValues(i));if(QL.lastRegression)drawResidualPlot(QL.lastRegression.fitted,QL.lastRegression.residuals);if($q('qTsColumn'))renderCorrelogram();if(!$q('qTsModelOutput').hidden&&QL.lastTsModel){drawForecast(QL.lastTsModel.values,QL.lastTsModel.model.forecastRows)}}});
     demo();
+    renderCorrelogram();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
