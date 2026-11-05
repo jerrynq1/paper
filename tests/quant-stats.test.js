@@ -52,3 +52,23 @@ console.log(`\n${n} nhóm kiểm thử Quant Stats đạt`);
 {
   assert.throws(()=>Q.parseCSV('Time,Close\n2026-01-01,1\n2026-01-02,2,unexpected'),/nhiều hơn/);ok('CSV parser rejects excess fields rather than silently discarding data');
 }
+
+{
+  const rv=Q.rollingRealizedVolatility([.01,-.01,.02],3)[2];
+  assert.ok(Math.abs(rv.realizedVariance-.0006)<1e-12);
+  assert.ok(Math.abs(rv.bipowerVariance-(Math.PI/2)*.0003)<1e-12);
+  assert.ok(Math.abs(rv.jumpVariation-Math.max(0,.0006-(Math.PI/2)*.0003))<1e-12);
+  ok('rolling realized variance, bipower variation and positive jump variation');
+}
+{
+  const d=Q.returnDistribution([-.02,-.01,0,.01,.02]);
+  assert.strictEqual(d.n,5);assert.ok(Number.isFinite(d.jarqueBera));assert.ok(d.jarqueBeraP>=0&&d.jarqueBeraP<=1);
+  assert.ok(d.quantiles.p01<=d.quantiles.p50&&d.quantiles.p50<=d.quantiles.p99);
+  ok('return distribution moments, Jarque-Bera reference p-value and tail quantiles');
+}
+{
+  const meta=Q.timestampMetadata(['2026-11-05T07:32:00.000Z','2026-11-05T07:33:00+00:00','2026-11-05T07:34:00']);
+  assert.strictEqual(meta.valid,3);assert.strictEqual(meta.counts['explicit-offset'],2);assert.strictEqual(meta.counts.ambiguous,1);assert.strictEqual(meta.allExplicit,false);
+  ok('timestamp metadata distinguishes explicit UTC offsets from timezone-ambiguous timestamps');
+}
+console.log('Quant Stats extension tests passed');

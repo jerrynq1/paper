@@ -64,3 +64,22 @@ console.log(`\n${n} nhóm kiểm thử Quant Time Series đạt`);
 {
  const sample=[0];let crossSeed=20261105;const crossRand=()=>{crossSeed=(crossSeed*1664525+1013904223)>>>0;return crossSeed/4294967296};const crossNoise=()=>{const u=Math.max(1e-9,crossRand()),v=crossRand();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};for(let i=1;i<600;i++)sample.push(.72*sample[i-1]+crossNoise());const r=T.adf(sample,{deterministic:'constant',maxLag:8,criterion:'bic'});assert.strictEqual(r.lag,0);assert.strictEqual(r.n,599);assert.ok(Math.abs(r.statistic-(-9.491862709098807))<1e-8);assert.strictEqual(r.candidates[0].selectionN,591);ok('ADF lag search uses common sample then refits selected lag on full available sample (cross-checked against statsmodels 0.14.6)');
 }
+
+{
+ const e=[1,-.5,.25,-.125,.06,-.03,.015,-.0075,.004,-.002,.001,-.0005];
+ const m=5,n=e.length,r=T.acf(e,m);let expected=0;for(let k=1;k<=m;k++)expected+=r[k]*r[k]/(n-k);expected*=n*(n+2);
+ const lb=T.ljungBox(e,m,0);assert.ok(Math.abs(lb.statistic-expected)<1e-12);assert.strictEqual(lb.n,n);assert.strictEqual(lb.df,m);
+ ok('Ljung–Box uses the standard n(n+2) multiplier rather than m(m+2)');
+ const short=T.ljungBox([1,2,3],20,0);assert.strictEqual(short.lags,1);assert.ok(Number.isFinite(short.statistic));
+ ok('Ljung–Box caps lag to the available autocorrelation range on a short series');
+}
+{
+ const d=T.dependenceDiagnostics(ar,20);assert.ok(d.returns.ljungBox);assert.ok(d.absoluteReturns.ljungBox);assert.ok(d.squaredReturns.ljungBox);assert.strictEqual(d.returns.acf[0].lag,1);
+ ok('return, absolute-return and squared-return dependence diagnostics');
+}
+{
+ const wf=T.walkForward(ar,{type:'AR',p:1,d:0,q:0,initialTrainPercent:90,maxForecastPoints:3});
+ assert.strictEqual(wf.evaluated,3);assert.strictEqual(wf.points.length,3);assert.ok(Number.isFinite(wf.metrics.rmse));assert.ok(wf.points.every(v=>v.trainN===v.targetIndex));
+ ok('expanding-window walk-forward evaluates one-step forecasts using only prior observations');
+}
+console.log('Quant Time Series extension tests passed');
