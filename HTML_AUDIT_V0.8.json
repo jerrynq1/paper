@@ -1,0 +1,11 @@
+{
+  "htmlIdCount": 250,
+  "uniqueHtmlIds": 250,
+  "duplicateIds": [],
+  "separateElliottView": true,
+  "quantView": true,
+  "elliottMarkupOutsideQuant": false,
+  "elliottPlotInsideView": true,
+  "xZoom": true,
+  "userAtrInputs": false
+}

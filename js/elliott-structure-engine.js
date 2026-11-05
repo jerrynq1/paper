@@ -1,4 +1,4 @@
-/* Gexadecimal Elliott Structure Lab · v0.7
+/* Gexadecimal Elliott Structure Lab · v0.8
  * Deterministic, explainable Elliott candidate engine.
  * Important: pivots are only confirmed after a subsequent directional change.
  * Candidate scores are heuristic evidence scores, NOT probabilities or trade signals.
@@ -10,7 +10,7 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
 
-  const VERSION='0.7.0';
+  const VERSION='0.8.0';
   const DEFAULTS={
     atrPeriod:14,
     thresholdMultiplier:1.5,
@@ -27,6 +27,7 @@
     {id:'impulse',name:'Impulse',status:'candidate-engine',degree:'motive',legs:5,internal:'5-3-5-3-5'},
     {id:'extended_impulse',name:'Extended Impulse',status:'assisted-detection',degree:'motive',legs:5,internal:'nested extension; commonly 9/13/17 swings but not mandatory'},
     {id:'truncated_fifth',name:'Truncated Fifth',status:'candidate-engine',degree:'motive',legs:5,internal:'5-3-5-3-5',rare:true},
+    {id:'impulse_developing_wave3',name:'Impulse · Wave 3 developing',status:'contextual-engine',degree:'motive',legs:3,internal:'5-3-5'},
     {id:'impulse_developing_wave5',name:'Impulse · Wave 5 developing',status:'candidate-engine',degree:'motive',legs:4,internal:'5-3-5-3-?'},
     {id:'diagonal_candidate',name:'Diagonal Candidate',status:'candidate-engine',degree:'motive',legs:5,internal:'contracting/expanding wedge; role and internal grammar require degree context'},
     {id:'expanding_diagonal_candidate',name:'Expanding Diagonal Candidate',status:'assisted-detection',degree:'motive',legs:5,internal:'expanding wedge; role/internal grammar requires degree context'},
@@ -58,7 +59,7 @@
     // Internal-only sensitivity: noisier/rangier samples need wider swing thresholds.
     const thresholdMultiplier=efficiency>.48?1.18:efficiency<.18?1.62:1.38;
     const atrPeriod=clamp(Math.round(Math.sqrt(bars.length)/3),8,21);
-    return{atrPeriod,thresholdMultiplier,scaleFactors:[.42,.68,1.00,1.62,2.55],autoPrimaryScale:true,autoMode:true,efficiency};
+    return{atrPeriod,thresholdMultiplier,scaleFactors:[.48,.72,1.00,1.38,1.85],autoPrimaryScale:true,autoMode:true,efficiency};
   }
   const abs=x=>Math.abs(x);
   const sign=x=>x>0?1:x<0?-1:0;
@@ -110,54 +111,49 @@
     const multiplier=Number(options.thresholdMultiplier??DEFAULTS.thresholdMultiplier);
     const minMove=Math.max(0,Number(options.minMove??DEFAULTS.minMove));
     const percentThreshold=Math.max(0,Number(options.percentThreshold??DEFAULTS.percentThreshold));
-    if(!Number.isFinite(multiplier)||multiplier<=0||multiplier>20)throw new Error('Threshold ATR phải lớn hơn 0 và không quá 20.');
+    if(!Number.isFinite(multiplier)||multiplier<=0||multiplier>20)throw new Error('Internal swing sensitivity is invalid.');
     const atr=atrWilder(bars,period);
-    // Causal warm-up: never use a full-sample median to set an early pivot threshold.
-    // Before ATR is seeded, only explicit minMove / percentThreshold floors are active.
     const threshold=(idx,price)=>Math.max(minMove,(Number.isFinite(atr.values[idx])?atr.values[idx]:0)*multiplier,abs(price)*percentThreshold);
-    const close=bars.map(b=>b.close);
-    // Start pivot discovery only after ATR has a causal seed. The initial warm-up
-    // range is deliberately not labeled as a confirmed market swing.
     const seedIndex=Math.min(period-1,bars.length-1);
-    let dir=0,hi=close[seedIndex],lo=close[seedIndex],hiIdx=seedIndex,loIdx=seedIndex;
+    let dir=0,hi=bars[seedIndex].high,lo=bars[seedIndex].low,hiIdx=seedIndex,loIdx=seedIndex;
     const pivots=[];
     const makePivot=(kind,idx,confirmIdx,scale)=>({
-      kind,index:idx,time:bars[idx].time,price:bars[idx].close,
+      kind,index:idx,time:bars[idx].time,price:kind==='high'?bars[idx].high:bars[idx].low,
       sourceClose:bars[idx].close,confirmed:true,confirmationIndex:confirmIdx,
       confirmationTime:bars[confirmIdx].time,confirmationDelayBars:confirmIdx-idx,
-      atrAtPivot:atr.values[idx]??0,thresholdAtPivot:threshold(idx,bars[idx].close),
-      scale:scale??1,persistence:1
+      atrAtPivot:atr.values[idx]??0,thresholdAtPivot:threshold(idx,kind==='high'?bars[idx].high:bars[idx].low),
+      scale:scale??1,persistence:1,pivotSource:'OHLC extreme; close-confirmed reversal'
     });
 
     for(let i=Math.max(1,period);i<bars.length;i++){
-      const c=close[i];
+      const bar=bars[i],c=bar.close;
       if(dir===0){
-        if(c>hi){hi=c;hiIdx=i;}
-        if(c<lo){lo=c;loIdx=i;}
+        if(bar.high>hi){hi=bar.high;hiIdx=i;}
+        if(bar.low<lo){lo=bar.low;loIdx=i;}
         const up=c>=lo+threshold(loIdx,lo),down=c<=hi-threshold(hiIdx,hi);
         if(up||down){
           const upExc=up?(c-lo)/Math.max(threshold(loIdx,lo),1e-12):-Infinity;
           const dnExc=down?(hi-c)/Math.max(threshold(hiIdx,hi),1e-12):-Infinity;
           if(up&&(!down||upExc>=dnExc)){
-            pivots.push(makePivot('low',loIdx,i,multiplier));dir=1;hi=c;hiIdx=i;
+            pivots.push(makePivot('low',loIdx,i,multiplier));dir=1;hi=bar.high;hiIdx=i;
           }else{
-            pivots.push(makePivot('high',hiIdx,i,multiplier));dir=-1;lo=c;loIdx=i;
+            pivots.push(makePivot('high',hiIdx,i,multiplier));dir=-1;lo=bar.low;loIdx=i;
           }
         }
       }else if(dir===1){
-        if(c>hi){hi=c;hiIdx=i;}
+        if(bar.high>hi){hi=bar.high;hiIdx=i;}
         if(hi-c>=threshold(hiIdx,hi)){
-          pivots.push(makePivot('high',hiIdx,i,multiplier));dir=-1;lo=c;loIdx=i;
+          pivots.push(makePivot('high',hiIdx,i,multiplier));dir=-1;lo=bar.low;loIdx=i;
         }
       }else{
-        if(c<lo){lo=c;loIdx=i;}
+        if(bar.low<lo){lo=bar.low;loIdx=i;}
         if(c-lo>=threshold(loIdx,lo)){
-          pivots.push(makePivot('low',loIdx,i,multiplier));dir=1;hi=c;hiIdx=i;
+          pivots.push(makePivot('low',loIdx,i,multiplier));dir=1;hi=bar.high;hiIdx=i;
         }
       }
     }
-    const active=dir===1?{kind:'high',index:hiIdx,time:bars[hiIdx].time,price:bars[hiIdx].close,confirmed:false,direction:'up'}:dir===-1?{kind:'low',index:loIdx,time:bars[loIdx].time,price:bars[loIdx].close,confirmed:false,direction:'down'}:null;
-    return{pivots,active,atr,thresholdMultiplier:multiplier,source:'close-confirmed directional change',direction:dir};
+    const active=dir===1?{kind:'high',index:hiIdx,time:bars[hiIdx].time,price:bars[hiIdx].high,confirmed:false,direction:'up'}:dir===-1?{kind:'low',index:loIdx,time:bars[loIdx].time,price:bars[loIdx].low,confirmed:false,direction:'down'}:null;
+    return{pivots,active,atr,thresholdMultiplier:multiplier,source:'OHLC extreme; close-confirmed directional change',direction:dir};
   }
 
   function linkScaleHierarchy(scales,bars,options={}){
@@ -343,7 +339,11 @@
     const d=directionOf(p);if(!d)return null;
     const l=lengths(p),[a,b,c]=l,eps=Math.max(1e-12,Number(options.epsilon)||0);
     const bNotBeyondOrigin=d>0?p[2].price>=p[0].price-eps:p[2].price<=p[0].price+eps;
-    const hard=[rule('EW-ZZ-01','Wave B không vượt điểm bắt đầu Wave A',bNotBeyondOrigin?'pass':'fail',bNotBeyondOrigin?'Wave B chưa vượt điểm bắt đầu Wave A.':'Wave B vượt điểm bắt đầu Wave A; không phù hợp Zigzag tiêu chuẩn.')];
+    const cExtendsA=d>0?p[3].price>p[1].price+eps:p[3].price<p[1].price-eps;
+    const hard=[
+      rule('EW-ZZ-01','Wave B không vượt điểm bắt đầu Wave A',bNotBeyondOrigin?'pass':'fail',bNotBeyondOrigin?'Wave B chưa vượt điểm bắt đầu Wave A.':'Wave B vượt điểm bắt đầu Wave A; không phù hợp Zigzag tiêu chuẩn.'),
+      rule('EW-ZZ-02','Wave C vượt điểm kết thúc Wave A',cExtendsA?'pass':'fail',cExtendsA?'Wave C đã vượt điểm kết thúc Wave A.':'Wave C chưa vượt điểm kết thúc Wave A; không xác nhận Zigzag tiêu chuẩn.')
+    ];
     const rb=b/Math.max(a,eps),rc=c/Math.max(a,eps);
     const guides=[
       guideline('EW-ZZ-FIB-B','Retracement Wave B',closestRatioScore(rb,[.382,.5,.618,.786],.3),`B / A = ${rb.toFixed(3)}.`,1),
@@ -440,7 +440,7 @@
     c.complete=true;c.fibTargets=[];return c;
   }
 
-  const isMotivePattern=id=>['impulse','extended_impulse','truncated_fifth','impulse_developing_wave5','diagonal_candidate','expanding_diagonal_candidate','leading_diagonal','ending_diagonal'].includes(id);
+  const isMotivePattern=id=>['impulse_developing_wave3','impulse','extended_impulse','truncated_fifth','impulse_developing_wave5','diagonal_candidate','expanding_diagonal_candidate','leading_diagonal','ending_diagonal'].includes(id);
   const isCorrectivePattern=id=>['zigzag','regular_flat','expanded_flat','running_flat','contracting_triangle','barrier_triangle','expanding_triangle','double_zigzag','double_three','triple_zigzag','triple_three'].includes(id);
   const isZigzagPattern=id=>id==='zigzag'||id==='double_zigzag'||id==='triple_zigzag';
 
@@ -628,10 +628,25 @@
     if(seq==='0-1-2-3-4-5'){
       const c=evaluateImpulse(p,options);if(c)parsed=[c];
       if(!c)rules.push(rule('EW-MAN-IMP','Impulse structure','fail','Không đủ sáu pivot luân phiên để đánh giá Impulse.'));
+    }else if(seq==='0-1-2-3'){
+      const c=evaluateDevelopingImpulseWave3(p,options);if(c)parsed=[c];
+      if(!c)rules.push(rule('EW-MAN-MOTIVE3','Developing Wave 3','fail','Không thỏa điều kiện Wave 2 giữ điểm gốc và Wave 3 vượt đỉnh/đáy Wave 1.'));
+      if(!options.contextDirection)rules.push(rule('EW-MAN-MOTIVE3-CONTEXT','Parent trend context','unverified','Cần bối cảnh xu hướng ở degree cha để xác nhận vai trò motive.'));
+      else if(directionOf(p)!==Number(options.contextDirection))rules.push(rule('EW-MAN-MOTIVE3-ROLE','Motive direction vs parent trend','fail','Hướng 0-1-2-3 đang ngược hướng degree cha; cần xem lại nhãn sóng.'));
+    }else if(seq==='0-1-2-3-4'){
+      const c=evaluateDevelopingImpulse(p,options);if(c)parsed=[c];
+      if(!c)rules.push(rule('EW-MAN-MOTIVE5','Developing Wave 5','fail','Không thỏa điều kiện Impulse đến hết Wave 4.'));
+      if(!options.contextDirection)rules.push(rule('EW-MAN-MOTIVE5-CONTEXT','Parent trend context','unverified','Cần bối cảnh xu hướng ở degree cha.'));
+      else if(directionOf(p)!==Number(options.contextDirection))rules.push(rule('EW-MAN-MOTIVE5-ROLE','Motive direction vs parent trend','fail','Hướng motive đang ngược degree cha.'));
     }else if(seq==='A-B-C'&&p.length===3){rules.push(rule('EW-MAN-ABC-ORIGIN','Origin pivot missing','unverified','Cần thêm pivot origin và nhãn 0 để kiểm tra quy tắc B không vượt origin A.'));}
     else if(seq==='0-A-B-C'){
-      const z=evaluateZigzag(p,options);if(z)parsed.push(z);parsed.push(...evaluateFlat(p,options));
-      if(!parsed.length)rules.push(rule('EW-MAN-ABC','ABC correction','unverified','Hình học chưa khớp Zigzag hoặc Flat candidate; cần xem loại correction khác.'));
+      if(!options.contextDirection){rules.push(rule('EW-MAN-ABC-CONTEXT','Parent trend context','unverified','Không tự xác nhận ABC khi chưa có hướng xu hướng ở degree cha.'));}
+      else if(directionOf(p)===Number(options.contextDirection)){rules.push(rule('EW-MAN-ABC-ROLE','ABC must be countertrend','fail','Chuỗi 0-A-B-C cùng hướng degree cha; hãy kiểm tra đây có phải cấu trúc motive 0-1-2-3 hay không.'));}
+      else{
+        const z=evaluateZigzag(p,options);if(z){const d=directionOf(p),extendsA=d>0?p[3].price>p[1].price:p[3].price<p[1].price;if(extendsA)parsed.push(z);}
+        parsed.push(...evaluateFlat(p,options));
+        if(!parsed.length)rules.push(rule('EW-MAN-ABC','ABC correction','unverified','Hình học chưa khớp Zigzag hoặc Flat candidate; cần xem loại correction khác.'));
+      }
     }else if(seq==='0-A-B-C-D-E'){
       parsed=evaluateTriangle(p,options);
       if(!parsed.length)rules.push(rule('EW-MAN-TRI','Triangle structure','unverified','Chưa khớp contracting/expanding geometry hoặc cần thêm ngữ cảnh.'));
@@ -640,7 +655,12 @@
     }else{
       rules.push(rule('EW-MAN-GRAMMAR','Wave sequence grammar','unverified','Chuỗi nhãn này chưa có grammar tự động; giữ ở trạng thái giả thuyết thủ công.'));
     }
-    if(parsed.length){for(const c of parsed)rules.push(...c.hardRules);}
+    if(parsed.length){
+      for(const c of parsed){
+        rules.push(...c.hardRules);
+        if(c.internalStructure&&c.internalStructure.status!=='verified')rules.push(rule('EW-MAN-RECURSIVE','Internal child-degree grammar','unverified','Hình học ngoài đã khớp, nhưng chưa có child grammar xác minh đầy đủ.'));
+      }
+    }
     const failed=rules.some(r=>r.status==='fail'),unverified=rules.some(r=>r.status==='unverified');
     return{status:failed?'FAIL':unverified?'REVIEW':'PASS',sequence:seq,rules,parsed:parsed.map(summarizeCandidate),notes:['Manual count là hypothesis; audit không thay thế việc xác minh child-degree grammar.']};
   }
@@ -697,7 +717,7 @@
   }
 
   function attachRecursiveGrammar(candidates,childCandidates,options={}){
-    const expectedByPattern={impulse:['5','3','5','3','5'],extended_impulse:['5','3','5','3','5'],truncated_fifth:['5','3','5','3','5'],impulse_developing_wave5:['5','3','5','3'],zigzag:['5','3','5'],regular_flat:['3','3','5'],expanded_flat:['3','3','5'],running_flat:['3','3','5'],contracting_triangle:['3','3','3','3','3'],barrier_triangle:['3','3','3','3','3'],expanding_triangle:['3','3','3','3','3'],diagonal_candidate:['role-dependent'],expanding_diagonal_candidate:['role-dependent']};
+    const expectedByPattern={impulse_developing_wave3:['5','3','5'],impulse:['5','3','5','3','5'],extended_impulse:['5','3','5','3','5'],truncated_fifth:['5','3','5','3','5'],impulse_developing_wave5:['5','3','5','3'],zigzag:['5','3','5'],regular_flat:['3','3','5'],expanded_flat:['3','3','5'],running_flat:['3','3','5'],contracting_triangle:['3','3','3','3','3'],barrier_triangle:['3','3','3','3','3'],expanding_triangle:['3','3','3','3','3'],diagonal_candidate:['role-dependent'],expanding_diagonal_candidate:['role-dependent']};
     for(const c of candidates){
       if(!expectedByPattern[c.pattern])continue;
       let expected=expectedByPattern[c.pattern];
@@ -727,6 +747,170 @@
       c.recursiveGrammar={status:c.internalStructure.status,matchedLegs:matches,totalLegs:legs.length,fullyVerified,legs:legs.map(x=>({...x}))};
     }
     return candidates;
+  }
+
+  // v0.8 starts with context/role classification. A three-leg geometry is NOT
+  // automatically an ABC: its parent trend decides whether it is motive 0-1-2-3
+  // or a counter-trend correction. Ambiguous sequences are intentionally withheld.
+  function regressionTrend(bars, startIndex=0){
+    const rows=(bars||[]).slice(Math.max(0,startIndex));
+    if(rows.length<20)return{direction:0,strength:0,slope:0,r2:0,observations:rows.length};
+    const stride=Math.max(1,Math.ceil(rows.length/120));
+    const sample=rows.filter((_,i)=>i%stride===0||i===rows.length-1);
+    const n=sample.length;
+    // Log returns stabilize the trend estimate for ordinary positive-price
+    // instruments. For instruments that can trade at/through zero (some
+    // futures), fall back to an affine price scale rather than silently
+    // collapsing all non-positive observations to an arbitrary epsilon.
+    const positivePrices=sample.every(b=>b.close>0);
+    const xs=sample.map((_,i)=>i),ys=sample.map(b=>positivePrices?Math.log(b.close):b.close);
+    const mx=mean(xs),my=mean(ys);
+    let num=0,den=0,total=0;
+    for(let i=0;i<n;i++){num+=(xs[i]-mx)*(ys[i]-my);den+=(xs[i]-mx)**2;total+=(ys[i]-my)**2;}
+    const slope=den?num/den:0,intercept=my-slope*mx;
+    let residual=0;for(let i=0;i<n;i++)residual+=(ys[i]-(intercept+slope*xs[i]))**2;
+    const r2=total>0?clamp(1-residual/total,0,1):0;
+    const net=slope*(n-1),strength=clamp(Math.abs(net)/Math.max(Math.sqrt(total/Math.max(1,n-1)),1e-9),0,2)/2;
+    const direction=Math.abs(net)>1e-8&&strength>.055&&r2>=.08?sign(net):0;
+    return{direction,strength,r2,slope:slope/stride,netMove:net,scale:positivePrices?'log':'arithmetic',observations:rows.length};
+  }
+
+  function estimateTrendContext(bars){
+    const n=bars?.length||0;
+    if(n<40)return{direction:0,strength:0,regime:'uncertain',windows:[],source:'insufficient history'};
+    const spans=[Math.max(30,Math.round(n*.42)),Math.max(40,Math.round(n*.68)),n];
+    const windows=spans.map(span=>regressionTrend(bars,n-span));
+    const up=windows.filter(x=>x.direction>0).length,down=windows.filter(x=>x.direction<0).length;
+    const winner=up===down?0:up>down?1:-1;
+    const agreeing=windows.filter(x=>x.direction===winner);
+    const strength=agreeing.length?mean(agreeing.map(x=>x.strength)):0;
+    const direction=agreeing.length>=2&&strength>=.075?winner:0;
+    return{direction,strength,regime:direction>0?'uptrend':direction<0?'downtrend':'range-or-uncertain',windows,source:'multi-horizon robust log-price regression'};
+  }
+
+  function parentDirectionForRange(scales,degreeIndex,startIndex,endIndex,fallback){
+    for(let level=degreeIndex+1;level<(scales||[]).length;level++){
+      const pivots=scales[level].pivots||[];
+      for(let i=0;i<pivots.length-1;i++){
+        const a=pivots[i],b=pivots[i+1];
+        if(a.index<=startIndex&&b.index>=endIndex){
+          const direction=sign(b.price-a.price);
+          if(direction)return{direction,strength:.82,source:`parent ${scales[level].id}`,parentStart:a.index,parentEnd:b.index};
+        }
+      }
+    }
+    return{direction:fallback.direction,strength:fallback.strength,source:fallback.source,parentStart:null,parentEnd:null};
+  }
+
+  function classifySequenceRole(p,contextDirection){
+    if(!Array.isArray(p)||p.length!==4||!isAlternating(p))return'unknown';
+    const direction=directionOf(p);
+    if(!direction||!contextDirection)return'unknown';
+    if(direction===contextDirection){
+      const originHeld=direction>0?p[2].price>=p[0].price-1e-12:p[2].price<=p[0].price+1e-12;
+      const wave3Extends=direction>0?p[3].price>p[1].price:p[3].price<p[1].price;
+      return originHeld&&wave3Extends?'motive-wave3':'motive-developing';
+    }
+    return'countertrend-correction';
+  }
+
+  function evaluateDevelopingImpulseWave3(p,options={}){
+    if(!Array.isArray(p)||p.length!==4||!isAlternating(p))return null;
+    const d=directionOf(p);if(!d)return null;
+    const eps=Math.max(1e-12,Number(options.epsilon)||0);
+    const originHeld=d>0?p[2].price>=p[0].price-eps:p[2].price<=p[0].price+eps;
+    const wave3Extends=d>0?p[3].price>p[1].price+eps:p[3].price<p[1].price-eps;
+    const l=lengths(p),r2=l[1]/Math.max(l[0],eps),r3=l[2]/Math.max(l[0],eps);
+    const hard=[
+      rule('EW-MOTIVE3-01','Wave 2 không vượt điểm bắt đầu Wave 1',originHeld?'pass':'fail',originHeld?'Wave 2 giữ được điểm gốc Wave 1.':'Wave 2 đã phá điểm gốc Wave 1.'),
+      rule('EW-MOTIVE3-02','Wave 3 vượt điểm kết thúc Wave 1',wave3Extends?'pass':'fail',wave3Extends?'Giá đã vượt cực trị Wave 1 theo hướng xu hướng.':'Wave 3 chưa vượt cực trị Wave 1; chưa đủ điều kiện xác nhận cấu trúc 0-1-2-3.'),
+      rule('EW-MOTIVE3-03','Đủ dữ liệu để đánh giá Wave 3',p[3].confirmed!==false?'pass':'unverified','Điểm cuối phải là pivot đã xác nhận; pivot đang hình thành không được coi là hoàn tất.')
+    ];
+    if(hard.some(x=>x.status==='fail'))return null;
+    const guides=[
+      guideline('EW-MOTIVE3-FIB-W2','Wave 2 retracement',closestRatioScore(r2,[.382,.5,.618,.786],.35),`W2 / W1 = ${r2.toFixed(3)}.`,1.2,'fibonacci'),
+      guideline('EW-MOTIVE3-FIB-W3','Wave 3 extension',closestRatioScore(r3,[1.618,2.0,2.618],.7),`W3 / W1 = ${r3.toFixed(3)}.`,1.2,'fibonacci')
+    ];
+    const c=baseCandidate('impulse_developing_wave3',p,d,hard,guides,{internalStructure:buildInternalProxy(p,[5,3,5],options.finePivots),metrics:{waveLengths:l,wave2Retracement:r2,wave3ToWave1:r3},warnings:['Wave 3 đã vượt Wave 1; Wave 4 và Wave 5 chưa xuất hiện nên đây vẫn là count đang phát triển.']});
+    c.complete=false;c.developing=true;c.nextWave='4';
+    c.invalidation={status:'conditional',levels:[{id:'EW-INV-MOTIVE3-01',name:'Wave 1 origin',price:p[0].price,condition:d>0?'A confirmed move below the origin invalidates this bullish count.':'A confirmed move above the origin invalidates this bearish count.'}],note:'Structural invalidation only; not a trade stop.'};
+    return c;
+  }
+
+  function hasPrecedingMotive(candidate,allCandidates){
+    const tol=Math.max(2,Math.round(Math.max(1,candidate.endIndex-candidate.startIndex)*.025));
+    return(allCandidates||[]).some(x=>isMotivePattern(x.pattern)&&x.directionSign===-candidate.directionSign&&
+      Math.abs(x.endIndex-candidate.startIndex)<=tol&&x.endIndex<=candidate.startIndex&&x.complete===true&&
+      !(x.hardRules||[]).some(r=>r.status==='fail'));
+  }
+
+  function contextualCandidatePool(multi,bars,globalTrend,options={}){
+    const all=[],rejected=[];
+    for(let degreeIndex=0;degreeIndex<multi.scales.length;degreeIndex++){
+      const pivots=multi.scales[degreeIndex].pivots||[];
+      const finePivots=degreeIndex>0?multi.scales[degreeIndex-1].pivots:[];
+      const pool=[];
+      for(let i=0;i<pivots.length;i++){
+        if(i+3<pivots.length){
+          const p=pivots.slice(i,i+4);
+          const ctx=parentDirectionForRange(multi.scales,degreeIndex,p[0].index,p[3].index,globalTrend);
+          const role=classifySequenceRole(p,ctx.direction);
+          if(role==='motive-wave3'){
+            const c=evaluateDevelopingImpulseWave3(p,{...options,finePivots});if(c){c.contextDirection=ctx.direction;c.contextSource=ctx.source;c.contextStrength=ctx.strength;c.contextRole=role;c.degreeIndex=degreeIndex;c.degreeId=multi.scales[degreeIndex].id;pool.push(c);}
+          }else if(role==='countertrend-correction'&&ctx.direction&&ctx.strength>=.06){
+            const zz=evaluateZigzag(p,{...options,finePivots});
+            if(zz){
+              const d=p[3].price>p[0].price?1:-1;
+              const cExtends=d>0?p[3].price>p[1].price:p[3].price<p[1].price;
+              if(cExtends){zz.contextDirection=ctx.direction;zz.contextSource=ctx.source;zz.contextStrength=ctx.strength;zz.contextRole=role;zz.degreeIndex=degreeIndex;zz.degreeId=multi.scales[degreeIndex].id;pool.push(zz);}
+            }
+            for(const flat of evaluateFlat(p,{...options,finePivots})){
+              flat.contextDirection=ctx.direction;flat.contextSource=ctx.source;flat.contextStrength=ctx.strength;flat.contextRole=role;flat.degreeIndex=degreeIndex;flat.degreeId=multi.scales[degreeIndex].id;pool.push(flat);
+            }
+          }
+        }
+        if(i+4<pivots.length){
+          const p=pivots.slice(i,i+5),ctx=parentDirectionForRange(multi.scales,degreeIndex,p[0].index,p[4].index,globalTrend);
+          if(ctx.direction&&directionOf(p)===ctx.direction){const c=evaluateDevelopingImpulse(p,{...options,finePivots});if(c){c.contextDirection=ctx.direction;c.contextSource=ctx.source;c.contextStrength=ctx.strength;c.contextRole='motive-wave5-developing';c.degreeIndex=degreeIndex;c.degreeId=multi.scales[degreeIndex].id;pool.push(c);}}
+        }
+        if(i+5<pivots.length){
+          const p=pivots.slice(i,i+6),ctx=parentDirectionForRange(multi.scales,degreeIndex,p[0].index,p[5].index,globalTrend);
+          if(ctx.direction&&directionOf(p)===ctx.direction){
+            const imp=evaluateImpulse(p,{...options,finePivots});
+            // A fifth-wave truncation is a rare exception. Geometry alone is
+            // insufficient to promote it into the automatic main count, so
+            // keep the normal engine conservative and do not display it here.
+            if(imp&&imp.pattern!=='truncated_fifth'){
+              if(imp.metrics?.extensionEvidence==='nested-subdivision-proxy'){
+                imp.pattern='extended_impulse';
+                imp.id=imp.id.replace(/^impulse:/,'extended_impulse:');
+                imp.metrics.extensionSubtype='extended-impulse candidate · lower-degree segmentation';
+              }
+              imp.contextDirection=ctx.direction;imp.contextSource=ctx.source;imp.contextStrength=ctx.strength;imp.contextRole='motive-complete';imp.degreeIndex=degreeIndex;imp.degreeId=multi.scales[degreeIndex].id;pool.push(imp);
+            }
+          }
+          // Triangles are sideways corrections: keep only if a larger trend/context exists.
+          const tri=evaluateTriangle(p,{...options,finePivots});
+          for(const c of tri){if(ctx.direction&&ctx.strength>=.12){c.contextDirection=ctx.direction;c.contextSource=ctx.source;c.contextStrength=ctx.strength;c.contextRole='corrective-triangle';c.degreeIndex=degreeIndex;c.degreeId=multi.scales[degreeIndex].id;pool.push(c);}}
+          // A diagonal cannot be selected from geometry alone; parent role must exist.
+        }
+      }
+      // Keep only the candidates built from this scale; combinations use contextual corrections only.
+      const corrections=pool.filter(c=>isCorrectivePattern(c.pattern));
+      const combinations=composeCombinationCandidates(corrections,options).map(c=>({...c,contextDirection:c.directionSign? -c.directionSign:0,contextRole:'countertrend-combination',degreeIndex,degreeId:multi.scales[degreeIndex].id}));
+      pool.push(...combinations);
+      const unique=new Map();
+      for(const c of pool){
+        const key=[c.pattern,c.startIndex,c.endIndex].join('|');
+        if(!unique.has(key)||c.evidenceScore>unique.get(key).evidenceScore)unique.set(key,c);
+      }
+      for(const c of unique.values()){
+        c.candidateKey=`${c.id}@${c.degreeId}`;
+        c.contextCompatible=true;
+        all.push(c);
+      }
+    }
+    return all;
   }
 
   function projectionPrice(anchor,baseStart,baseEnd,ratio,direction,mode='arithmetic'){
@@ -767,7 +951,11 @@
     const p=candidate.pivots,pattern=candidate.pattern,d=candidate.directionSign||1;
     const fib=[];let wave=null,origin=null,baseLength=0,forecastDirection=0,formula='';
     const addFib=(label,ratio,price,source='Fibonacci')=>{if(Number.isFinite(price))fib.push({label,ratio,price,source});};
-    if(pattern==='impulse_developing_wave5'&&p.length===5){
+    if(pattern==='impulse_developing_wave3'&&p.length===4){
+      wave='4';origin=p[3].price;forecastDirection=-d;baseLength=abs(p[3].price-p[2].price);
+      [.236,.382,.5].forEach(r=>addFib(`Wave 4 retracement ${r} × Wave 3`,r,origin+forecastDirection*baseLength*r));
+      formula='W3 end − retracement × W3';
+    }else if(pattern==='impulse_developing_wave5'&&p.length===5){
       wave='5';origin=p[4].price;forecastDirection=d;baseLength=abs(p[1].price-p[0].price);
       [.618,1,1.618].forEach(r=>addFib(`Wave 5 = ${r} × Wave 1`,r,origin+d*baseLength*r));
       const net13=abs(p[3].price-p[0].price);[.382,.618,1].forEach(r=>addFib(`Wave 5 = ${r} × net Wave 1–3`,r,origin+d*net13*r));
@@ -830,47 +1018,76 @@
     const requestedIndex=Number.isInteger(Number(opts.asOfIndex))?Number(opts.asOfIndex):null;
     if(requestedAsOf!=null)bars=bars.filter(b=>b.time<=requestedAsOf);
     else if(requestedIndex!=null)bars=bars.slice(0,Math.max(0,Math.min(bars.length,requestedIndex+1)));
-    if(bars.length<20)throw new Error('Mốc As-of cần tối thiểu 20 nến OHLC đã đóng.');
-    // Default user path uses adaptive internal sensitivity; explicit developer/test parameters remain supported.
+    if(bars.length<20)throw new Error('Cần tối thiểu 20 nến OHLC đã đóng để phân tích cấu trúc Elliott.');
     if(autoMode)opts={...opts,...automaticSwingSettings(bars),...options,autoPrimaryScale:true};
-    // Rebase indices after an as-of slice: all pivots/candidates use indices local to this immutable snapshot.
     bars=bars.map((b,index)=>({...b,index}));
+
+    // New pipeline: market context → multi-degree swings → context-specific wave roles
+    // → recursive child/parent audit → rank. The legacy geometry scanner is not used
+    // to choose the displayed count.
+    const trendContext=estimateTrendContext(bars);
     const multi=detectMultiScalePivots(bars,opts);
-    const all=[],rejectedByScale=[];
-    for(let i=0;i<multi.scales.length;i++){
-      const fine=i===0?[]:multi.scales[i-1].pivots;
-      const d0=detectAtScale(multi.scales[i].pivots,{...opts,finePivots:fine});
-      d0.candidates.forEach(c=>{c.degreeIndex=i;c.degreeId=multi.scales[i].id;c.candidateKey=`${c.id}@${c.degreeId}`;});
-      all.push(d0.candidates);rejectedByScale.push(d0.rejected);
+    let forest=contextualCandidatePool(multi,bars,trendContext,opts);
+    const allByScale=multi.scales.map((s,i)=>forest.filter(c=>c.degreeIndex===i));
+    for(let i=1;i<allByScale.length;i++)attachRecursiveGrammar(allByScale[i],allByScale[i-1],{...opts,finePivots:multi.scales[i-1].pivots});
+    forest=addScaleAgreement(allByScale,multi.scales,multi.primaryScaleIndex,bars.length);
+
+    // Contextual gate for corrective patterns. An ABC must oppose the parent trend
+    // and be anchored by a preceding motive sequence or an actual parent/child link.
+    // A same-direction 0-1-2-3 is always treated as motive, never relabelled ABC.
+    for(const c of forest){
+      const correction=isCorrectivePattern(c.pattern);
+      const motive=isMotivePattern(c.pattern);
+      const directionalMatch=!!c.contextDirection&&c.directionSign===(correction?-c.contextDirection:c.contextDirection);
+      const preceding=correction&&hasPrecedingMotive(c,forest);
+      const parentSupport=(c.parentSupport||0)>0;
+      const childSupport=(c.childSupport||0)>=.34;
+      c.contextDiagnostics={trendDirection:c.contextDirection||0,source:c.contextSource||'none',role:c.contextRole||'unknown',directionalMatch,precedingMotive:preceding,parentSupport,childSupport};
+      c.contextCompatible=directionalMatch&&(!correction||preceding||parentSupport||childSupport);
+      c.contextStatus=!directionalMatch?'role-conflict':correction&&!c.contextCompatible?'correction-without-parent-anchor':'context-aligned';
+      const quality=(c.hardRules||[]).length?c.hardRules.filter(x=>x.status==='pass').length/c.hardRules.length:.5;
+      const span=Math.max(1,c.endIndex-c.startIndex),coverage=clamp(Math.log1p(span)/Math.log1p(Math.max(30,bars.length*.35)),0,1);
+      const degree=Number(c.degreeIndex)||0;
+      const recursive=c.hierarchyConsistency||0;
+      const recency=clamp(1-(bars.length-1-c.endIndex)/Math.max(1,bars.length),0,1);
+      const anchorScore=preceding||parentSupport||childSupport?1:0;
+      const macroAlignment=trendContext.direction===0?.5:(c.directionSign===trendContext.direction?1:.12);
+      c.macroAlignment=macroAlignment;
+      // Macro directional agreement is an explicit first-class feature. It prevents a
+      // tiny countertrend fragment from displacing the dominant degree count merely
+      // because its endpoint is newer.
+      c.hierarchyScore=100*clamp(.27*quality+.19*recursive+.13*(c.scaleAgreement||0)+.13*coverage+.05*recency+.08*anchorScore+.15*macroAlignment,0,1);
+      c.hierarchyDiagnostics={...(c.hierarchyDiagnostics||{}),contextCompatible:c.contextCompatible,contextStatus:c.contextStatus,precedingMotive:preceding,parentSupport,parentAnchorScore:anchorScore,macroAlignment,degreeIndex:degree,coverage,recency};
+      if(!c.contextCompatible)c.status='context-rejected';
     }
-    // Recursive grammar flows upward, while candidate links are retained for the
-    // reverse parent-context pass. Thus the final count is checked in both directions.
-    for(let i=1;i<all.length;i++)attachRecursiveGrammar(all[i],all[i-1],{...opts,finePivots:multi.scales[i-1].pivots});
-    const primaryIndex=multi.primaryScaleIndex;
-    const ranked=addScaleAgreement(all,multi.scales,primaryIndex,bars.length)
-      .map(c=>{c.fibTargets=buildProjectionZones(c,{...opts,atrValue:atrWilder(bars,opts.atrPeriod).values.at(-1)});return c;});
-    // Prioritize structures near the right edge so the default view describes the current market,
-    // while keeping older patterns available as alternates and historical analogs.
-    const recentCutoff=Math.max(0,bars.length-Math.max(12,Math.round(bars.length*.14)));
-    const recentRanked=ranked.filter(c=>c.endIndex>=recentCutoff);
-    const candidates=diversifyCandidates([...recentRanked,...ranked],opts.maxCandidates);
-    // Select the current count by structural coherence first, recency second. A tiny,
-    // late ABC fragment no longer wins solely because its last pivot is newest.
-    const latestPool=candidates.filter(c=>c.endIndex>=recentCutoff);
-    const preferred=(latestPool.length?latestPool:candidates).slice().sort((a,b)=>(b.hierarchyScore||0)-(a.hierarchyScore||0)||b.endIndex-a.endIndex)[0]||null;
-    const nextWaveForecast=buildNextWaveForecast(preferred,ranked,bars,{quantStats:opts.quantStats});
-    const rejectedCandidateCount=rejectedByScale.reduce((sum,group)=>sum+Object.values(group).reduce((s,n)=>s+n,0),0);
+    const ranked=forest.filter(c=>c.contextCompatible&&!(c.hardRules||[]).some(x=>x.status==='fail'))
+      .sort((a,b)=>{
+        const patternPriority=c=>c.pattern==='impulse'?5:c.pattern==='extended_impulse'?4.8:c.pattern==='impulse_developing_wave5'?4.4:c.pattern==='impulse_developing_wave3'?4.1:isCorrectivePattern(c.pattern)?3.4:2;
+        return (b.hierarchyScore-a.hierarchyScore)||patternPriority(b)-patternPriority(a)||b.endIndex-a.endIndex;
+      });
+    const recentCutoff=Math.max(0,bars.length-Math.max(20,Math.round(bars.length*.32)));
+    const recent=ranked.filter(c=>c.endIndex>=recentCutoff);
+    const pool=recent.length?recent:ranked;
+    // Display one interpretation per near-identical interval; all scales remain in
+    // candidateForest for parent/child validation and inspectability.
+    const candidates=diversifyCandidates(pool,Math.max(24,Number(opts.maxCandidates)||40));
+    // Prefer robust, degree-consistent structures over tiny newest fragments. If nothing
+    // survives role/context validation, return NO_CLEAR_COUNT rather than invent labels.
+    const preferred=candidates.find(c=>c.hierarchyScore>=38)||null;
+    const alternates=preferred?selectAlternateCounts(candidates,preferred,5):[];
+    const nextWaveForecast=preferred?buildNextWaveForecast(preferred,forest,bars,{quantStats:opts.quantStats}):{available:false,wave:null,reason:'Chưa có count được xác nhận theo bối cảnh xu hướng và cấu trúc cha/con.',fib:[],quant:null};
+    const rejectedCandidateCount=forest.length-candidates.length;
     const primaryPivots=multi.primary;
+    const atrSeries=atrWilder(bars,opts.atrPeriod).values;
     return{
-      version:VERSION,createdAt:new Date().toISOString(),bars,nextWaveForecast,
+      version:VERSION,createdAt:new Date().toISOString(),bars,nextWaveForecast,trendContext,
       dataSummary:{observations:bars.length,startTime:bars[0].time,endTime:bars[bars.length-1].time,asOfTime:bars[bars.length-1].time,asOfIndex:bars.length-1,source:'OHLC',lookaheadProtected:true},
-      atr:{period:opts.atrPeriod,values:atrWilder(bars,opts.atrPeriod).values},
-      scales:multi.scales,primaryScaleIndex:primaryIndex,parentLegs:multi.parentLegs,degreeHierarchy:multi.degreeHierarchy,candidateForest:ranked,
-      pivotGraph:buildPivotGraph(primaryPivots,atrWilder(bars,opts.atrPeriod).values),
-      swingBoxes:primaryPivots.length?buildSwingBoxes(primaryPivots,opts):[],
-      candidates,preferred,alternates:selectAlternateCounts(candidates,preferred,5),
-      diagnostics:{pivotCount:primaryPivots.length,scalePivotCounts:multi.scales.map(s=>s.pivots.length),candidateCount:candidates.length,rejectedCandidateCount,rejectedByScale,hasClearCount:candidates.length>0,asOfTime:bars[bars.length-1].time,recursiveCounts:candidates.filter(c=>c.recursiveGrammar?.status==='verified').length,recursiveMatchedCounts:candidates.filter(c=>c.recursiveGrammar?.status==='matched').length,hierarchicalCount:candidates.filter(c=>(c.hierarchyDiagnostics?.parentSupport||0)>0||(c.hierarchyDiagnostics?.recursiveMatchedLegs||0)>0).length,provisionalCounts:candidates.filter(c=>c.status==='provisional').length,disclaimer:'Evidence Score không phải xác suất. Candidate là giả thuyết hình học trên pivot đã xác nhận; grammar chỉ VERIFIED khi child grammar cũng được xác minh đệ quy; swing-count đơn thuần chỉ là proxy.',patternCoverage:['Impulse','Extended Impulse candidate','Truncated Fifth','Developing Wave 5','Contracting/expanding Diagonal candidates · role-dependent','Zigzag','Regular/Expanded/Running Flat','Contracting/Barrier/Expanding Triangle','Double/Triple Zigzag','Double/Triple Three']},
-      settings:{mode:autoMode?'automatic':'explicit',atrPeriod:opts.atrPeriod,thresholdMultiplier:opts.thresholdMultiplier,scaleFactors:opts.scaleFactors,primaryScaleIndex:primaryIndex,asOfTime:bars[bars.length-1].time,projectionMode:opts.projectionMode||'arithmetic',zoneAtrMultiplier:opts.zoneAtrMultiplier||.05}
+      atr:{period:opts.atrPeriod,values:atrSeries},
+      scales:multi.scales,primaryScaleIndex:multi.primaryScaleIndex,parentLegs:multi.parentLegs,degreeHierarchy:multi.degreeHierarchy,candidateForest:forest,
+      pivotGraph:buildPivotGraph(primaryPivots,atrSeries),swingBoxes:primaryPivots.length?buildSwingBoxes(primaryPivots,opts):[],
+      candidates,preferred,alternates,
+      diagnostics:{pivotCount:primaryPivots.length,scalePivotCounts:multi.scales.map(s=>s.pivots.length),candidateCount:candidates.length,rawCandidateCount:forest.length,rejectedCandidateCount,hasClearCount:!!preferred,contextRejectedCount:forest.filter(c=>!c.contextCompatible).length,trendDirection:trendContext.direction,trendRegime:trendContext.regime,asOfTime:bars[bars.length-1].time,recursiveCounts:forest.filter(c=>c.recursiveGrammar?.status==='verified').length,recursiveMatchedCounts:forest.filter(c=>c.recursiveGrammar?.status==='matched').length,hierarchicalCount:forest.filter(c=>(c.hierarchyDiagnostics?.parentSupport||0)>0||(c.hierarchyDiagnostics?.recursiveMatchedLegs||0)>0).length,provisionalCounts:candidates.filter(c=>c.status==='provisional').length,disclaimer:'Wave labels require directional role/context compatibility. A-B-C is never assigned solely from four alternating pivots. Structural rank is not a probability.',patternCoverage:['Impulse 0-1-2-3-4-5','Developing impulse 0-1-2-3','Developing impulse 0-1-2-3-4','Contextual Zigzag / Flat / Triangle','Parent-child subdivision checks']},
+      settings:{mode:autoMode?'automatic':'explicit',atrPeriod:opts.atrPeriod,thresholdMultiplier:opts.thresholdMultiplier,scaleFactors:opts.scaleFactors,primaryScaleIndex:multi.primaryScaleIndex,asOfTime:bars[bars.length-1].time,projectionMode:opts.projectionMode||'arithmetic',zoneAtrMultiplier:opts.zoneAtrMultiplier||.05,engine:'context-first wave grammar v0.8'}
     };
   }
 
@@ -885,7 +1102,7 @@
 
   return{
     VERSION,DEFAULTS,PATTERN_CATALOG,normalizeBars,trueRanges,atrWilder,automaticSwingSettings,quantile,
-    directionalChangePivots,detectMultiScalePivots,
+    directionalChangePivots,detectMultiScalePivots,estimateTrendContext,classifySequenceRole,parentDirectionForRange,evaluateDevelopingImpulseWave3,
     evaluateImpulse,evaluateDevelopingImpulse,evaluateZigzag,evaluateFlat,evaluateTriangle,evaluateDiagonal,
     detectAtScale,composeCombinationCandidates,attachRecursiveGrammar,addScaleAgreement,auditManualSequence,buildDegreeHierarchy,buildSwingBoxes,buildPivotGraph,buildProjectionZones,buildNextWaveForecast,updateScenarioLifecycle,diversifyCandidates,selectAlternateCounts,buildFibTargets,buildImpulseChannel,analyze,summarizeCandidate
   };

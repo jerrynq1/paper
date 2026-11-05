@@ -11,7 +11,7 @@
     if(typeof ctx.roundRect==='function'){ctx.roundRect(x,y,w,h,r);return;}
     const rr=Math.min(r,w/2,h/2);ctx.moveTo(x+rr,y);ctx.lineTo(x+w-rr,y);ctx.quadraticCurveTo(x+w,y,x+w,y+rr);ctx.lineTo(x+w,y+h-rr);ctx.quadraticCurveTo(x+w,y+h,x+w-rr,y+h);ctx.lineTo(x+rr,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-rr);ctx.lineTo(x,y+rr);ctx.quadraticCurveTo(x,y,x+rr,y);
   }
-  const patternNames={impulse:'Impulse',extended_impulse:'Extended Impulse · proxy',truncated_fifth:'Truncated Fifth',impulse_developing_wave5:'Impulse · Wave 5 đang hình thành',diagonal_candidate:'Contracting Diagonal Candidate',expanding_diagonal_candidate:'Expanding Diagonal Candidate',zigzag:'Zigzag',regular_flat:'Regular Flat',expanded_flat:'Expanded Flat',running_flat:'Running Flat',contracting_triangle:'Contracting Triangle',expanding_triangle:'Expanding Triangle',barrier_triangle:'Barrier Triangle',double_zigzag:'Double Zigzag (W-X-Y)',double_three:'Double Three (W-X-Y)',triple_zigzag:'Triple Zigzag (W-X-Y-X-Z)',triple_three:'Triple Three (W-X-Y-X-Z)'};
+  const patternNames={impulse_developing_wave3:'Impulse · Wave 3 đang phát triển',impulse:'Impulse',extended_impulse:'Extended Impulse · proxy',truncated_fifth:'Truncated Fifth',impulse_developing_wave5:'Impulse · Wave 5 đang hình thành',diagonal_candidate:'Contracting Diagonal Candidate',expanding_diagonal_candidate:'Expanding Diagonal Candidate',zigzag:'Zigzag',regular_flat:'Regular Flat',expanded_flat:'Expanded Flat',running_flat:'Running Flat',contracting_triangle:'Contracting Triangle',expanding_triangle:'Expanding Triangle',barrier_triangle:'Barrier Triangle',double_zigzag:'Double Zigzag (W-X-Y)',double_three:'Double Three (W-X-Y)',triple_zigzag:'Triple Zigzag (W-X-Y-X-Z)',triple_three:'Triple Three (W-X-Y-X-Z)'};
   const setStatus=(message,bad=false)=>{const el=$('eStatus');if(el){el.textContent=message;el.classList.toggle('is-bad',!!bad);el.classList.toggle('is-good',!bad)}};
   const showSource=(message)=>{const el=$('eDataMeta');if(el)el.textContent=message};
 
@@ -110,7 +110,7 @@
       if(result.preferred){const span=Math.max(1,result.preferred.endIndex-result.preferred.startIndex),targetBars=Math.max(72,Math.min(state.bars.length,Math.round(span*2.6)));state.xZoom=Math.max(1,Math.min(10,state.bars.length/targetBars));state.xCenterIndex=(result.preferred.startIndex+result.preferred.endIndex)/2;}else{state.xZoom=1;state.xCenterIndex=null;}
       render();saveScenarioSnapshot();
       const recursive=result.diagnostics.recursiveCounts||0,matched=result.diagnostics.recursiveMatchedCounts||0;
-      setStatus(result.candidates.length?`Đã nhận diện ${patternNames[result.preferred?.pattern]||'cấu trúc sóng'} · ${result.diagnostics.pivotCount} điểm cấu trúc · ${result.diagnostics.candidateCount} giả thuyết · ${timeText(result.dataSummary.asOfTime)}.`:'Chưa có count đủ điều kiện. Hãy thử timeframe khác hoặc nạp thêm dữ liệu.',!result.candidates.length);
+      setStatus(result.preferred?`Đã nhận diện ${patternNames[result.preferred.pattern]||'cấu trúc sóng'} · bối cảnh ${result.trendContext.regime==='uptrend'?'tăng':result.trendContext.regime==='downtrend'?'giảm':'chưa rõ'} · ${result.diagnostics.candidateCount} count hợp lệ · ${timeText(result.dataSummary.asOfTime)}.`:`Chưa có count đủ điều kiện trong bối cảnh ${result.trendContext.regime==='uptrend'?'tăng':result.trendContext.regime==='downtrend'?'giảm':'chưa rõ'}. Không tự gán ABC khi chưa có sóng cha xác nhận.`,!result.preferred);
       window.dispatchEvent(new CustomEvent('gx:elliott:analysis',{detail:{version:result.version,source:state.source,asOfTime:result.dataSummary.asOfTime,lookaheadProtected:true,summary:{bars:result.dataSummary.observations,pivots:result.diagnostics.pivotCount,candidates:result.diagnostics.candidateCount,preferred:E().summarizeCandidate(result.preferred)}}}));
     }catch(e){setStatus(e.message||'Không thể phân tích dữ liệu.',true)}
   }
@@ -135,7 +135,8 @@
     const direction=c.direction==='bullish'?'Tăng':'Giảm';
     const invalidation=c.invalidation?.levels?.[0];
     const hd=c.hierarchyDiagnostics||{};const hierarchyText=`Sóng con khớp ${hd.recursiveMatchedLegs||0}/${hd.recursiveTotalLegs||0} nhịp · được sóng cha hỗ trợ ${hd.parentSupport||0} lần`;
-    box.innerHTML=`<div class="e-preferred-simple"><div><small>COUNT ĐANG ƯU TIÊN</small><h3>${esc(patternNames[c.pattern]||c.pattern)}</h3><span class="e-dir ${c.direction}">${direction}</span></div><div class="e-simple-status">${esc(status)}</div></div><div class="e-simple-meta"><span><small>Bắt đầu</small><b>${esc(timeText(c.startTime))}</b></span><span><small>Cập nhật đến</small><b>${esc(timeText(c.endTime))}</b></span><span><small>Đối chiếu đa cấp</small><b>${esc(hierarchyText)}</b></span>${invalidation?`<span><small>Mốc vô hiệu hóa chính</small><b>${fmt(invalidation.price,5)}</b></span>`:''}</div>${c.warnings?.length?`<p class="e-caveat">${esc(c.warnings.slice(0,2).join(' '))}</p>`:''}`;
+    const contextText=c.contextSource?`Bối cảnh: ${c.contextSource} · ${c.contextRole||'—'}`:'Bối cảnh đa cấp';
+    box.innerHTML=`<div class="e-preferred-simple"><div><small>COUNT ĐANG ƯU TIÊN</small><h3>${esc(patternNames[c.pattern]||c.pattern)}</h3><span class="e-dir ${c.direction}">${direction}</span></div><div class="e-simple-status">${esc(status)}</div></div><div class="e-simple-meta"><span><small>Bắt đầu</small><b>${esc(timeText(c.startTime))}</b></span><span><small>Cập nhật đến</small><b>${esc(timeText(c.endTime))}</b></span><span><small>Đối chiếu đa cấp</small><b>${esc(hierarchyText)}</b></span><span><small>Vai trò cấu trúc</small><b>${esc(contextText)}</b></span>${invalidation?`<span><small>Mốc vô hiệu hóa chính</small><b>${fmt(invalidation.price,5)}</b></span>`:''}</div>${c.warnings?.length?`<p class="e-caveat">${esc(c.warnings.slice(0,2).join(' '))}</p>`:''}`;
   }
   function renderCandidates(){
     const r=state.result;if(!r)return;
@@ -163,7 +164,7 @@
     if(!f||!f.available){el.innerHTML=`<div class="e-empty"><b>Chưa đủ ngữ cảnh để dự đoán sóng kế tiếp</b><span>${esc(f?.reason||'Khi chưa xác định được nhịp kế tiếp ở degree phù hợp, hệ thống sẽ không tự tạo mục tiêu.')}</span></div>`;return;}
     const direction=f.direction==='up'?'Tăng':'Giảm',q=f.quant;
     const preferredRatio=f.wave==='5'?1:.5;
-    const keyFib=(f.fib||[]).filter(x=>Math.abs(Number(x.ratio)-preferredRatio)<1e-8).slice(0,1);
+    const keyFib=f.wave==='4'?(f.fib||[]).slice(0,3):(f.fib||[]).filter(x=>Math.abs(Number(x.ratio)-preferredRatio)<1e-8).slice(0,1);
     const fibRows=(keyFib.length?keyFib:f.fib||[]).slice(0,3).map(x=>`<div class="e-target-row"><span>${esc(x.label)}</span><b>${fmt(x.price,5)}</b><small>${fmt(x.ratio,3)}×</small></div>`).join('');
     const quantHtml=q?`<div class="e-quant-forecast"><div class="e-quant-main"><small>QUANT · TRUNG VỊ MẪU TƯƠNG ĐỒNG</small><b>${fmt(q.centerPrice,5)}</b><span>Khoảng P25–P75: ${fmt(q.lowPrice,5)} – ${fmt(q.highPrice,5)}</span></div><div class="e-quant-stats"><div><small>Số mẫu</small><b>${q.sampleCount}</b></div><div><small>Tỷ lệ trung vị</small><b>${fmt(q.ratioP50,3)}×</b></div></div><p class="e-caveat">${q.sampleCount<5?'Mẫu rất ít; chỉ nên xem là tham khảo.':q.sampleCount<12?'Mẫu còn nhỏ, vùng giá có thể thay đổi đáng kể.':'Phân vị mô tả lịch sử tương đồng, không phải xác suất chạm mục tiêu.'} ${esc(q.method||'Historical analogs')}.</p></div>`:`<div class="e-empty e-empty-compact"><b>Quant chưa đủ mẫu tương đồng</b><span>Vẫn có thể tham khảo các mốc Fibonacci bên cạnh. Cần thêm lịch sử OHLC để thống kê đáng tin cậy hơn.</span></div>`;
     el.innerHTML=`<div class="e-forecast-head"><span class="e-dir ${f.direction==='up'?'bullish':'bearish'}">Wave ${esc(f.wave)} · kỳ vọng ${direction}</span><small>Điểm xuất phát: ${fmt(f.origin,5)}</small></div><div class="e-simple-forecast-grid"><section><h5>Fibonacci</h5>${fibRows||'<p class="msg">Không có mốc phù hợp.</p>'}</section><section><h5>QuantLab · mẫu tương đồng</h5>${quantHtml}</section></div><p class="e-caveat">Đây là vùng mục tiêu theo kịch bản, không phải lời hứa giá hay tín hiệu giao dịch. Count có thể thay đổi khi có cấu trúc mới hoặc bị vô hiệu hóa.</p>`;
@@ -188,6 +189,7 @@
   function waveStructureLabels(c){
     if(!c?.pivots?.length)return[];
     const n=c.pivots.length,id=c.pattern;
+    if(id==='impulse_developing_wave3')return['0','1','2','3'];
     if(id==='impulse_developing_wave5')return['0','1','2','3','4'];
     if(['impulse','extended_impulse','truncated_fifth','diagonal_candidate','expanding_diagonal_candidate','leading_diagonal','ending_diagonal'].includes(id))return n===6?['0','1','2','3','4','5']:c.pivots.map((_,i)=>String(i));
     if(['zigzag','regular_flat','expanded_flat','running_flat'].includes(id))return n===4?['0','A','B','C']:c.pivots.map((_,i)=>String(i));
@@ -221,7 +223,7 @@
     for(let i=viewStart;i<=viewEnd;i+=step){const xx=x(i),yy=y(bars[i].close);if(!started){ctx.moveTo(xx,yy);started=true}else ctx.lineTo(xx,yy)}
     if((viewEnd-viewStart)%step!==0)ctx.lineTo(x(viewEnd),y(bars[viewEnd].close));ctx.stroke();ctx.globalAlpha=1;
 
-    const forest=state.result.candidateForest||state.result.candidates||[];
+    const forest=(state.result.candidateForest||state.result.candidates||[]).filter(c=>c.contextCompatible!==false);
     const parentKeys=selected?.parentCandidateKeys||[];
     const childKeys=(selected?.recursiveGrammar?.legs||[]).map(v=>v.childCandidateKey).filter(Boolean);
     const parentCounts=forest.filter(c=>parentKeys.includes(c.candidateKey)).slice(0,1);
@@ -321,7 +323,7 @@
     const groups=new Map();
     Object.entries(state.manualLabels).forEach(([uid,label])=>{const p=state.manualPivots.find(x=>x.uid===uid);if(!p||p.index>((state.result?.bars?.length||0)-1))return;const degree=state.manualDegrees[uid]||'degree-2';if(!groups.has(degree))groups.set(degree,[]);groups.get(degree).push({uid,label,p});});
     if(!groups.size){out.innerHTML='<p class="msg">Chưa có sequence để audit.</p>';return;}
-    const reports=[...groups.entries()].map(([degree,rows])=>{rows.sort((a,b)=>a.p.index-b.p.index);const r=E().auditManualSequence(rows.map(x=>x.p),rows.map(x=>x.label));const level=Number(String(degree).replace('degree-',''));const hierarchyIssues=rows.filter(x=>{const parent=state.manualParents[x.uid]||'none';return parent!=='none'&&Number(String(parent).replace('degree-',''))<=level;});if(hierarchyIssues.length){r.status=r.status==='FAIL'?'FAIL':'REVIEW';r.rules.push({id:'EW-MAN-PARENT',label:'Parent degree phải lớn hơn child degree',status:'unverified',detail:`${hierarchyIssues.length} nhãn có parent degree cùng cấp hoặc thấp hơn; cần chọn parent degree cao hơn.`});}return{degree,rows,report:r};});
+    const reports=[...groups.entries()].map(([degree,rows])=>{rows.sort((a,b)=>a.p.index-b.p.index);const r=E().auditManualSequence(rows.map(x=>x.p),rows.map(x=>x.label),{contextDirection:state.result?.trendContext?.direction||0});const level=Number(String(degree).replace('degree-',''));const hierarchyIssues=rows.filter(x=>{const parent=state.manualParents[x.uid]||'none';return parent!=='none'&&Number(String(parent).replace('degree-',''))<=level;});if(hierarchyIssues.length){r.status=r.status==='FAIL'?'FAIL':'REVIEW';r.rules.push({id:'EW-MAN-PARENT',label:'Parent degree phải lớn hơn child degree',status:'unverified',detail:`${hierarchyIssues.length} nhãn có parent degree cùng cấp hoặc thấp hơn; cần chọn parent degree cao hơn.`});}return{degree,rows,report:r};});
     out.innerHTML=reports.map(({degree,rows,report})=>`<div class="e-manual-audit"><div class="e-rule-row"><span class="e-rule-status ${report.status==='PASS'?'e-pass':report.status==='FAIL'?'e-fail':'e-unverified'}">${esc(report.status)}</span><div><b>${esc(degree.replace('degree-','Degree '))} · ${esc(report.sequence)}</b><small>${esc(report.notes.join(' '))}</small></div></div>${report.rules.map(x=>`<div class="e-rule-row"><span class="e-rule-status ${x.status==='pass'?'e-pass':x.status==='fail'?'e-fail':'e-unverified'}">${esc(x.status.toUpperCase())}</span><div><b>${esc(x.label)}</b><small>${esc(x.id)} · ${esc(x.detail)}</small></div></div>`).join('')}</div>`).join('');
     const st=$('eManualStatus');if(st)st.textContent=`Auto-audit: ${reports.length} degree group(s), ${reports.reduce((n,x)=>n+x.rows.length,0)} labeled pivots. Structural PASS requires complete rules and child-degree review.`;
   }

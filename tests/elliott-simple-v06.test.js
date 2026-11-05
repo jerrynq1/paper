@@ -14,7 +14,7 @@ const bars=Array.from({length:240},(_,i)=>{const c=100+Math.sin(i/5)*2+i*.015,pr
   assert.ok(automatic.atrPeriod>=8&&automatic.atrPeriod<=21);
   assert.strictEqual(automatic.autoPrimaryScale,true);
   const result=E.analyze(bars);
-  assert.strictEqual(result.version,'0.7.0');
+  assert.strictEqual(result.version,'0.8.0');
   assert.strictEqual(result.settings.mode,'automatic');
   assert.ok(result.primaryScaleIndex>=0&&result.primaryScaleIndex<result.scales.length);
   ok('Default analysis auto-configures swing sensitivity and degree; no user ATR controls required');
