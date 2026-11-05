@@ -1,4 +1,4 @@
-/* Gexadecimal Elliott Structure Lab · v0.1
+/* Gexadecimal Elliott Structure Lab · v0.4
  * Deterministic, explainable Elliott candidate engine.
  * Important: pivots are only confirmed after a subsequent directional change.
  * Candidate scores are heuristic evidence scores, NOT probabilities or trade signals.
@@ -10,7 +10,7 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
 
-  const VERSION='0.1.0';
+  const VERSION='0.4.0';
   const DEFAULTS={
     atrPeriod:14,
     thresholdMultiplier:1.5,
@@ -25,9 +25,11 @@
 
   const PATTERN_CATALOG=[
     {id:'impulse',name:'Impulse',status:'candidate-engine',degree:'motive',legs:5,internal:'5-3-5-3-5'},
+    {id:'extended_impulse',name:'Extended Impulse',status:'assisted-detection',degree:'motive',legs:5,internal:'nested extension; commonly 9/13/17 swings but not mandatory'},
     {id:'truncated_fifth',name:'Truncated Fifth',status:'candidate-engine',degree:'motive',legs:5,internal:'5-3-5-3-5',rare:true},
     {id:'impulse_developing_wave5',name:'Impulse · Wave 5 developing',status:'candidate-engine',degree:'motive',legs:4,internal:'5-3-5-3-?'},
-    {id:'diagonal_candidate',name:'Diagonal Candidate',status:'candidate-engine',degree:'motive',legs:5,internal:'role/internal count requires degree context'},
+    {id:'diagonal_candidate',name:'Diagonal Candidate',status:'candidate-engine',degree:'motive',legs:5,internal:'contracting/expanding wedge; role and internal grammar require degree context'},
+    {id:'expanding_diagonal_candidate',name:'Expanding Diagonal Candidate',status:'assisted-detection',degree:'motive',legs:5,internal:'expanding wedge; role/internal grammar requires degree context'},
     {id:'leading_diagonal',name:'Leading Diagonal',status:'context-required',degree:'motive',legs:5,internal:'5-3-5-3-5 / author-dependent variants'},
     {id:'ending_diagonal',name:'Ending Diagonal',status:'context-required',degree:'motive',legs:5,internal:'3-3-3-3-3'},
     {id:'zigzag',name:'Zigzag',status:'candidate-engine',degree:'corrective',legs:3,internal:'5-3-5'},
@@ -35,9 +37,12 @@
     {id:'expanded_flat',name:'Expanded Flat',status:'candidate-engine',degree:'corrective',legs:3,internal:'3-3-5'},
     {id:'running_flat',name:'Running Flat',status:'candidate-engine',degree:'corrective',legs:3,internal:'3-3-5'},
     {id:'contracting_triangle',name:'Contracting Triangle',status:'candidate-engine',degree:'corrective',legs:5,internal:'3-3-3-3-3'},
+    {id:'barrier_triangle',name:'Barrier Triangle · geometric subtype',status:'assisted-detection',degree:'corrective',legs:5,internal:'3-3-3-3-3; one boundary nearly horizontal'},
     {id:'expanding_triangle',name:'Expanding Triangle',status:'candidate-engine',degree:'corrective',legs:5,internal:'3-3-3-3-3'},
-    {id:'double_three',name:'Double Three (W-X-Y)',status:'definition-only',degree:'corrective',legs:null,internal:'3-3-3 combination'},
-    {id:'triple_three',name:'Triple Three (W-X-Y-X-Z)',status:'definition-only',degree:'corrective',legs:null,internal:'3-3-3-3-3 combination'}
+    {id:'double_zigzag',name:'Double Zigzag (W-X-Y)',status:'assisted-detection',degree:'corrective',legs:null,internal:'Zigzag–connector–Zigzag'},
+    {id:'double_three',name:'Double Three (W-X-Y)',status:'assisted-detection',degree:'corrective',legs:null,internal:'Corrective–connector–corrective'},
+    {id:'triple_zigzag',name:'Triple Zigzag (W-X-Y-X-Z)',status:'assisted-detection',degree:'corrective',legs:null,internal:'Zigzag–connector–Zigzag–connector–Zigzag'},
+    {id:'triple_three',name:'Triple Three (W-X-Y-X-Z)',status:'assisted-detection',degree:'corrective',legs:null,internal:'Corrective–connector–corrective–connector–corrective'}
   ];
 
   const finite=x=>Number.isFinite(Number(x));
@@ -95,20 +100,25 @@
     const minMove=Math.max(0,Number(options.minMove??DEFAULTS.minMove));
     const percentThreshold=Math.max(0,Number(options.percentThreshold??DEFAULTS.percentThreshold));
     if(!Number.isFinite(multiplier)||multiplier<=0||multiplier>20)throw new Error('Threshold ATR phải lớn hơn 0 và không quá 20.');
-    const atr=atrWilder(bars,period),fallback=median(atr.trueRange.filter(x=>x>0&&Number.isFinite(x)))||0;
-    const threshold=(idx,price)=>Math.max(minMove,(Number.isFinite(atr.values[idx])?atr.values[idx]:fallback)*multiplier,abs(price)*percentThreshold);
+    const atr=atrWilder(bars,period);
+    // Causal warm-up: never use a full-sample median to set an early pivot threshold.
+    // Before ATR is seeded, only explicit minMove / percentThreshold floors are active.
+    const threshold=(idx,price)=>Math.max(minMove,(Number.isFinite(atr.values[idx])?atr.values[idx]:0)*multiplier,abs(price)*percentThreshold);
     const close=bars.map(b=>b.close);
-    let dir=0,hi=close[0],lo=close[0],hiIdx=0,loIdx=0;
+    // Start pivot discovery only after ATR has a causal seed. The initial warm-up
+    // range is deliberately not labeled as a confirmed market swing.
+    const seedIndex=Math.min(period-1,bars.length-1);
+    let dir=0,hi=close[seedIndex],lo=close[seedIndex],hiIdx=seedIndex,loIdx=seedIndex;
     const pivots=[];
     const makePivot=(kind,idx,confirmIdx,scale)=>({
       kind,index:idx,time:bars[idx].time,price:bars[idx].close,
       sourceClose:bars[idx].close,confirmed:true,confirmationIndex:confirmIdx,
       confirmationTime:bars[confirmIdx].time,confirmationDelayBars:confirmIdx-idx,
-      atrAtPivot:atr.values[idx]??fallback,thresholdAtPivot:threshold(idx,kind==='high'?bars[idx].high:bars[idx].low),
+      atrAtPivot:atr.values[idx]??0,thresholdAtPivot:threshold(idx,bars[idx].close),
       scale:scale??1,persistence:1
     });
 
-    for(let i=1;i<bars.length;i++){
+    for(let i=Math.max(1,period);i<bars.length;i++){
       const c=close[i];
       if(dir===0){
         if(c>hi){hi=c;hiIdx=i;}
@@ -151,6 +161,18 @@
     return{parentLegs};
   }
 
+  function buildDegreeHierarchy(scales){
+    const levels=(scales||[]).map((scale,index)=>({degree:scale.id,scaleIndex:index,thresholdMultiplier:scale.thresholdMultiplier,pivotCount:scale.pivots.length,legs:scale.pivots.slice(1).map((p,i)=>{const a=scale.pivots[i];return{id:`${scale.id}-leg-${i+1}`,startIndex:a.index,endIndex:p.index,startPrice:a.price,endPrice:p.price,children:[]};})}));
+    for(let i=0;i<levels.length-1;i++){
+      const child=levels[i],parent=levels[i+1];
+      for(const leg of child.legs){
+        const host=parent.legs.find(x=>leg.startIndex>=x.startIndex&&leg.endIndex<=x.endIndex);
+        if(host)host.children.push(leg.id);
+      }
+    }
+    return levels;
+  }
+
   function detectMultiScalePivots(bars,options={}){
     const factors=Array.isArray(options.scaleFactors)&&options.scaleFactors.length>=2?options.scaleFactors.slice():DEFAULTS.scaleFactors.slice();
     const primaryScaleIndex=clamp(Number(options.primaryScaleIndex??DEFAULTS.primaryScaleIndex),0,factors.length-1)|0;
@@ -168,7 +190,7 @@
     }
     // A smaller-scale pivot belongs to the parent leg whose time interval contains it.
     const hierarchy=linkScaleHierarchy(scales,bars,{primaryScaleIndex});
-    return{scales,primaryScaleIndex,primary:scales[primaryScaleIndex].pivots,fine:scales[0].pivots,coarse:scales[scales.length-1].pivots,parentLegs:hierarchy.parentLegs};
+    return{scales,primaryScaleIndex,primary:scales[primaryScaleIndex].pivots,fine:scales[0].pivots,coarse:scales[scales.length-1].pivots,parentLegs:hierarchy.parentLegs,degreeHierarchy:buildDegreeHierarchy(scales)};
   }
 
   const rule=(id,label,status,detail='',kind='hard')=>({id,label,status,detail,kind});
@@ -181,15 +203,24 @@
     const d=Math.min(...targets.map(t=>abs(value-t)/Math.max(band,t*.35)));
     return clamp(1-d,0,1);
   }
-  function guideline(id,label,score,detail,weight=1){return{id,label,score:clamp(score,0,1),detail,weight,kind:'guideline'};}
-  function weightedScore(items){const den=items.reduce((s,x)=>s+x.weight,0);return den?100*items.reduce((s,x)=>s+x.score*x.weight,0)/den:0;}
+  function guideline(id,label,score,detail,weight=1,group=null){
+    const inferred=group||(String(id).includes('FIB')?'fibonacci':String(id).includes('ALT')?'structure':String(id).includes('SCALE')?'robustness':String(id).includes('TIME')?'time':'other');
+    return{id,label,score:clamp(score,0,1),detail,weight,group:inferred,kind:'guideline'};
+  }
+  function weightedScore(items){
+    // Normalize within evidence families first so five correlated Fibonacci ratios do not
+    // outvote one independent structure/context family merely by count.
+    const groups=new Map();for(const x of items){const k=x.group||'other';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(x);}
+    const values=[...groups.values()].map(g=>{const den=g.reduce((s,x)=>s+x.weight,0);return den?g.reduce((s,x)=>s+x.score*x.weight,0)/den:0;});
+    return values.length?100*mean(values):0;
+  }
   function ruleState(rules){return{passed:rules.filter(r=>r.status==='pass').length,failed:rules.filter(r=>r.status==='fail').length,unverified:rules.filter(r=>r.status==='unverified').length};}
   function buildInternalProxy(p,expected,finePivots){
     const segments=[];
     for(let i=0;i<p.length-1;i++){
       const inside=(finePivots||[]).filter(q=>q.index>p[i].index&&q.index<p[i+1].index);
-      const count=inside.length+1;
-      segments.push({leg:i+1,expected,observedSwingSegments:count,intermediateFinePivots:inside.length,status:inside.length?'proxy-only':'unverified'});
+      const count=inside.length+1,expectedForLeg=Array.isArray(expected)?expected[i]??null:expected;
+      segments.push({leg:i+1,expected:expectedForLeg,observedSwingSegments:count,intermediateFinePivots:inside.length,status:inside.length?'proxy-only':'unverified'});
     }
     return{status:'unverified',note:'Số swing ở scale nhỏ chỉ là proxy hình học; chưa chứng minh được internal Elliott count 3 hoặc 5.',segments};
   }
@@ -201,7 +232,7 @@
       startIndex:p[0].index,endIndex:p[p.length-1].index,startTime:p[0].time,endTime:p[p.length-1].time,
       pivots:p.map(x=>({...x})),hardRules:hard,guidelines:guides,ruleSummary:state,
       evidenceScore:score,scoreLabel:'Heuristic evidence score · not probability',
-      status:state.failed?'rejected':(state.unverified||(extra.internalStructure&&extra.internalStructure.status==='unverified'))?'provisional':'rules-passed',
+      status:state.failed?'rejected':(state.unverified||(extra.internalStructure&&extra.internalStructure.status!=='verified'))?'provisional':'rules-passed',
       internalStructure:extra.internalStructure??null,
       metrics:extra.metrics??{},fibTargets:extra.fibTargets??[],channel:extra.channel??null,
       warnings:extra.warnings??[],invalidation:extra.invalidation??null,scaleSupport:1,scaleAgreement:0,
@@ -213,10 +244,10 @@
     if(!Array.isArray(p)||p.length!==6||!isAlternating(p))return null;
     const d=directionOf(p);if(!d)return null;
     const l=lengths(p),dur=durations(p),w1=l[0],w2=l[1],w3=l[2],w4=l[3],w5=l[4],eps=Math.max(1e-12,Number(options.epsilon)||0);
-    const wave2Valid=d>0?p[2].price>p[0].price+eps:p[2].price<p[0].price-eps;
+    const wave2Valid=d>0?p[2].price>=p[0].price-eps:p[2].price<=p[0].price+eps;
     const wave3Extends=d>0?p[3].price>p[1].price+eps:p[3].price<p[1].price-eps;
     const wave3NotShortest=w3+eps>=Math.min(w1,w5);
-    const wave4NoOverlap=d>0?p[4].price>p[1].price+eps:p[4].price<p[1].price-eps;
+    const wave4NoOverlap=d>0?p[4].price>=p[1].price-eps:p[4].price<=p[1].price+eps;
     const wave5Extends=d>0?p[5].price>p[3].price+eps:p[5].price<p[3].price-eps;
     const hard=[
       rule('EW-IMP-01','Wave 2 không vượt điểm bắt đầu Wave 1',wave2Valid?'pass':'fail',wave2Valid?'Wave 2 vẫn nằm trong giới hạn của Wave 1.':'Wave 2 đã vượt điểm bắt đầu Wave 1.'),
@@ -247,8 +278,14 @@
     const internal=buildInternalProxy(p,[5,3,5,3,5],options.finePivots);
     const warnings=['Internal 5-3-5-3-5 chưa được chứng minh chỉ bằng năm nhịp pivot ngoài.'];
     if(truncated)warnings.push('Truncated fifth là trường hợp hiếm; không xem là mặc định.');
-    const c=baseCandidate(subtype,p,d,hard,guides,{internalStructure:internal,metrics:{waveLengths:l,waveDurations:dur,wave2Retracement:r2,wave3Extension:r3,wave4Retracement:r4,wave5ToWave1:r5,extendedWaveCandidate:[w1,w3,w5].indexOf(Math.max(w1,w3,w5))===0?'1':[w1,w3,w5].indexOf(Math.max(w1,w3,w5))===1?'3':'5'},warnings});
+    const childCounts=p.slice(0,5).map((x,i)=>((options.finePivots||[]).filter(q=>q.index>x.index&&q.index<p[i+1].index).length+1));
+    const extensionIndex=[w1,w3,w5].indexOf(Math.max(w1,w3,w5));
+    const extensionWave=['1','3','5'][extensionIndex];
+    const nestedExtension=childCounts.some(n=>n>=7);
+    const c=baseCandidate(subtype,p,d,hard,guides,{internalStructure:internal,metrics:{waveLengths:l,waveDurations:dur,wave2Retracement:r2,wave3Extension:r3,wave4Retracement:r4,wave5ToWave1:r5,extendedWaveCandidate:extensionWave,lowerScaleSwingSegmentsByWave:childCounts,extensionEvidence:nestedExtension?'nested-subdivision-proxy':'length-only'},warnings});
     c.complete=true;c.developing=false;c.channel=buildImpulseChannel(p);
+    c.metrics.extensionSubtype=nestedExtension?'extended-impulse candidate':'length-dominant wave only';
+    if(nestedExtension)c.warnings.push(`Possible extension in Wave ${extensionWave}: lower-scale swing segmentation suggests nesting; verify recursive 5/3 grammar manually.`);
     return c;
   }
 
@@ -256,9 +293,9 @@
     if(!Array.isArray(p)||p.length!==5||!isAlternating(p))return null;
     const d=directionOf(p);if(!d)return null;
     const l=lengths(p),dur=durations(p),[w1,w2,w3,w4]=l,eps=Math.max(1e-12,Number(options.epsilon)||0);
-    const wave2Valid=d>0?p[2].price>p[0].price+eps:p[2].price<p[0].price-eps;
+    const wave2Valid=d>0?p[2].price>=p[0].price-eps:p[2].price<=p[0].price+eps;
     const wave3Extends=d>0?p[3].price>p[1].price+eps:p[3].price<p[1].price-eps;
-    const wave4NoOverlap=d>0?p[4].price>p[1].price+eps:p[4].price<p[1].price-eps;
+    const wave4NoOverlap=d>0?p[4].price>=p[1].price-eps:p[4].price<=p[1].price+eps;
     const hard=[
       rule('EW-IMP-01','Wave 2 không vượt điểm bắt đầu Wave 1',wave2Valid?'pass':'fail',wave2Valid?'Wave 2 còn hợp lệ.':'Wave 2 đã vượt điểm bắt đầu Wave 1.'),
       rule('EW-IMP-02','Wave 3 vượt điểm kết thúc Wave 1',wave3Extends?'pass':'fail',wave3Extends?'Wave 3 đã vượt Wave 1.':'Wave 3 chưa vượt Wave 1.'),
@@ -283,7 +320,7 @@
     if(!Array.isArray(p)||p.length!==4||!isAlternating(p))return null;
     const d=directionOf(p);if(!d)return null;
     const l=lengths(p),[a,b,c]=l,eps=Math.max(1e-12,Number(options.epsilon)||0);
-    const bNotBeyondOrigin=d>0?p[2].price>p[0].price+eps:p[2].price<p[0].price-eps;
+    const bNotBeyondOrigin=d>0?p[2].price>=p[0].price-eps:p[2].price<=p[0].price+eps;
     const hard=[rule('EW-ZZ-01','Wave B không vượt điểm bắt đầu Wave A',bNotBeyondOrigin?'pass':'fail',bNotBeyondOrigin?'Wave B chưa vượt điểm bắt đầu Wave A.':'Wave B vượt điểm bắt đầu Wave A; không phù hợp Zigzag tiêu chuẩn.')];
     const rb=b/Math.max(a,eps),rc=c/Math.max(a,eps);
     const guides=[
@@ -326,23 +363,33 @@
   function evaluateTriangle(p,options={}){
     if(!Array.isArray(p)||p.length!==6||!isAlternating(p))return[];
     const d=directionOf(p);if(!d)return[];
-    const highs=p.filter(x=>x.kind==='high').map(x=>x.price),lows=p.filter(x=>x.kind==='low').map(x=>x.price);
+    const highP=p.filter(x=>x.kind==='high'),lowP=p.filter(x=>x.kind==='low');
+    const highs=highP.map(x=>x.price),lows=lowP.map(x=>x.price);
     if(highs.length!==3||lows.length!==3)return[];
     const highContract=highs[0]>highs[1]&&highs[1]>highs[2],lowContract=lows[0]<lows[1]&&lows[1]<lows[2];
     const highExpand=highs[0]<highs[1]&&highs[1]<highs[2],lowExpand=lows[0]>lows[1]&&lows[1]>lows[2];
-    const l=lengths(p),guides=[
-      guideline('EW-TRI-LEG-SIZE','Các nhịp A–E co giãn hợp lý',clamp((l.slice(1).filter((x,i)=>x<=l[i]).length)/4,0,1),'So sánh độ dài 5 nhịp; tính chất co hẹp chỉ là guideline hình học.',1.5),
-      guideline('EW-TRI-TIME','Tính cân bằng thời gian của A–E',clamp(1-(Math.max(...durations(p))/Math.max(1,mean(durations(p))*4)),0,1),'Thời lượng các nhịp không nên bị chi phối bởi một nhịp bất thường.',.5)
+    const l=lengths(p),dur=durations(p),totalRange=Math.max(...highs)-Math.min(...lows);
+    const tolRatio=clamp(Number(options.barrierToleranceRatio??.10),.01,.25);
+    const highRange=Math.max(...highs)-Math.min(...highs),lowRange=Math.max(...lows)-Math.min(...lows);
+    const upperBarrier=(highRange/Math.max(totalRange,1e-12))<=tolRatio&&lowContract;
+    const lowerBarrier=(lowRange/Math.max(totalRange,1e-12))<=tolRatio&&highContract;
+    const guides=[
+      guideline('EW-TRI-LEG-SIZE','Các nhịp A–E co giãn hợp lý',clamp(l.slice(1).filter((x,i)=>x<=l[i]).length/4,0,1),'So sánh độ dài các nhịp; tính chất co hẹp chỉ là guideline hình học.',1.5,'structure'),
+      guideline('EW-TRI-TIME','Tính cân bằng thời gian của A–E',clamp(1-Math.max(...dur)/Math.max(1,mean(dur)*4),0,1),'Thời lượng các nhịp không nên bị chi phối bởi một nhịp bất thường.',.5,'time')
     ];
-    const internal=buildInternalProxy(p,[3,3,3,3,3],options.finePivots);
-    const out=[];
+    const internal=buildInternalProxy(p,[3,3,3,3,3],options.finePivots),out=[];
     if(highContract&&lowContract){
       const hard=[rule('EW-TRI-01','Đường biên trên co xuống','pass','Các đỉnh High giảm dần.'),rule('EW-TRI-02','Đường biên dưới co lên','pass','Các đáy Low tăng dần.')];
-      out.push(baseCandidate('contracting_triangle',p,d,hard,guides,{internalStructure:internal,metrics:{legLengths:l,highs,lows},warnings:['A–E phải có internal 3-3-3-3-3; hình tam giác đơn thuần chưa đủ xác nhận.']}));
+      const c=baseCandidate('contracting_triangle',p,d,hard,guides,{internalStructure:internal,metrics:{legLengths:l,highs,lows,geometry:'contracting'},warnings:['A–E phải có internal 3-3-3-3-3; hình tam giác đơn thuần chưa đủ xác nhận.']});c.complete=true;out.push(c);
+    }
+    if(upperBarrier||lowerBarrier){
+      const boundary=upperBarrier?'upper':'lower';
+      const hard=[rule('EW-TRI-BAR-01',boundary==='upper'?'Đường biên trên gần nằm ngang':'Đường biên dưới gần nằm ngang','pass',`Biên ${boundary} có độ rộng ${(boundary==='upper'?highRange:lowRange).toPrecision(4)} so với tổng range ${totalRange.toPrecision(4)}.`),rule('EW-TRI-BAR-02',boundary==='upper'?'Đường biên dưới nâng dần':'Đường biên trên hạ dần','pass','Biên đối diện hội tụ về đường biên gần ngang.')];
+      out.push(baseCandidate('barrier_triangle',p,d,hard,guides,{internalStructure:internal,metrics:{legLengths:l,highs,lows,geometry:'barrier',barrierBoundary:boundary,toleranceRatio:tolRatio},warnings:['Barrier Triangle là một biến thể của Contracting Triangle; hình học gần ngang không tự chứng minh internal 3-3-3-3-3.']}));
     }
     if(highExpand&&lowExpand){
       const hard=[rule('EW-TRI-01','Đường biên trên mở rộng','pass','Các đỉnh High tăng dần.'),rule('EW-TRI-02','Đường biên dưới mở rộng','pass','Các đáy Low giảm dần.')];
-      out.push(baseCandidate('expanding_triangle',p,d,hard,guides,{internalStructure:internal,metrics:{legLengths:l,highs,lows},warnings:['Expanding Triangle ít gặp; cần xác nhận cấu trúc con và dữ liệu không có gap bất thường.']}));
+      const c=baseCandidate('expanding_triangle',p,d,hard,guides,{internalStructure:internal,metrics:{legLengths:l,highs,lows,geometry:'expanding'},warnings:['Expanding Triangle ít gặp; cần xác nhận cấu trúc con và loại trừ gap bất thường.']});c.complete=true;out.push(c);
     }
     return out;
   }
@@ -356,18 +403,59 @@
     const highSlopes=(highs[1]-highs[0])/(Math.max(1,p.filter(x=>x.kind==='high')[1].index-p.filter(x=>x.kind==='high')[0].index));
     const lowSlopes=(lows[1]-lows[0])/(Math.max(1,p.filter(x=>x.kind==='low')[1].index-p.filter(x=>x.kind==='low')[0].index));
     const range0=abs(highs[0]-lows[0]),range1=abs(highs[1]-lows[1]),range2=abs(highs[2]-lows[2]);
-    const contracting=range0>range1&&range1>range2;
+    const contracting=range0>range1&&range1>range2,expanding=range0<range1&&range1<range2;
     const hard=[
       rule('EW-DIAG-01','Wave 4 overlap vùng Wave 1',overlap?'pass':'fail',overlap?'Có overlap phù hợp đặc trưng Diagonal.':'Không có overlap; không phù hợp Diagonal tiêu chuẩn.'),
-      rule('EW-DIAG-02','Hình học nêm có hội tụ','unverified',contracting?'Khoảng cách High–Low co hẹp qua ba swing.':'Chưa thấy hội tụ rõ ở các pivot.')
+      rule('EW-DIAG-02','Hình học nêm co hẹp hoặc mở rộng',(contracting||expanding)?'pass':'unverified',contracting?'Khoảng cách High–Low co hẹp qua ba swing.':expanding?'Khoảng cách High–Low mở rộng qua ba swing.':'Chưa thấy co hẹp hoặc mở rộng đơn điệu rõ ở các pivot.')
     ];
     const guides=[
-      guideline('EW-DIAG-WEDGE','Độ hội tụ của nêm',contracting?1:clamp(1-(range2/Math.max(range0,1e-12)),0,1),`Biên độ đầu/cuối: ${range0.toPrecision(4)} → ${range2.toPrecision(4)}.`,2),
+      guideline('EW-DIAG-WEDGE','Hình học nêm',contracting?1:expanding?.75:clamp(1-abs(range2-range0)/Math.max(range0,1e-12),0,1),`Biên độ đầu/cuối: ${range0.toPrecision(4)} → ${range2.toPrecision(4)}.`,2),
       guideline('EW-DIAG-LEG','Tương quan độ dài các nhịp',closestRatioScore(l[4]/Math.max(l[0],1e-12),[.618,1],.5),'So sánh nhịp thứ năm với nhịp thứ nhất.',1)
     ];
-    const c=baseCandidate('diagonal_candidate',p,d,hard,guides,{internalStructure:buildInternalProxy(p,[3,3,3,3,3],options.finePivots),metrics:{waveLengths:l,rangeSequence:[range0,range1,range2],highSlope:highSlopes,lowSlope:lowSlopes,overlap},warnings:['Chưa thể xác định Leading hay Ending chỉ từ hình học 6 pivot; cần biết vị trí trong chu kỳ lớn hơn.','Internal structure của Leading/Ending Diagonal cần xác nhận ở degree nhỏ hơn.']});
+    const pattern=expanding?'expanding_diagonal_candidate':'diagonal_candidate';
+    const c=baseCandidate(pattern,p,d,hard,guides,{internalStructure:{...buildInternalProxy(p,['role-dependent'],options.finePivots),expectedVariants:['5-3-5-3-5 (possible Leading context)','3-3-3-3-3 (Ending context; author/context dependent)'],status:'unverified',note:'Diagonal role must be assigned from its parent-degree position; geometry alone cannot choose internal grammar.'},metrics:{waveLengths:l,rangeSequence:[range0,range1,range2],geometry:contracting?'contracting':expanding?'expanding':'unclear',highSlope:highSlopes,lowSlope:lowSlopes,overlap},warnings:['Chưa thể xác định Leading hay Ending chỉ từ hình học 6 pivot; cần biết vị trí trong chu kỳ lớn hơn.','Internal grammar của Diagonal phụ thuộc vai trò/tài liệu; chưa được tự động chốt chỉ từ 6 pivot.']});
     c.possibleRoles=['leading_diagonal','ending_diagonal'];
     c.complete=true;c.fibTargets=[];return c;
+  }
+
+  const isMotivePattern=id=>['impulse','extended_impulse','truncated_fifth','impulse_developing_wave5','diagonal_candidate','expanding_diagonal_candidate','leading_diagonal','ending_diagonal'].includes(id);
+  const isCorrectivePattern=id=>['zigzag','regular_flat','expanded_flat','running_flat','contracting_triangle','barrier_triangle','expanding_triangle','double_zigzag','double_three','triple_zigzag','triple_three'].includes(id);
+  const isZigzagPattern=id=>id==='zigzag'||id==='double_zigzag'||id==='triple_zigzag';
+
+  function composeCombinationCandidates(baseCandidates,options={}){
+    const corrective=baseCandidates.filter(c=>isCorrectivePattern(c.pattern)&&c.complete!==false&&!c.hardRules.some(r=>r.status==='fail'));
+    if(corrective.length<3)return[];
+    const max=clamp(Number(options.maxCombinationCandidates)||24,1,100);
+    const byStart=new Map();for(const c of corrective){const k=c.startIndex;if(!byStart.has(k))byStart.set(k,[]);byStart.get(k).push(c);}
+    const next=(left,dir)=>corrective.filter(c=>c.startIndex===left.endIndex&&c.directionSign===dir&&c.endIndex>left.endIndex);
+    const out=[];
+    for(const w of corrective){
+      if(out.length>=max)break;
+      for(const x of next(w,-w.directionSign).slice(0,8)){
+        for(const y of next(x,w.directionSign).slice(0,8)){
+          const zig=isZigzagPattern(w.pattern)&&isZigzagPattern(y.pattern);
+          const seq=[w,x,y],p=[w.pivots[0],w.pivots[w.pivots.length-1],x.pivots[x.pivots.length-1],y.pivots[y.pivots.length-1]];
+          const hard=[rule('EW-COMB-01','W, X, Y là các cấu trúc corrective đã được nhận diện','pass','Các component W/X/Y có candidate riêng; internal grammar giữ ở trạng thái theo từng component.')];
+          const guides=[guideline('EW-COMB-RATIO-X','Tương quan connector X / W',closestRatioScore(lengths(p)[1]/Math.max(lengths(p)[0],1e-12),[.5,.618,.786],.4),'Tỷ lệ tham khảo, không phải điều kiện bắt buộc.',1,'fibonacci'),guideline('EW-COMB-RATIO-Y','Tương quan Y / W',closestRatioScore(lengths(p)[2]/Math.max(lengths(p)[0],1e-12),[.618,1,1.272,1.618],.5),'Tỷ lệ tham khảo; grammar quan trọng hơn tỷ lệ.',1,'fibonacci')];
+          const c=baseCandidate(zig?'double_zigzag':'double_three',p,w.directionSign,hard,guides,{internalStructure:{status:'partial',note:'Combination được dựng từ các corrective component; xác minh từng internal grammar riêng.',components:seq.map(q=>({pattern:q.pattern,startIndex:q.startIndex,endIndex:q.endIndex,status:q.internalStructure?.status||'unverified'}))},metrics:{components:seq.map(q=>({pattern:q.pattern,direction:q.direction,startIndex:q.startIndex,endIndex:q.endIndex}))},warnings:['W-X-Y là tổ hợp của các corrective patterns; không gộp thành một Zigzag duy nhất.']});
+          c.complete=true;c.componentCandidates=seq.map(q=>q.id);c.metrics.componentCount=3;c.metrics.componentTypes=seq.map(q=>q.pattern);c.invalidation={status:'conditional',levels:[{id:'EW-INV-WXY',name:'Start of combination',price:w.pivots[0].price,condition:'A confirmed break beyond the start of W invalidates this combination count.'}],note:'Scenario boundary; no trade stop is implied.'};out.push(c);
+          if(out.length>=max)break;
+          for(const x2 of next(y,-w.directionSign).slice(0,6)){
+            for(const z of next(x2,w.directionSign).slice(0,6)){
+              const tripleZig=zig&&isZigzagPattern(z.pattern);
+              const p5=[w.pivots[0],w.pivots[w.pivots.length-1],x.pivots[x.pivots.length-1],y.pivots[y.pivots.length-1],x2.pivots[x2.pivots.length-1],z.pivots[z.pivots.length-1]];
+              const comp=[w,x,y,x2,z];
+              const tc=baseCandidate(tripleZig?'triple_zigzag':'triple_three',p5,w.directionSign,[rule('EW-COMB-02','W-X-Y-X-Z component compatibility','pass','Đủ năm component corrective theo chuỗi W-X-Y-X-Z.')],[guideline('EW-COMB-ZY','Tương quan Z / Y',closestRatioScore(lengths(p5)[4]/Math.max(lengths(p5)[2],1e-12),[.618,1,1.272,1.618],.5),'Ratio chỉ là guideline.',1,'fibonacci')],{internalStructure:{status:'partial',note:'Triple combination được ghép từ 5 corrective component; từng internal grammar vẫn cần xác minh.',components:comp.map(q=>({pattern:q.pattern,startIndex:q.startIndex,endIndex:q.endIndex,status:q.internalStructure?.status||'unverified'}))},metrics:{components:comp.map(q=>({pattern:q.pattern,direction:q.direction,startIndex:q.startIndex,endIndex:q.endIndex}))},warnings:['W-X-Y-X-Z là cấu trúc hiếm; giữ alternate counts và yêu cầu xác nhận degree/connector.']});
+              tc.complete=true;tc.componentCandidates=comp.map(q=>q.id);tc.metrics.componentCount=5;tc.metrics.componentTypes=comp.map(q=>q.pattern);out.push(tc);if(out.length>=max)break;
+            }
+            if(out.length>=max)break;
+          }
+          if(out.length>=max)break;
+        }
+        if(out.length>=max)break;
+      }
+    }
+    return out;
   }
 
   function detectAtScale(pivots,options={}){
@@ -375,9 +463,13 @@
     const push=c=>{if(!c)return;if(c.hardRules.some(r=>r.status==='fail')){rejected[c.pattern]=(rejected[c.pattern]||0)+1;return;}candidates.push(c)};
     for(let i=0;i<pivots.length;i++){
       if(i+4<pivots.length)push(evaluateDevelopingImpulse(pivots.slice(i,i+5),options));
-      if(i+5<pivots.length){const w=pivots.slice(i,i+6);push(evaluateImpulse(w,options));for(const c of evaluateTriangle(w,options))push(c);push(evaluateDiagonal(w,options));}
+      if(i+5<pivots.length){const w=pivots.slice(i,i+6);const impulse=evaluateImpulse(w,options);push(impulse);if(impulse?.metrics?.extensionEvidence==='nested-subdivision-proxy'){
+        const extended={...impulse,id:impulse.id.replace('impulse:', 'extended_impulse:'),pattern:'extended_impulse',warnings:[...impulse.warnings,'Extended Impulse là phân loại hỗ trợ dựa trên nested swing proxy; không khẳng định số subdivision 9/13/17.']};
+        extended.guidelines=[...extended.guidelines,guideline('EW-EXT-NESTED','Bằng chứng nested extension',1,'Lower-scale swing count gợi ý wave extension; cần xác nhận internal grammar.')];extended.evidenceScore=weightedScore(extended.guidelines);push(extended);
+      }for(const c of evaluateTriangle(w,options))push(c);push(evaluateDiagonal(w,options));}
       if(i+3<pivots.length){const w=pivots.slice(i,i+4);push(evaluateZigzag(w,options));for(const c of evaluateFlat(w,options))push(c);}
     }
+    candidates.push(...composeCombinationCandidates(candidates,options));
     const unique=new Map();
     for(const c of candidates){const key=[c.pattern,c.direction,c.startIndex,c.endIndex].join('|');const old=unique.get(key);if(!old||c.evidenceScore>old.evidenceScore)unique.set(key,c);}
     return{candidates:[...unique.values()],rejected};
@@ -458,30 +550,196 @@
     ).slice(0,maxAlternates);
   }
 
+  function auditManualSequence(pivots,labels,options={}){
+    const p=Array.isArray(pivots)?pivots:[],l=Array.isArray(labels)?labels:[];
+    if(p.length!==l.length||p.length<3)return{status:'UNKNOWN',sequence:l.join('-'),rules:[],notes:['Cần gán nhãn cho tối thiểu ba pivot theo đúng thứ tự thời gian.']};
+    const order=p.every((x,i)=>!i||x.index>p[i-1].index),alternating=isAlternating(p);
+    const rules=[rule('EW-MAN-ORDER','Pivot theo đúng thời gian',order?'pass':'fail',order?'Các pivot có thứ tự tăng dần.':'Có pivot bị đảo thứ tự thời gian.'),rule('EW-MAN-ALT','Pivot High/Low luân phiên',alternating?'pass':'fail',alternating?'Loại pivot luân phiên.':'Hai pivot liên tiếp cùng loại High/Low.')];
+    let parsed=[];const seq=l.join('-');
+    if(seq==='0-1-2-3-4-5'){
+      const c=evaluateImpulse(p,options);if(c)parsed=[c];
+      if(!c)rules.push(rule('EW-MAN-IMP','Impulse structure','fail','Không đủ sáu pivot luân phiên để đánh giá Impulse.'));
+    }else if(seq==='A-B-C'&&p.length===3){rules.push(rule('EW-MAN-ABC-ORIGIN','Origin pivot missing','unverified','Cần thêm pivot origin và nhãn 0 để kiểm tra quy tắc B không vượt origin A.'));}
+    else if(seq==='0-A-B-C'){
+      const z=evaluateZigzag(p,options);if(z)parsed.push(z);parsed.push(...evaluateFlat(p,options));
+      if(!parsed.length)rules.push(rule('EW-MAN-ABC','ABC correction','unverified','Hình học chưa khớp Zigzag hoặc Flat candidate; cần xem loại correction khác.'));
+    }else if(seq==='0-A-B-C-D-E'){
+      parsed=evaluateTriangle(p,options);
+      if(!parsed.length)rules.push(rule('EW-MAN-TRI','Triangle structure','unverified','Chưa khớp contracting/expanding geometry hoặc cần thêm ngữ cảnh.'));
+    }else if(seq==='0-W-X-Y'||seq==='0-W-X-Y-X-Z'){
+      rules.push(rule('EW-MAN-COMB','Combination component grammar','unverified','Cần từng W/Y/Z là corrective pattern hợp lệ và X là connector riêng ở degree tương ứng.'));
+    }else{
+      rules.push(rule('EW-MAN-GRAMMAR','Wave sequence grammar','unverified','Chuỗi nhãn này chưa có grammar tự động; giữ ở trạng thái giả thuyết thủ công.'));
+    }
+    if(parsed.length){for(const c of parsed)rules.push(...c.hardRules);}
+    const failed=rules.some(r=>r.status==='fail'),unverified=rules.some(r=>r.status==='unverified');
+    return{status:failed?'FAIL':unverified?'REVIEW':'PASS',sequence:seq,rules,parsed:parsed.map(summarizeCandidate),notes:['Manual count là hypothesis; audit không thay thế việc xác minh child-degree grammar.']};
+  }
+
+  function buildSwingBoxes(pivots,options={}){
+    if(!Array.isArray(pivots)||pivots.length<2)return[];
+    const swings=pivots.slice(1).map((p,i)=>{const a=pivots[i],amp=abs(p.price-a.price),bars=Math.max(1,p.index-a.index);return{from:a,to:p,amplitude:amp,durationBars:bars,slope:amp/bars,normalizedAmplitude:amp/Math.max(Number(p.atrAtPivot)||Number(a.atrAtPivot)||1e-12,1e-12)};});
+    const groups=[];let current=[];
+    const tolerance=Number(options.swingBoxTolerance)||.45;
+    for(const sw of swings){
+      const prev=current[current.length-1];
+      const similar=!prev||(abs(sw.normalizedAmplitude-prev.normalizedAmplitude)/Math.max(sw.normalizedAmplitude,prev.normalizedAmplitude,1e-12)<=tolerance&&abs(sw.durationBars-prev.durationBars)/Math.max(sw.durationBars,prev.durationBars,1)<=tolerance);
+      if(!similar&&current.length){groups.push(current);current=[];}current.push(sw);
+    }
+    if(current.length)groups.push(current);
+    return groups.map((g,i)=>({id:`box-${i+1}`,startIndex:g[0].from.index,endIndex:g[g.length-1].to.index,high:Math.max(...g.flatMap(x=>[x.from.price,x.to.price])),low:Math.min(...g.flatMap(x=>[x.from.price,x.to.price])),swingCount:g.length,meanNormalizedAmplitude:mean(g.map(x=>x.normalizedAmplitude)),meanDurationBars:mean(g.map(x=>x.durationBars)),swings:g}));
+  }
+
+  function buildPivotGraph(pivots,atrValues=[]){
+    const nodes=pivots.map((p,i)=>({id:`pivot-${p.index}-${p.kind}`,index:p.index,time:p.time,price:p.price,kind:p.kind,confirmed:!!p.confirmed,confirmationIndex:p.confirmationIndex,scaleSupport:p.scaleSupport||1}));
+    const edges=[];
+    for(let i=0;i<nodes.length-1;i++){const a=nodes[i],b=nodes[i+1],move=b.price-a.price,elapsed=Math.max(1,b.index-a.index),atr=Number(atrValues[b.index])||Number(atrValues[a.index])||null;edges.push({id:`edge-${i+1}`,from:a.id,to:b.id,direction:Math.sign(move),amplitude:Math.abs(move),durationBars:elapsed,slope:move/elapsed,atrNormalized:atr?Math.abs(move)/atr:null,overlap:false});}
+    return{nodes,edges};
+  }
+
+  function diagonalRoleContext(parentPattern,waveIndex){
+    const n=Number(waveIndex);
+    if(['impulse','extended_impulse','truncated_fifth'].includes(parentPattern)){
+      if(n===0)return'leading_diagonal';
+      if(n===4)return'ending_diagonal';
+      return null;
+    }
+    if(parentPattern==='impulse_developing_wave5')return n===0?'leading_diagonal':null;
+    if(parentPattern==='zigzag'){
+      if(n===0)return'leading_diagonal';
+      if(n===2)return'ending_diagonal';
+      return null;
+    }
+    if(['regular_flat','expanded_flat','running_flat'].includes(parentPattern))return n===2?'ending_diagonal':null;
+    return null;
+  }
+
+  function closestChildCandidate(children,a,b,expected,options={}){
+    const span=Math.max(1,b.index-a.index),tol=Math.max(Number(options.recursiveMatchBars)||2,Math.round(span*.08));
+    const expectedMotive=expected==='5',expectedDirection=sign(b.price-a.price);
+    const candidates=children.filter(c=>abs(c.startIndex-a.index)<=tol&&abs(c.endIndex-b.index)<=tol&&c.endIndex>c.startIndex&&c.directionSign===expectedDirection&&!c.hardRules?.some(r=>r.status==='fail'));
+    const matches=candidates.filter(c=>expectedMotive?isMotivePattern(c.pattern):isCorrectivePattern(c.pattern));
+    matches.sort((x,y)=>{
+      const xDist=abs(x.startIndex-a.index)+abs(x.endIndex-b.index),yDist=abs(y.startIndex-a.index)+abs(y.endIndex-b.index);
+      const xRules=(x.ruleSummary?.failed||0)+(x.ruleSummary?.unverified||0),yRules=(y.ruleSummary?.failed||0)+(y.ruleSummary?.unverified||0);
+      return xDist-yDist||xRules-yRules||(y.evidenceScore||0)-(x.evidenceScore||0);
+    });
+    return matches[0]||null;
+  }
+
+  function attachRecursiveGrammar(candidates,childCandidates,options={}){
+    const expectedByPattern={impulse:['5','3','5','3','5'],extended_impulse:['5','3','5','3','5'],truncated_fifth:['5','3','5','3','5'],impulse_developing_wave5:['5','3','5','3'],zigzag:['5','3','5'],regular_flat:['3','3','5'],expanded_flat:['3','3','5'],running_flat:['3','3','5'],contracting_triangle:['3','3','3','3','3'],barrier_triangle:['3','3','3','3','3'],expanding_triangle:['3','3','3','3','3'],diagonal_candidate:['role-dependent'],expanding_diagonal_candidate:['role-dependent']};
+    for(const c of candidates){
+      if(!expectedByPattern[c.pattern])continue;
+      let expected=expectedByPattern[c.pattern];
+      if(['diagonal_candidate','expanding_diagonal_candidate'].includes(c.pattern)){const roles=[...new Set((c.contextualRoleEvidence||[]).map(x=>x.role))];if(roles.length===1&&roles[0]==='leading_diagonal')expected=[5,3,5,3,5];else if(roles.length===1&&roles[0]==='ending_diagonal')expected=[3,3,3,3,3];}
+      const legs=[];
+      for(let i=0;i<c.pivots.length-1;i++){
+        const a=c.pivots[i],b=c.pivots[i+1];
+        if(expected[i]==='role-dependent'){
+          legs.push({wave:i+1,expected:'5 or 3 · role-dependent',observedSwingSegments:(options.finePivots||[]).filter(q=>q.index>a.index&&q.index<b.index).length+1,childPattern:null,childCandidateId:null,status:'role-unresolved'});
+          continue;
+        }
+        const child=closestChildCandidate(childCandidates,a,b,expected[i],options);
+        const roleContext=child?.pattern?.includes('diagonal')?diagonalRoleContext(c.pattern,i):null;
+        if(child?.pattern?.includes('diagonal')&&roleContext){child.contextualRoleEvidence=child.contextualRoleEvidence||[];const evidence={role:roleContext,parentPattern:c.pattern,parentId:c.id,parentWave:i+1};if(!child.contextualRoleEvidence.some(x=>x.parentId===evidence.parentId&&x.parentWave===evidence.parentWave))child.contextualRoleEvidence.push(evidence);}
+        const observed=(options.finePivots||[]).filter(q=>q.index>a.index&&q.index<b.index).length+1;
+        const childRulesClean=!!child&&(child.ruleSummary?.failed||0)===0&&(child.ruleSummary?.unverified||0)===0;
+        const childVerified=childRulesClean&&child.internalStructure?.status==='verified';
+        legs.push({wave:i+1,expected:expected[i],observedSwingSegments:observed,childPattern:child?.pattern||null,childCandidateId:child?.id||null,childRuleStatus:child?child.status:'missing',contextualRole:roleContext|| (child?.pattern?.includes('diagonal')?'parent-context-unresolved':null),status:childVerified?'verified':childRulesClean?'matched-child-pattern':child?'child-provisional':observed===Number(expected[i])?'swing-count-only':'unverified'});
+      }
+      const matches=legs.filter(x=>x.childCandidateId).length;
+      const fullyVerified=legs.length>0&&legs.every(x=>x.status==='verified');
+      const allMatched=legs.length>0&&legs.every(x=>x.status==='verified'||x.status==='matched-child-pattern');
+      const roleUnresolved=legs.some(x=>x.status==='role-unresolved');
+      c.internalStructure={status:fullyVerified?'verified':allMatched?'matched':matches?'partial':'unverified',note:fullyVerified?'Tất cả các nhịp có child grammar đã xác minh đệ quy.':allMatched?'Đã tìm thấy child candidate cùng hướng và đúng nhóm motive/corrective, nhưng child grammar sâu hơn chưa được xác minh.':roleUnresolved?'Diagonal cần xác định vai trò (Leading/Ending) ở degree lớn hơn trước khi chọn 5-3-5-3-5 hoặc 3-3-3-3-3.':'Có pivot-count / child candidates chưa đủ; không suy diễn 3/5 grammar từ số swing.',expected,matchedLegs:matches,totalLegs:legs.length,legs};
+      if(!fullyVerified){c.status='provisional';if(!c.warnings.some(x=>x.includes('recursive')))c.warnings.push('Recursive subdivision chưa được xác minh đầy đủ ở degree thấp hơn; không coi internal grammar là PASS.');}
+      else if(!c.ruleSummary.failed&&!c.ruleSummary.unverified)c.status='rules-passed';
+      c.recursiveGrammar={status:c.internalStructure.status,matchedLegs:matches,totalLegs:legs.length,fullyVerified};
+    }
+    return candidates;
+  }
+
+  function projectionPrice(anchor,baseStart,baseEnd,ratio,direction,mode='arithmetic'){
+    if(mode==='log'&&anchor>0&&baseStart>0&&baseEnd>0)return Math.exp(Math.log(anchor)+direction*ratio*Math.abs(Math.log(baseEnd/baseStart)));
+    return anchor+direction*ratio*Math.abs(baseEnd-baseStart);
+  }
+
+  function buildProjectionZones(candidate,options={}){
+    if(!candidate?.pivots?.length)return[];
+    const p=candidate.pivots,d=candidate.directionSign||1,mode=options.projectionMode==='log'?'log':'arithmetic';
+    const atr=Number(options.atrValue)||0,tick=Number(options.tickSize)||0,halfWidth=Math.max(tick,atr*(Number(options.zoneAtrMultiplier)||.05));
+    const zones=[],add=(label,anchor,baseStart,baseEnd,ratio,direction,formula,source)=>{const price=projectionPrice(anchor,baseStart,baseEnd,ratio,direction,mode);if(!Number.isFinite(price))return;zones.push({label,ratio,price,zoneLow:price-halfWidth,zoneHigh:price+halfWidth,halfWidth,mode,formula,source,anchor,baseStart,baseEnd,direction:direction>0?'up':'down',kind:'projection'});};
+    const observed=(label,ratio,price,formula,source)=>zones.push({label,ratio,price,zoneLow:null,zoneHigh:null,halfWidth:0,mode:'observed',formula,source,direction:'observed',kind:'observed'});
+    const id=candidate.pattern;
+    if(id==='impulse_developing_wave5'&&p.length===5){
+      const w1s=p[0].price,w1e=p[1].price,w2=p[2].price,w3e=p[3].price,w4=p[4].price,w1=Math.abs(w1e-w1s),w3=Math.abs(w3e-w2);
+      [.618,1,1.618].forEach(r=>add(`W5 = ${r} × W1`,w4,w1s,w1e,r,d,'W4 + r × W1','F-06/F-07'));
+      [.382,.618,1].forEach(r=>add(`W5 = ${r} × net W1–W3`,w4,w1s,w3e,r,d,'W4 + r × net(W1→W3)','F-08'));
+      if(mode==='arithmetic'){[.5,.618,.786].forEach(r=>add(`W2 retracement ${r}`,w1e,w1s,w1e,r,-d,'W1 end − d × r × W1','F-03'));[1.618,2.618,4.236].forEach(r=>add(`W3 extension ${r} × W1`,w2,w1s,w1e,r,d,'W2 + d × r × W1','F-04'));[.236,.382,.5].forEach(r=>add(`W4 retracement ${r} × W3`,w3e,w2,w3e,r,-d,'W3 end − d × r × W3','F-05'));}
+    }else if(['impulse','extended_impulse','truncated_fifth'].includes(id)&&p.length===6){
+      const w1=Math.abs(p[1].price-p[0].price),w3=Math.abs(p[3].price-p[2].price),w5=Math.abs(p[5].price-p[4].price);
+      observed('Observed W3 / W1',w3/Math.max(w1,1e-12),p[3].price,'|W3| / |W1|','F-04');
+      observed('Observed W5 / W1',w5/Math.max(w1,1e-12),p[5].price,'|W5| / |W1|','F-06/F-07');
+      observed('Observed W5 / net W1–W3',w5/Math.max(Math.abs(p[3].price-p[0].price),1e-12),p[5].price,'|W5| / |net(W1→W3)|','F-08');
+    }else if(['zigzag','regular_flat','expanded_flat','running_flat'].includes(id)&&p.length===4){
+      const a=Math.abs(p[1].price-p[0].price),b=Math.abs(p[2].price-p[1].price),c=Math.abs(p[3].price-p[2].price);
+      observed('Observed B / A',b/Math.max(a,1e-12),p[2].price,'|B| / |A|',id==='zigzag'?'F-10':'F-11/F-12');
+      observed('Observed C / A',c/Math.max(a,1e-12),p[3].price,'|C| / |A|',id==='zigzag'?'F-09':'F-11/F-12');
+    }else if(id.includes('triangle')&&p.length===6){
+      const leg=lengths(p);for(let i=0;i<4;i++){const ratio=leg[i+1]/Math.max(leg[i],1e-12);zones.push({label:`Triangle leg ${String.fromCharCode(66+i)} / ${String.fromCharCode(65+i)}`,ratio,price:null,zoneLow:null,zoneHigh:null,formula:'Observed leg ratio',source:'F-14',kind:'observed'});}
+      const widest=Math.max(...p.map(x=>x.price))-Math.min(...p.map(x=>x.price));zones.push({label:'Post-triangle thrust · widest width',ratio:1,price:null,zoneLow:null,zoneHigh:null,formula:`E ± ${widest.toPrecision(5)} after confirmed breakout`,source:'F-15',width:widest,requiresBreakout:true,kind:'conditional'});
+    }
+    return zones;
+  }
+
+  function updateScenarioLifecycle(snapshots,fullBars){
+    return (snapshots||[]).map(s=>{
+      if(s.status==='invalidated')return s;
+      const c=s.candidate;if(!c?.invalidation?.levels?.length)return{...s,status:s.status||'active',checkedThrough:fullBars?.at(-1)?.time??s.asOfTime};
+      const later=(fullBars||[]).filter(b=>b.time>s.asOfTime);let hit=null;
+      for(const bar of later){for(const lv of c.invalidation.levels){const dir=c.direction==='bullish'?1:-1;const breached=lv.name.toLowerCase().includes('origin')?(dir>0?bar.low<=lv.price:bar.high>=lv.price):(dir>0?bar.close<=lv.price:bar.close>=lv.price);if(breached){hit={time:bar.time,level:lv.id,price:lv.price,observedClose:bar.close};break;}}if(hit)break;}
+      return hit?{...s,status:'invalidated',invalidationEvent:hit,checkedThrough:fullBars?.at(-1)?.time??hit.time}:{...s,status:s.status||'active',checkedThrough:fullBars?.at(-1)?.time??s.asOfTime};
+    });
+  }
+
   function analyze(input,options={}){
     const opts={...DEFAULTS,...options};
-    const bars=normalizeBars(input,opts);
+    let bars=normalizeBars(input,opts);
+    const requestedAsOf=Number.isFinite(Number(opts.asOfTime))?Number(opts.asOfTime):null;
+    const requestedIndex=Number.isInteger(Number(opts.asOfIndex))?Number(opts.asOfIndex):null;
+    if(requestedAsOf!=null)bars=bars.filter(b=>b.time<=requestedAsOf);
+    else if(requestedIndex!=null)bars=bars.slice(0,Math.max(0,Math.min(bars.length,requestedIndex+1)));
+    if(bars.length<20)throw new Error('Mốc As-of cần tối thiểu 20 nến OHLC đã đóng.');
+    // Rebase indices after an as-of slice: all pivots/candidates use indices local to this immutable snapshot.
+    bars=bars.map((b,index)=>({...b,index}));
     const multi=detectMultiScalePivots(bars,opts);
-    const all=[];const rejectedByScale=[];
+    const all=[],rejectedByScale=[];
     for(let i=0;i<multi.scales.length;i++){
       const fine=i===0?[]:multi.scales[i-1].pivots;
-      const d=detectAtScale(multi.scales[i].pivots,{...opts,finePivots:fine});
-      all.push(d.candidates);rejectedByScale.push(d.rejected);
+      const d0=detectAtScale(multi.scales[i].pivots,{...opts,finePivots:fine});
+      all.push(d0.candidates);rejectedByScale.push(d0.rejected);
     }
+    // Recursive subdivision evidence flows from the immediately smaller scale upward.
+    for(let i=1;i<all.length;i++)attachRecursiveGrammar(all[i],all[i-1],{...opts,finePivots:multi.scales[i-1].pivots});
     const primaryIndex=multi.primaryScaleIndex;
     const ranked=addScaleAgreement(all,multi.scales,primaryIndex)
+      .map(c=>{c.fibTargets=buildProjectionZones(c,{...opts,atrValue:atrWilder(bars,opts.atrPeriod).values.at(-1)});return c;})
       .sort((a,b)=>b.evidenceScore-a.evidenceScore||b.endIndex-a.endIndex);
     const candidates=diversifyCandidates(ranked,opts.maxCandidates);
     const preferred=candidates[0]||null;
     const rejectedCandidateCount=rejectedByScale.reduce((sum,group)=>sum+Object.values(group).reduce((s,n)=>s+n,0),0);
+    const primaryPivots=multi.primary;
     return{
       version:VERSION,createdAt:new Date().toISOString(),bars,
-      dataSummary:{observations:bars.length,startTime:bars[0].time,endTime:bars[bars.length-1].time,source:'OHLC'},
+      dataSummary:{observations:bars.length,startTime:bars[0].time,endTime:bars[bars.length-1].time,asOfTime:bars[bars.length-1].time,asOfIndex:bars.length-1,source:'OHLC',lookaheadProtected:true},
       atr:{period:opts.atrPeriod,values:atrWilder(bars,opts.atrPeriod).values},
-      scales:multi.scales,primaryScaleIndex:primaryIndex,parentLegs:multi.parentLegs,
-      candidates,preferred,alternates:selectAlternateCounts(candidates,preferred,3),
-      diagnostics:{pivotCount:multi.primary.length,scalePivotCounts:multi.scales.map(s=>s.pivots.length),candidateCount:candidates.length,rejectedCandidateCount,rejectedByScale,hasClearCount:candidates.length>0,disclaimer:'Evidence Score không phải xác suất. Candidate là giả thuyết hình học trên pivot đã xác nhận; internal wave count có thể chưa được xác minh.'},
-      settings:{atrPeriod:opts.atrPeriod,thresholdMultiplier:opts.thresholdMultiplier,scaleFactors:opts.scaleFactors,primaryScaleIndex:primaryIndex}
+      scales:multi.scales,primaryScaleIndex:primaryIndex,parentLegs:multi.parentLegs,degreeHierarchy:multi.degreeHierarchy,
+      pivotGraph:buildPivotGraph(primaryPivots,atrWilder(bars,opts.atrPeriod).values),
+      swingBoxes:primaryPivots.length?buildSwingBoxes(primaryPivots,opts):[],
+      candidates,preferred,alternates:selectAlternateCounts(candidates,preferred,5),
+      diagnostics:{pivotCount:primaryPivots.length,scalePivotCounts:multi.scales.map(s=>s.pivots.length),candidateCount:candidates.length,rejectedCandidateCount,rejectedByScale,hasClearCount:candidates.length>0,asOfTime:bars[bars.length-1].time,recursiveCounts:candidates.filter(c=>c.recursiveGrammar?.status==='verified').length,recursiveMatchedCounts:candidates.filter(c=>c.recursiveGrammar?.status==='matched').length,provisionalCounts:candidates.filter(c=>c.status==='provisional').length,disclaimer:'Evidence Score không phải xác suất. Candidate là giả thuyết hình học trên pivot đã xác nhận; grammar chỉ VERIFIED khi child grammar cũng được xác minh đệ quy; swing-count đơn thuần chỉ là proxy.',patternCoverage:['Impulse','Extended Impulse candidate','Truncated Fifth','Developing Wave 5','Contracting/expanding Diagonal candidates · role-dependent','Zigzag','Regular/Expanded/Running Flat','Contracting/Barrier/Expanding Triangle','Double/Triple Zigzag','Double/Triple Three']},
+      settings:{atrPeriod:opts.atrPeriod,thresholdMultiplier:opts.thresholdMultiplier,scaleFactors:opts.scaleFactors,primaryScaleIndex:primaryIndex,asOfTime:bars[bars.length-1].time,projectionMode:opts.projectionMode||'arithmetic',zoneAtrMultiplier:opts.zoneAtrMultiplier||.05}
     };
   }
 
@@ -498,6 +756,6 @@
     VERSION,DEFAULTS,PATTERN_CATALOG,normalizeBars,trueRanges,atrWilder,
     directionalChangePivots,detectMultiScalePivots,
     evaluateImpulse,evaluateDevelopingImpulse,evaluateZigzag,evaluateFlat,evaluateTriangle,evaluateDiagonal,
-    detectAtScale,diversifyCandidates,selectAlternateCounts,buildFibTargets,buildImpulseChannel,analyze,summarizeCandidate
+    detectAtScale,composeCombinationCandidates,attachRecursiveGrammar,auditManualSequence,buildDegreeHierarchy,buildSwingBoxes,buildPivotGraph,buildProjectionZones,updateScenarioLifecycle,diversifyCandidates,selectAlternateCounts,buildFibTargets,buildImpulseChannel,analyze,summarizeCandidate
   };
 });
