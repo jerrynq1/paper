@@ -14,7 +14,7 @@ const bars=Array.from({length:240},(_,i)=>{const c=100+Math.sin(i/5)*2+i*.015,pr
   assert.ok(automatic.atrPeriod>=8&&automatic.atrPeriod<=21);
   assert.strictEqual(automatic.autoPrimaryScale,true);
   const result=E.analyze(bars);
-  assert.strictEqual(result.version,'0.6.0');
+  assert.strictEqual(result.version,'0.7.0');
   assert.strictEqual(result.settings.mode,'automatic');
   assert.ok(result.primaryScaleIndex>=0&&result.primaryScaleIndex<result.scales.length);
   ok('Default analysis auto-configures swing sensitivity and degree; no user ATR controls required');
@@ -86,4 +86,4 @@ const bars=Array.from({length:240},(_,i)=>{const c=100+Math.sin(i/5)*2+i*.015,pr
   assert.ok(Number.isFinite(f.quant.ratioP25));
   ok('QuantLab statistics API supplies finite quantiles and dispersion to the Elliott forecast');
 }
-console.log(`\n${passed} nhóm kiểm thử Elliott v0.6 đạt`);
+console.log(`\n${passed} nhóm kiểm thử Elliott legacy forecast regression đạt`);

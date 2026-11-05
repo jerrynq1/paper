@@ -4,8 +4,8 @@ let passed=0;const ok=s=>{console.log('ok  ',s);passed++};
 const pivots=(prices,startIndex=0,step=10)=>prices.map((price,i)=>({index:startIndex+i*step,time:(startIndex+i*step)*60,price,kind:i%2===0?'low':'high',confirmed:true,confirmationIndex:startIndex+i*step+1,confirmationTime:(startIndex+i*step+1)*60,confirmationDelayBars:1}));
 const barsFromCloses=closes=>closes.map((close,i)=>{const open=i?closes[i-1]:close;return{time:i*60,open,high:Math.max(open,close)+.1,low:Math.min(open,close)-.1,close,volume:10};});
 
-assert.strictEqual(E.VERSION,'0.6.0');
-ok('v0.6 engine version is exported');
+assert.strictEqual(E.VERSION,'0.7.0');
+ok('v0.7 engine version is exported');
 
 {
   // Exact touches at the Wave-1 origin and Wave-1 end are boundaries, not price overlap/crossing.

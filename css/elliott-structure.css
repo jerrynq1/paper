@@ -118,3 +118,14 @@ body.sc #nav .nav-sep:after{max-width:22px}
 #v-elliott .e-target-row small{color:var(--mut)}
 #v-elliott .e-forecast-panel{min-width:0}
 @media(max-width:650px){#v-elliott .e-simple-forecast-grid{grid-template-columns:1fr}}
+
+
+/* Elliott v0.7 · focused X-axis zoom and hierarchy overlay */
+#v-elliott .e-plot-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+#v-elliott .e-x-zoom{display:grid;grid-template-columns:auto minmax(90px,150px) auto;align-items:center;gap:9px;min-width:min(100%,360px)}
+#v-elliott .e-x-zoom label{font:700 8px 'Space Grotesk',sans-serif;letter-spacing:.1em;color:var(--mut);white-space:nowrap}
+#v-elliott .e-x-zoom label b{display:block;margin-top:3px;color:var(--acc);font-size:10px;letter-spacing:0}
+#v-elliott .e-x-zoom input{width:100%;min-width:70px;accent-color:var(--acc)}
+#v-elliott .e-x-zoom .btn{white-space:nowrap}
+#v-elliott .e-plot{touch-action:pan-y;user-select:none}
+@media(max-width:650px){#v-elliott .e-x-zoom{width:100%;grid-template-columns:auto 1fr auto;min-width:0}#v-elliott .e-x-zoom input{min-width:60px}}

@@ -289,7 +289,7 @@
 <section class="view" id="v-elliott">
   <div class="ql-head"><div><div class="ql-eyebrow">INDEPENDENT WORKSPACE · ELLIOTT WAVE</div><h2>Elliott <span>· Wave Detector</span></h2><p class="msg">Tự nhận diện cấu trúc sóng trên chart. Không cần cấu hình ATR, threshold hay degree; hệ thống tự điều chỉnh độ nhạy và chỉ hiển thị nhãn sóng.</p></div><span class="ql-local-badge">AUTO STRUCTURE</span></div>
   <section class="card e-structure-card" id="eStructureLab" aria-label="Elliott Wave Detector">
-    <div class="e-head"><div><div class="e-eyebrow">AUTOMATIC WAVE COUNT</div><h3>Wave <span>Detector</span></h3><p class="msg">Tự nhận diện sóng và gắn nhãn cấu trúc. Không cần chọn ATR, threshold hay degree; các mốc dự báo kết hợp Fibonacci và thống kê QuantLab khi có đủ mẫu.</p></div><span class="ql-local-badge">V0.6</span></div>
+    <div class="e-head"><div><div class="e-eyebrow">AUTOMATIC WAVE COUNT</div><h3>Wave <span>Detector</span></h3><p class="msg">Tự nhận diện sóng và gắn nhãn cấu trúc. Không cần chọn ATR, threshold hay degree; các mốc dự báo kết hợp Fibonacci và thống kê QuantLab khi có đủ mẫu.</p></div><span class="ql-local-badge">V0.7</span></div>
     <div class="e-controls e-controls-simple">
       <label class="ql-select-label">DỮ LIỆU CHART<select id="eTimeframe"><option value="current">Timeframe hiện tại</option><option value="m1">M1</option></select></label>
       <div class="e-actions">
@@ -303,7 +303,7 @@
     <div class="e-status" id="eStatus" role="status">Đang chuẩn bị nhận diện cấu trúc…</div>
     <div class="e-data-meta" id="eDataMeta">Chưa có dữ liệu.</div>
     <div id="eMetrics" hidden></div>
-    <div class="e-panel e-plot-panel e-wave-chart"><div class="e-plot-head"><div><h4>Cấu trúc sóng được nhận diện</h4><p class="msg">Chỉ hiển thị đường đi và nhãn sóng của count đang chọn; các nhãn được tự sắp xếp để hạn chế chồng lấn.</p></div></div><canvas id="ePlot" class="e-plot" aria-label="Đồ thị cấu trúc sóng Elliott tự động"></canvas></div>
+    <div class="e-panel e-plot-panel e-wave-chart"><div class="e-plot-head"><div><h4>Cấu trúc sóng được nhận diện</h4><p class="msg">Sóng chính được làm nổi bật; cấu trúc con và ngữ cảnh sóng cha được đối chiếu ở nền để tránh rối nhãn.</p></div><div class="e-x-zoom"><label for="eXZoom">ZOOM TRỤC X <b id="eXZoomLabel">1.0×</b></label><input id="eXZoom" type="range" min="1" max="10" step="0.1" value="1"><button class="btn ghost sm" id="eXZoomReset" type="button">Fit toàn bộ</button></div></div><canvas id="ePlot" class="e-plot" aria-label="Đồ thị cấu trúc sóng Elliott tự động"></canvas></div>
     <div class="e-wave-summary-grid">
       <div class="e-panel"><h4>Count hiện tại</h4><div id="ePreferred"><div class="e-empty"><b>Chưa phân tích</b><span>Nhấn Tự nhận diện sóng để bắt đầu.</span></div></div></div>
       <div class="e-panel e-forecast-panel"><h4>Dự báo mục tiêu sóng kế tiếp</h4><div id="eForecast"><div class="e-empty"><b>Chưa có dự báo</b><span>Kết quả sẽ gồm Fibonacci và thống kê cấu trúc tương đồng khi đủ dữ liệu.</span></div></div></div>

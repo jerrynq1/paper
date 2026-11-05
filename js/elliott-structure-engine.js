@@ -1,4 +1,4 @@
-/* Gexadecimal Elliott Structure Lab · v0.6
+/* Gexadecimal Elliott Structure Lab · v0.7
  * Deterministic, explainable Elliott candidate engine.
  * Important: pivots are only confirmed after a subsequent directional change.
  * Candidate scores are heuristic evidence scores, NOT probabilities or trade signals.
@@ -10,7 +10,7 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
 
-  const VERSION='0.6.0';
+  const VERSION='0.7.0';
   const DEFAULTS={
     atrPeriod:14,
     thresholdMultiplier:1.5,
@@ -58,7 +58,7 @@
     // Internal-only sensitivity: noisier/rangier samples need wider swing thresholds.
     const thresholdMultiplier=efficiency>.48?1.18:efficiency<.18?1.62:1.38;
     const atrPeriod=clamp(Math.round(Math.sqrt(bars.length)/3),8,21);
-    return{atrPeriod,thresholdMultiplier,scaleFactors:[.78,1.08,1.52,2.15],autoPrimaryScale:true,autoMode:true,efficiency};
+    return{atrPeriod,thresholdMultiplier,scaleFactors:[.42,.68,1.00,1.62,2.55],autoPrimaryScale:true,autoMode:true,efficiency};
   }
   const abs=x=>Math.abs(x);
   const sign=x=>x>0?1:x<0?-1:0;
@@ -448,8 +448,8 @@
     const corrective=baseCandidates.filter(c=>isCorrectivePattern(c.pattern)&&c.complete!==false&&!c.hardRules.some(r=>r.status==='fail'));
     if(corrective.length<3)return[];
     const max=clamp(Number(options.maxCombinationCandidates)||24,1,100);
-    const byStart=new Map();for(const c of corrective){const k=c.startIndex;if(!byStart.has(k))byStart.set(k,[]);byStart.get(k).push(c);}
-    const next=(left,dir)=>corrective.filter(c=>c.startIndex===left.endIndex&&c.directionSign===dir&&c.endIndex>left.endIndex);
+    const byStartDirection=new Map();for(const c of corrective){const k=`${c.startIndex}|${c.directionSign}`;if(!byStartDirection.has(k))byStartDirection.set(k,[]);byStartDirection.get(k).push(c);}
+    const next=(left,dir)=>byStartDirection.get(`${left.endIndex}|${dir}`)||[];
     const out=[];
     for(const w of corrective){
       if(out.length>=max)break;
@@ -523,22 +523,69 @@
     return out;
   }
 
-  function addScaleAgreement(allCandidates,scales,primaryScaleIndex){
-    const prim=allCandidates[primaryScaleIndex]||[];
-    return prim.map(c=>{
-      const matches=[];
-      allCandidates.forEach((list,i)=>{
-        if(i===primaryScaleIndex)return;
-        const tol=Math.max(2,Math.round((c.endIndex-c.startIndex)*.08));
-        if(list.some(x=>x.pattern===c.pattern&&x.direction===c.direction&&abs(x.startIndex-c.startIndex)<=tol&&abs(x.endIndex-c.endIndex)<=tol))matches.push(i);
-      });
-      c.scaleSupport=matches.length+1;c.scaleAgreement=c.scaleSupport/scales.length;
-      const supportGuide=guideline('EW-ROBUST-SCALE','Độ ổn định qua nhiều scale',c.scaleAgreement,`${c.scaleSupport}/${scales.length} scale có candidate tương đồng. Đây là độ ổn định tham số, không phải xác suất đúng.`,1.25);
-      c.guidelines.push(supportGuide);c.evidenceScore=weightedScore(c.guidelines);
-      if(c.pattern==='impulse_developing_wave5'||c.pattern==='zigzag'||c.pattern.includes('flat'))c.fibTargets=buildFibTargets(c);
-      if(c.pattern==='impulse'||c.pattern==='truncated_fifth')c.channel=buildImpulseChannel(c.pivots);
+  function addScaleAgreement(allCandidates,scales,primaryScaleIndex,totalBars=1){
+    // Keep every degree in the candidate forest. The previous implementation returned
+    // only the primary degree, silently discarding valid child/parent interpretations.
+    const flat=(allCandidates||[]).flatMap((list,degreeIndex)=>(list||[]).map(c=>{
+      c.degreeIndex=degreeIndex;c.degreeId=scales[degreeIndex]?.id||`degree-${degreeIndex+1}`;
+      c.candidateKey=`${c.id}@${c.degreeId}`;
       return c;
-    });
+    }));
+    const parentMap=new Map(flat.map(c=>[c.candidateKey,new Set()]));
+    for(const parent of flat){
+      for(const leg of parent.recursiveGrammar?.legs||[]){
+        if(leg.childCandidateKey&&parentMap.has(leg.childCandidateKey))parentMap.get(leg.childCandidateKey).add(parent.candidateKey);
+      }
+    }
+    // Interval index avoids comparing every candidate against every other candidate
+    // when a long intraday chart creates thousands of sliding-window hypotheses.
+    const index=new Map();
+    for(const c of flat){const key=`${c.pattern}|${c.direction}|${c.degreeIndex}`;if(!index.has(key))index.set(key,[]);index.get(key).push(c);}
+    for(const list of index.values())list.sort((a,b)=>a.startIndex-b.startIndex||a.endIndex-b.endIndex);
+    const lowerBound=(list,value)=>{let lo=0,hi=list.length;while(lo<hi){const mid=(lo+hi)>>1;if(list[mid].startIndex<value)lo=mid+1;else hi=mid;}return lo;};
+    const denominator=Math.max(1,Number(totalBars)||1);
+    for(const c of flat){
+      const span=Math.max(1,c.endIndex-c.startIndex),tol=Math.max(2,Math.round(span*.08));
+      const matchingScales=new Set([c.degreeIndex]);
+      for(let degree=0;degree<scales.length;degree++){
+        if(degree===c.degreeIndex)continue;
+        const list=index.get(`${c.pattern}|${c.direction}|${degree}`)||[];
+        for(let j=lowerBound(list,c.startIndex-tol);j<list.length&&list[j].startIndex<=c.startIndex+tol;j++){
+          if(abs(list[j].endIndex-c.endIndex)<=tol){matchingScales.add(degree);break;}
+        }
+      }
+      c.scaleSupport=matchingScales.size;c.scaleAgreement=c.scaleSupport/Math.max(1,scales.length);
+      c.parentCandidateKeys=[...(parentMap.get(c.candidateKey)||[])];
+      c.parentSupport=c.parentCandidateKeys.length;
+      const legs=c.recursiveGrammar?.legs||[];
+      const matched=legs.filter(x=>['verified','matched-child-pattern'].includes(x.status)).length;
+      const partial=legs.filter(x=>x.childCandidateKey).length;
+      c.childSupport=legs.length?clamp((matched+.35*Math.max(0,partial-matched))/legs.length,0,1):0;
+      c.parentSupportScore=clamp(c.parentSupport/2,0,1);
+      c.hierarchyConsistency=clamp(.62*c.childSupport+.38*c.parentSupportScore,0,1);
+      const totalRules=(c.hardRules||[]).length,passed=(c.hardRules||[]).filter(x=>x.status==='pass').length;
+      const hardQuality=totalRules?passed/totalRules:0.5;
+      const recency=clamp(1-(denominator-1-c.endIndex)/denominator,0,1);
+      const coverage=clamp(Math.log1p(span)/Math.log1p(Math.max(24,denominator*.22)),0,1);
+      const correction=isCorrectivePattern(c.pattern);
+      const isolatedCorrection=correction&&c.parentSupport===0?.14:0;
+      const unverifiedGrammar=c.internalStructure?.status==='unverified'?.055:0;
+      const diagonalRoleMissing=['diagonal_candidate','expanding_diagonal_candidate'].includes(c.pattern)&&!(c.contextualRoleEvidence||[]).length?.18:0;
+      // Structural agreement is the dominant term: both child subdivisions and parent
+      // context matter. This is a ranking score, not a probability or accuracy estimate.
+      c.hierarchyScore=100*clamp(
+        .24*(Number(c.evidenceScore)||0)/100+
+        .10*hardQuality+
+        .13*c.scaleAgreement+
+        .32*c.hierarchyConsistency+
+        .13*recency+
+        .08*coverage-isolatedCorrection-unverifiedGrammar-diagonalRoleMissing,0,1);
+      c.hierarchyDiagnostics={degreeIndex:c.degreeIndex,degreeId:c.degreeId,scaleSupport:c.scaleSupport,scaleCount:scales.length,
+        parentSupport:c.parentSupport,childSupport:c.childSupport,parentCandidateKeys:c.parentCandidateKeys.slice(),
+        recursiveMatchedLegs:matched,recursiveTotalLegs:legs.length,hardQuality,recency,coverage,
+        isolatedCorrectionPenalty:isolatedCorrection,unverifiedGrammarPenalty:unverifiedGrammar,diagonalRoleMissingPenalty:diagonalRoleMissing};
+    }
+    return flat.sort((a,b)=>(b.hierarchyScore||0)-(a.hierarchyScore||0)||(b.endIndex-a.endIndex)||(b.evidenceScore-a.evidenceScore));
   }
 
   function diversifyCandidates(items,maxCandidates){
@@ -668,7 +715,7 @@
         const observed=(options.finePivots||[]).filter(q=>q.index>a.index&&q.index<b.index).length+1;
         const childRulesClean=!!child&&(child.ruleSummary?.failed||0)===0&&(child.ruleSummary?.unverified||0)===0;
         const childVerified=childRulesClean&&child.internalStructure?.status==='verified';
-        legs.push({wave:i+1,expected:expected[i],observedSwingSegments:observed,childPattern:child?.pattern||null,childCandidateId:child?.id||null,childRuleStatus:child?child.status:'missing',contextualRole:roleContext|| (child?.pattern?.includes('diagonal')?'parent-context-unresolved':null),status:childVerified?'verified':childRulesClean?'matched-child-pattern':child?'child-provisional':observed===Number(expected[i])?'swing-count-only':'unverified'});
+        legs.push({wave:i+1,expected:expected[i],observedSwingSegments:observed,childPattern:child?.pattern||null,childCandidateId:child?.id||null,childCandidateKey:child?.candidateKey||null,childRuleStatus:child?child.status:'missing',contextualRole:roleContext|| (child?.pattern?.includes('diagonal')?'parent-context-unresolved':null),status:childVerified?'verified':childRulesClean?'matched-child-pattern':child?'child-provisional':observed===Number(expected[i])?'swing-count-only':'unverified'});
       }
       const matches=legs.filter(x=>x.childCandidateId).length;
       const fullyVerified=legs.length>0&&legs.every(x=>x.status==='verified');
@@ -677,7 +724,7 @@
       c.internalStructure={status:fullyVerified?'verified':allMatched?'matched':matches?'partial':'unverified',note:fullyVerified?'Tất cả các nhịp có child grammar đã xác minh đệ quy.':allMatched?'Đã tìm thấy child candidate cùng hướng và đúng nhóm motive/corrective, nhưng child grammar sâu hơn chưa được xác minh.':roleUnresolved?'Diagonal cần xác định vai trò (Leading/Ending) ở degree lớn hơn trước khi chọn 5-3-5-3-5 hoặc 3-3-3-3-3.':'Có pivot-count / child candidates chưa đủ; không suy diễn 3/5 grammar từ số swing.',expected,matchedLegs:matches,totalLegs:legs.length,legs};
       if(!fullyVerified){c.status='provisional';if(!c.warnings.some(x=>x.includes('recursive')))c.warnings.push('Recursive subdivision chưa được xác minh đầy đủ ở degree thấp hơn; không coi internal grammar là PASS.');}
       else if(!c.ruleSummary.failed&&!c.ruleSummary.unverified)c.status='rules-passed';
-      c.recursiveGrammar={status:c.internalStructure.status,matchedLegs:matches,totalLegs:legs.length,fullyVerified};
+      c.recursiveGrammar={status:c.internalStructure.status,matchedLegs:matches,totalLegs:legs.length,fullyVerified,legs:legs.map(x=>({...x}))};
     }
     return candidates;
   }
@@ -793,22 +840,24 @@
     for(let i=0;i<multi.scales.length;i++){
       const fine=i===0?[]:multi.scales[i-1].pivots;
       const d0=detectAtScale(multi.scales[i].pivots,{...opts,finePivots:fine});
+      d0.candidates.forEach(c=>{c.degreeIndex=i;c.degreeId=multi.scales[i].id;c.candidateKey=`${c.id}@${c.degreeId}`;});
       all.push(d0.candidates);rejectedByScale.push(d0.rejected);
     }
-    // Recursive subdivision evidence flows from the immediately smaller scale upward.
+    // Recursive grammar flows upward, while candidate links are retained for the
+    // reverse parent-context pass. Thus the final count is checked in both directions.
     for(let i=1;i<all.length;i++)attachRecursiveGrammar(all[i],all[i-1],{...opts,finePivots:multi.scales[i-1].pivots});
     const primaryIndex=multi.primaryScaleIndex;
-    const ranked=addScaleAgreement(all,multi.scales,primaryIndex)
-      .map(c=>{c.fibTargets=buildProjectionZones(c,{...opts,atrValue:atrWilder(bars,opts.atrPeriod).values.at(-1)});return c;})
-      .sort((a,b)=>b.evidenceScore-a.evidenceScore||b.endIndex-a.endIndex);
+    const ranked=addScaleAgreement(all,multi.scales,primaryIndex,bars.length)
+      .map(c=>{c.fibTargets=buildProjectionZones(c,{...opts,atrValue:atrWilder(bars,opts.atrPeriod).values.at(-1)});return c;});
     // Prioritize structures near the right edge so the default view describes the current market,
     // while keeping older patterns available as alternates and historical analogs.
     const recentCutoff=Math.max(0,bars.length-Math.max(12,Math.round(bars.length*.14)));
-    const recentRanked=ranked.filter(c=>c.endIndex>=recentCutoff).sort((a,b)=>b.endIndex-a.endIndex||b.evidenceScore-a.evidenceScore);
+    const recentRanked=ranked.filter(c=>c.endIndex>=recentCutoff);
     const candidates=diversifyCandidates([...recentRanked,...ranked],opts.maxCandidates);
-    // In a live chart, prefer the most recent coherent count over an older, higher-scoring historical pattern.
+    // Select the current count by structural coherence first, recency second. A tiny,
+    // late ABC fragment no longer wins solely because its last pivot is newest.
     const latestPool=candidates.filter(c=>c.endIndex>=recentCutoff);
-    const preferred=(latestPool.length?latestPool:candidates).slice().sort((a,b)=>b.endIndex-a.endIndex||b.evidenceScore-a.evidenceScore)[0]||null;
+    const preferred=(latestPool.length?latestPool:candidates).slice().sort((a,b)=>(b.hierarchyScore||0)-(a.hierarchyScore||0)||b.endIndex-a.endIndex)[0]||null;
     const nextWaveForecast=buildNextWaveForecast(preferred,ranked,bars,{quantStats:opts.quantStats});
     const rejectedCandidateCount=rejectedByScale.reduce((sum,group)=>sum+Object.values(group).reduce((s,n)=>s+n,0),0);
     const primaryPivots=multi.primary;
@@ -816,11 +865,11 @@
       version:VERSION,createdAt:new Date().toISOString(),bars,nextWaveForecast,
       dataSummary:{observations:bars.length,startTime:bars[0].time,endTime:bars[bars.length-1].time,asOfTime:bars[bars.length-1].time,asOfIndex:bars.length-1,source:'OHLC',lookaheadProtected:true},
       atr:{period:opts.atrPeriod,values:atrWilder(bars,opts.atrPeriod).values},
-      scales:multi.scales,primaryScaleIndex:primaryIndex,parentLegs:multi.parentLegs,degreeHierarchy:multi.degreeHierarchy,
+      scales:multi.scales,primaryScaleIndex:primaryIndex,parentLegs:multi.parentLegs,degreeHierarchy:multi.degreeHierarchy,candidateForest:ranked,
       pivotGraph:buildPivotGraph(primaryPivots,atrWilder(bars,opts.atrPeriod).values),
       swingBoxes:primaryPivots.length?buildSwingBoxes(primaryPivots,opts):[],
       candidates,preferred,alternates:selectAlternateCounts(candidates,preferred,5),
-      diagnostics:{pivotCount:primaryPivots.length,scalePivotCounts:multi.scales.map(s=>s.pivots.length),candidateCount:candidates.length,rejectedCandidateCount,rejectedByScale,hasClearCount:candidates.length>0,asOfTime:bars[bars.length-1].time,recursiveCounts:candidates.filter(c=>c.recursiveGrammar?.status==='verified').length,recursiveMatchedCounts:candidates.filter(c=>c.recursiveGrammar?.status==='matched').length,provisionalCounts:candidates.filter(c=>c.status==='provisional').length,disclaimer:'Evidence Score không phải xác suất. Candidate là giả thuyết hình học trên pivot đã xác nhận; grammar chỉ VERIFIED khi child grammar cũng được xác minh đệ quy; swing-count đơn thuần chỉ là proxy.',patternCoverage:['Impulse','Extended Impulse candidate','Truncated Fifth','Developing Wave 5','Contracting/expanding Diagonal candidates · role-dependent','Zigzag','Regular/Expanded/Running Flat','Contracting/Barrier/Expanding Triangle','Double/Triple Zigzag','Double/Triple Three']},
+      diagnostics:{pivotCount:primaryPivots.length,scalePivotCounts:multi.scales.map(s=>s.pivots.length),candidateCount:candidates.length,rejectedCandidateCount,rejectedByScale,hasClearCount:candidates.length>0,asOfTime:bars[bars.length-1].time,recursiveCounts:candidates.filter(c=>c.recursiveGrammar?.status==='verified').length,recursiveMatchedCounts:candidates.filter(c=>c.recursiveGrammar?.status==='matched').length,hierarchicalCount:candidates.filter(c=>(c.hierarchyDiagnostics?.parentSupport||0)>0||(c.hierarchyDiagnostics?.recursiveMatchedLegs||0)>0).length,provisionalCounts:candidates.filter(c=>c.status==='provisional').length,disclaimer:'Evidence Score không phải xác suất. Candidate là giả thuyết hình học trên pivot đã xác nhận; grammar chỉ VERIFIED khi child grammar cũng được xác minh đệ quy; swing-count đơn thuần chỉ là proxy.',patternCoverage:['Impulse','Extended Impulse candidate','Truncated Fifth','Developing Wave 5','Contracting/expanding Diagonal candidates · role-dependent','Zigzag','Regular/Expanded/Running Flat','Contracting/Barrier/Expanding Triangle','Double/Triple Zigzag','Double/Triple Three']},
       settings:{mode:autoMode?'automatic':'explicit',atrPeriod:opts.atrPeriod,thresholdMultiplier:opts.thresholdMultiplier,scaleFactors:opts.scaleFactors,primaryScaleIndex:primaryIndex,asOfTime:bars[bars.length-1].time,projectionMode:opts.projectionMode||'arithmetic',zoneAtrMultiplier:opts.zoneAtrMultiplier||.05}
     };
   }
@@ -838,6 +887,6 @@
     VERSION,DEFAULTS,PATTERN_CATALOG,normalizeBars,trueRanges,atrWilder,automaticSwingSettings,quantile,
     directionalChangePivots,detectMultiScalePivots,
     evaluateImpulse,evaluateDevelopingImpulse,evaluateZigzag,evaluateFlat,evaluateTriangle,evaluateDiagonal,
-    detectAtScale,composeCombinationCandidates,attachRecursiveGrammar,auditManualSequence,buildDegreeHierarchy,buildSwingBoxes,buildPivotGraph,buildProjectionZones,buildNextWaveForecast,updateScenarioLifecycle,diversifyCandidates,selectAlternateCounts,buildFibTargets,buildImpulseChannel,analyze,summarizeCandidate
+    detectAtScale,composeCombinationCandidates,attachRecursiveGrammar,addScaleAgreement,auditManualSequence,buildDegreeHierarchy,buildSwingBoxes,buildPivotGraph,buildProjectionZones,buildNextWaveForecast,updateScenarioLifecycle,diversifyCandidates,selectAlternateCounts,buildFibTargets,buildImpulseChannel,analyze,summarizeCandidate
   };
 });

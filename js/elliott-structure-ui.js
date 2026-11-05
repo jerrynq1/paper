@@ -3,7 +3,7 @@
   'use strict';
   const $=id=>document.getElementById(id);
   const E=()=>window.ElliottStructure;
-  const state={bars:[],source:'',result:null,selectedId:null,selected:null,manualPivots:[],manualDataKey:null,manualLabels:{},manualDegrees:{},manualParents:{},manualLocks:{},asOfIndex:null,snapshots:[],showAlternates:false,dragPivotUid:null,plotTransform:null};
+  const state={bars:[],source:'',result:null,selectedId:null,selected:null,manualPivots:[],manualDataKey:null,manualLabels:{},manualDegrees:{},manualParents:{},manualLocks:{},asOfIndex:null,snapshots:[],showAlternates:false,dragPivotUid:null,plotTransform:null,xZoom:1,xCenterIndex:null};
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fmt=(v,d=2)=>Number.isFinite(Number(v))?Number(v).toLocaleString('en-US',{maximumFractionDigits:d}):'—';
   const timeText=t=>{if(!Number.isFinite(Number(t)))return '—';try{return new Date(Number(t)*1000).toLocaleString('vi-VN',{hour12:false})}catch{return String(t)}};
@@ -107,6 +107,7 @@
       syncAsOfControl();
       const options={autoMode:true,maxCandidates:96,asOfIndex:state.asOfIndex,projectionMode:'arithmetic',zoneAtrMultiplier:.05,quantStats:window.QuantStats||null};
       const result=E().analyze(state.bars,options);state.result=result;initializeManualPivots(result);state.selectedId=result.preferred?.id||null;state.selected=selectedCandidate();
+      if(result.preferred){const span=Math.max(1,result.preferred.endIndex-result.preferred.startIndex),targetBars=Math.max(72,Math.min(state.bars.length,Math.round(span*2.6)));state.xZoom=Math.max(1,Math.min(10,state.bars.length/targetBars));state.xCenterIndex=(result.preferred.startIndex+result.preferred.endIndex)/2;}else{state.xZoom=1;state.xCenterIndex=null;}
       render();saveScenarioSnapshot();
       const recursive=result.diagnostics.recursiveCounts||0,matched=result.diagnostics.recursiveMatchedCounts||0;
       setStatus(result.candidates.length?`Đã nhận diện ${patternNames[result.preferred?.pattern]||'cấu trúc sóng'} · ${result.diagnostics.pivotCount} điểm cấu trúc · ${result.diagnostics.candidateCount} giả thuyết · ${timeText(result.dataSummary.asOfTime)}.`:'Chưa có count đủ điều kiện. Hãy thử timeframe khác hoặc nạp thêm dữ liệu.',!result.candidates.length);
@@ -130,17 +131,18 @@
   function renderPreferred(){
     const r=state.result,c=selectedCandidate(),box=$('ePreferred');if(!r||!box)return;
     if(!c){box.innerHTML='<div class="e-empty"><b>Chưa nhận diện được cấu trúc sóng rõ ràng</b><span>Thử đổi timeframe hoặc nạp thêm dữ liệu. Hệ thống không tự gán nhãn khi chưa đủ điều kiện.</span></div>';return;}
-    const status=c.status==='rules-passed'?'Đạt các hard rule có thể kiểm tra':c.status==='provisional'?'Đang chờ thêm xác nhận':'Ứng viên cấu trúc';
+    const status=c.status==='rules-passed'?'Đạt các hard rule có thể kiểm tra':c.status==='provisional'?'Đang chờ xác nhận sóng cha/con':'Ứng viên cấu trúc';
     const direction=c.direction==='bullish'?'Tăng':'Giảm';
     const invalidation=c.invalidation?.levels?.[0];
-    box.innerHTML=`<div class="e-preferred-simple"><div><small>COUNT ĐANG ƯU TIÊN</small><h3>${esc(patternNames[c.pattern]||c.pattern)}</h3><span class="e-dir ${c.direction}">${direction}</span></div><div class="e-simple-status">${esc(status)}</div></div><div class="e-simple-meta"><span><small>Bắt đầu</small><b>${esc(timeText(c.startTime))}</b></span><span><small>Cập nhật đến</small><b>${esc(timeText(c.endTime))}</b></span>${invalidation?`<span><small>Mốc vô hiệu hóa chính</small><b>${fmt(invalidation.price,5)}</b></span>`:''}</div>${c.warnings?.length?`<p class="e-caveat">${esc(c.warnings.slice(0,2).join(' '))}</p>`:''}`;
+    const hd=c.hierarchyDiagnostics||{};const hierarchyText=`Sóng con khớp ${hd.recursiveMatchedLegs||0}/${hd.recursiveTotalLegs||0} nhịp · được sóng cha hỗ trợ ${hd.parentSupport||0} lần`;
+    box.innerHTML=`<div class="e-preferred-simple"><div><small>COUNT ĐANG ƯU TIÊN</small><h3>${esc(patternNames[c.pattern]||c.pattern)}</h3><span class="e-dir ${c.direction}">${direction}</span></div><div class="e-simple-status">${esc(status)}</div></div><div class="e-simple-meta"><span><small>Bắt đầu</small><b>${esc(timeText(c.startTime))}</b></span><span><small>Cập nhật đến</small><b>${esc(timeText(c.endTime))}</b></span><span><small>Đối chiếu đa cấp</small><b>${esc(hierarchyText)}</b></span>${invalidation?`<span><small>Mốc vô hiệu hóa chính</small><b>${fmt(invalidation.price,5)}</b></span>`:''}</div>${c.warnings?.length?`<p class="e-caveat">${esc(c.warnings.slice(0,2).join(' '))}</p>`:''}`;
   }
   function renderCandidates(){
     const r=state.result;if(!r)return;
     const alternates=r.alternates||[];
     const alternateIds=new Set(alternates.map(c=>c.id));
     const otherCandidates=r.candidates.filter(c=>c.id!==r.preferred?.id&&!alternateIds.has(c.id)).slice(0,10);
-    const row=(c,i)=>`<button type="button" class="e-candidate-row${c.id===state.selectedId?' selected':''}" data-e-candidate="${esc(c.id)}"><span class="e-cand-rank">${i+1}</span><span class="e-cand-main"><b>${esc(patternNames[c.pattern]||c.pattern)}</b><small>${c.direction==='bullish'?'Bullish':'Bearish'} · ${c.status==='provisional'?'Provisional':'Rules passed'} · ${c.ruleSummary.passed} rule pass</small></span><span class="e-cand-score">${fmt(c.evidenceScore,1)}</span></button>`;
+    const row=(c,i)=>`<button type="button" class="e-candidate-row${c.id===state.selectedId?' selected':''}" data-e-candidate="${esc(c.id)}"><span class="e-cand-rank">${i+1}</span><span class="e-cand-main"><b>${esc(patternNames[c.pattern]||c.pattern)}</b><small>${c.direction==='bullish'?'Bullish':'Bearish'} · ${c.status==='provisional'?'Provisional':'Rules passed'} · ${c.ruleSummary.passed} rule pass · ${c.hierarchyDiagnostics?.parentSupport||0} parent links · D${(c.degreeIndex??0)+1}</small></span><span class="e-cand-score">${fmt(c.hierarchyScore??c.evidenceScore,1)}</span></button>`;
     const alternateHtml=alternates.length?`<h5 class="e-candidate-section-title">Alternate interpretations · same swing interval</h5><div class="e-candidate-list">${alternates.map(row).join('')}</div>`:'<div class="e-empty e-empty-compact"><b>No close alternate count</b><span>Chưa có cách đếm khác có điểm đầu/cuối gần với Preferred Count.</span></div>';
     const otherHtml=otherCandidates.length?`<h5 class="e-candidate-section-title">Other pattern candidates · other intervals</h5><div class="e-candidate-list">${otherCandidates.map(row).join('')}</div>`:'';
     $('eCandidates').innerHTML=r.preferred?`${alternateHtml}${otherHtml}`:'<div class="e-empty"><b>No candidate detected</b><span>Thử timeframe khác hoặc nạp thêm dữ liệu để cấu trúc được xác nhận.</span></div>';
@@ -197,21 +199,76 @@
 
   function drawPlot(){
     const cv=$('ePlot');if(!cv||!state.result)return;
-    const dpr=window.devicePixelRatio||1,w=Math.max(320,cv.clientWidth||720),h=Math.max(240,cv.clientHeight||320);cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
-    const bars=state.result.bars,selected=selectedCandidate(),forecast=selected?.id===state.result.preferred?.id?state.result.nextWaveForecast:E().buildNextWaveForecast(selected,state.result.candidates||[],bars,{quantStats:window.QuantStats||null});
-    const values=bars.flatMap(b=>[b.high,b.low]);let lo=Math.min(...values),hi=Math.max(...values);if(!(hi>lo)){lo-=1;hi+=1;}const pad=(hi-lo)*.055;lo-=pad;hi+=pad;const range=hi-lo,p={l:56,r:Math.max(92,Math.min(140,w*.16)),t:24,b:34};
-    const x=i=>p.l+(i/Math.max(1,bars.length-1))*(w-p.l-p.r),y=v=>p.t+(hi-v)/range*(h-p.t-p.b);state.plotTransform={w,h,p,lo,hi,x,y};
-    const css=getComputedStyle(document.documentElement),mut=css.getPropertyValue('--mut').trim()||'#9b927d',line=css.getPropertyValue('--line').trim()||'#555',accent=css.getPropertyValue('--acc').trim()||'#d8aa4c',green=css.getPropertyValue('--win').trim()||'#38b98a',red=css.getPropertyValue('--loss').trim()||'#de6682';
+    const dpr=window.devicePixelRatio||1,w=Math.max(320,cv.clientWidth||720),h=Math.max(240,cv.clientHeight||320);
+    cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+    const bars=state.result.bars,selected=selectedCandidate(),n=bars.length;
+    const total=n,zoom=Number(state.xZoom)||1,visibleCount=zoom<=1.001?total:Math.max(40,Math.min(total,Math.round(total/zoom)));
+    const center=Number.isFinite(state.xCenterIndex)?state.xCenterIndex:(selected?(selected.startIndex+selected.endIndex)/2:n-1);
+    const viewStart=visibleCount>=total?0:Math.max(0,Math.min(total-visibleCount,Math.round(center-visibleCount/2)));
+    const viewEnd=Math.min(total-1,viewStart+visibleCount-1),visible=bars.slice(viewStart,viewEnd+1);
+    const forecast=selected?.id===state.result?.preferred?.id?state.result.nextWaveForecast:E().buildNextWaveForecast(selected,state.result?.candidateForest||state.result?.candidates||[],bars,{quantStats:window.QuantStats||null});
+    const values=visible.flatMap(b=>[b.high,b.low]);
+    (selected?.pivots||[]).forEach(q=>{if(q.index>=viewStart&&q.index<=viewEnd)values.push(q.price)});
+    let lo=Math.min(...values),hi=Math.max(...values);if(!(hi>lo)){lo-=1;hi+=1;}const pad=(hi-lo)*.075;lo-=pad;hi+=pad;const range=hi-lo;
+    const p={l:56,r:Math.max(94,Math.min(128,w*.18)),t:22,b:34};
+    const x=i=>p.l+((i-viewStart)/Math.max(1,viewEnd-viewStart))*(w-p.l-p.r),y=v=>p.t+(hi-v)/range*(h-p.t-p.b);
+    state.plotTransform={w,h,p,lo,hi,x,y,viewStart,viewEnd,visibleCount};
+    const css=getComputedStyle(document.documentElement),mut=css.getPropertyValue('--mut').trim()||'#9b927d',line=css.getPropertyValue('--line').trim()||'#555',accent=css.getPropertyValue('--acc').trim()||'#d8aa4c',green=css.getPropertyValue('--win').trim()||'#38b98a',cardColor=css.getPropertyValue('--card').trim()||'#111';
     ctx.strokeStyle=line;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(p.l,h-p.b);ctx.lineTo(w-p.r,h-p.b);ctx.stroke();
-    ctx.fillStyle=mut;ctx.font='10px Space Grotesk,sans-serif';ctx.fillText(fmt(hi,4),5,p.t+4);ctx.fillText(fmt(lo,4),5,h-p.b);
-    const step=Math.max(1,Math.ceil(bars.length/1800));ctx.strokeStyle=mut;ctx.globalAlpha=.64;ctx.lineWidth=1;ctx.beginPath();let started=false;for(let i=0;i<bars.length;i+=step){const xx=x(i),yy=y(bars[i].close);if(!started){ctx.moveTo(xx,yy);started=true}else ctx.lineTo(xx,yy)}if((bars.length-1)%step!==0)ctx.lineTo(x(bars.length-1),y(bars[bars.length-1].close));ctx.stroke();ctx.globalAlpha=1;
-    if(selected?.pivots?.length){const labels=waveStructureLabels(selected),pts=selected.pivots;ctx.strokeStyle=accent;ctx.lineWidth=2.4;ctx.beginPath();pts.forEach((q,i)=>{if(i===0)ctx.moveTo(x(q.index),y(q.price));else ctx.lineTo(x(q.index),y(q.price));});ctx.stroke();
-      const placed=[];const cardColor=getComputedStyle(document.documentElement).getPropertyValue('--card').trim()||'#111';
-      pts.forEach((q,i)=>{const xx=x(q.index),yy=y(q.price),label=labels[i]||String(i);ctx.fillStyle=accent;ctx.beginPath();ctx.arc(xx,yy,3.8,0,Math.PI*2);ctx.fill();ctx.font='800 10px Space Grotesk,sans-serif';const bw=Math.max(20,ctx.measureText(label).width+9),bh=18;const preferUp=q.kind==='high';let bx=Math.max(p.l+bw/2+2,Math.min(w-p.r-bw/2-2,xx)),by=yy+(preferUp?-22:22);const shifts=[0,-18,18,-34,34,-50,50];for(const shift of shifts){const cy=Math.max(p.t+bh/2+2,Math.min(h-p.b-bh/2-2,by+shift));const clash=placed.some(a=>Math.abs(a.x-bx)<(a.w+bw)/2+3&&Math.abs(a.y-cy)<(a.h+bh)/2+2);if(!clash){by=cy;break;}}const box={x:bx,y:Math.max(p.t+bh/2+2,Math.min(h-p.b-bh/2-2,by)),w:bw,h:bh};placed.push(box);ctx.save();ctx.strokeStyle=accent;ctx.globalAlpha=.65;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xx,yy);ctx.lineTo(box.x,box.y+(preferUp?bh/2:-bh/2));ctx.stroke();ctx.globalAlpha=1;ctx.fillStyle=cardColor;ctx.strokeStyle=accent;ctx.lineWidth=1;ctx.beginPath();roundedRectPath(ctx,box.x-bw/2,box.y-bh/2,bw,bh,5);ctx.fill();ctx.stroke();ctx.fillStyle=accent;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,box.x,box.y);ctx.restore();});ctx.textAlign='left';ctx.textBaseline='alphabetic';}
-    // Keep the price chart clean: one Quant midpoint and one central Fibonacci reference at most.
-    if(forecast?.available){const levels=[];if(forecast.quant)levels.push({label:'QUANT',price:forecast.quant.centerPrice,color:green,width:2});const centralRatio=forecast.wave==='5'?1:.5;const centralFib=(forecast.fib||[]).find(v=>Math.abs(Number(v.ratio)-centralRatio)<1e-8);if(centralFib)levels.push({label:'FIB',price:centralFib.price,color:accent,width:1});
-      levels.filter(lv=>lv.price>=lo&&lv.price<=hi).forEach((lv,i)=>{const yy=y(lv.price);ctx.save();ctx.strokeStyle=lv.color;ctx.globalAlpha=.76;ctx.lineWidth=lv.width;ctx.setLineDash(lv.label==='QUANT'?[]:[5,4]);ctx.beginPath();ctx.moveTo(x(Math.max(0,selected?.endIndex??bars.length-1)),yy);ctx.lineTo(w-p.r+3,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=lv.color;ctx.font='bold 9px Space Grotesk,sans-serif';ctx.fillText(`${lv.label} ${fmt(lv.price,4)}`,w-p.r+7,yy+(i%2?12:-5));ctx.restore();});}
-    ctx.fillStyle=mut;ctx.font='10px Space Grotesk,sans-serif';ctx.fillText(`${bars.length.toLocaleString('vi-VN')} nến · ${selected?patternNames[selected.pattern]||selected.pattern:'chưa có cấu trúc'} · nhãn sóng tự động`,p.l,h-9);
+    ctx.fillStyle=mut;ctx.font='10px Space Grotesk,sans-serif';ctx.textAlign='left';ctx.fillText(fmt(hi,4),5,p.t+4);ctx.fillText(fmt(lo,4),5,h-p.b);
+    ctx.save();ctx.beginPath();ctx.rect(p.l,p.t,w-p.l-p.r,h-p.t-p.b);ctx.clip();
+    const step=Math.max(1,Math.ceil(visible.length/1800));ctx.strokeStyle=mut;ctx.globalAlpha=.68;ctx.lineWidth=1;ctx.beginPath();let started=false;
+    for(let i=viewStart;i<=viewEnd;i+=step){const xx=x(i),yy=y(bars[i].close);if(!started){ctx.moveTo(xx,yy);started=true}else ctx.lineTo(xx,yy)}
+    if((viewEnd-viewStart)%step!==0)ctx.lineTo(x(viewEnd),y(bars[viewEnd].close));ctx.stroke();ctx.globalAlpha=1;
+
+    const forest=state.result.candidateForest||state.result.candidates||[];
+    const parentKeys=selected?.parentCandidateKeys||[];
+    const childKeys=(selected?.recursiveGrammar?.legs||[]).map(v=>v.childCandidateKey).filter(Boolean);
+    const parentCounts=forest.filter(c=>parentKeys.includes(c.candidateKey)).slice(0,1);
+    const childCounts=forest.filter(c=>childKeys.includes(c.candidateKey));
+    const drawStructure=(candidate,color,width,alpha,dash=[])=>{
+      if(!candidate?.pivots?.length||candidate.pivots.length<2)return;
+      ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.beginPath();
+      candidate.pivots.forEach((q,i)=>{if(i===0)ctx.moveTo(x(q.index),y(q.price));else ctx.lineTo(x(q.index),y(q.price));});ctx.stroke();ctx.restore();
+    };
+    // Draw the parent context and matched child structures softly. The selected
+    // count remains the only structure with prominent wave labels.
+    parentCounts.forEach(c=>drawStructure(c,mut,1.15,.42,[4,4]));
+    childCounts.forEach(c=>drawStructure(c,mut,1.05,.34,[]));
+    if(selected?.pivots?.length){
+      const labels=waveStructureLabels(selected),pts=selected.pivots;
+      ctx.strokeStyle=accent;ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();pts.forEach((q,i)=>{if(i===0)ctx.moveTo(x(q.index),y(q.price));else ctx.lineTo(x(q.index),y(q.price));});ctx.stroke();
+      const placed=[];ctx.font='800 10px Space Grotesk,sans-serif';
+      pts.forEach((q,i)=>{
+        const xx=x(q.index),yy=y(q.price),label=labels[i]||String(i);ctx.fillStyle=accent;ctx.beginPath();ctx.arc(xx,yy,3.6,0,Math.PI*2);ctx.fill();
+        const bw=Math.max(20,ctx.measureText(label).width+10),bh=18;
+        const offsets=[[0,-26],[0,26],[-22,-26],[22,26],[-30,0],[30,0],[0,-46],[0,46],[-42,-20],[42,20]];
+        let best=null,bestCost=Infinity;
+        for(const [dx,dy] of offsets){
+          const bx=Math.max(p.l+bw/2+2,Math.min(w-p.r-bw/2-2,xx+dx));
+          const by=Math.max(p.t+bh/2+2,Math.min(h-p.b-bh/2-2,yy+dy));
+          const overlap=placed.reduce((sum,a)=>{const ox=Math.max(0,(a.w+bw)/2+4-Math.abs(a.x-bx)),oy=Math.max(0,(a.h+bh)/2+3-Math.abs(a.y-by));return sum+ox*oy;},0);
+          const cost=overlap*100+Math.hypot(dx,dy)*.08;
+          if(cost<bestCost){bestCost=cost;best={x:bx,y:by,w:bw,h:bh};}
+          if(overlap===0)break;
+        }
+        const box=best||{x:xx,y:yy-25,w:bw,h:bh};placed.push(box);
+        ctx.save();ctx.strokeStyle=accent;ctx.globalAlpha=.62;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xx,yy);ctx.lineTo(box.x,box.y+(box.y<yy?bh/2:-bh/2));ctx.stroke();ctx.globalAlpha=1;
+        ctx.fillStyle=cardColor;ctx.strokeStyle=accent;ctx.lineWidth=1;ctx.beginPath();roundedRectPath(ctx,box.x-bw/2,box.y-bh/2,bw,bh,5);ctx.fill();ctx.stroke();ctx.fillStyle=accent;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,box.x,box.y);ctx.restore();
+      });ctx.textAlign='left';ctx.textBaseline='alphabetic';
+    }
+    if(forecast?.available){
+      const levels=[];if(forecast.quant)levels.push({label:'QUANT',price:forecast.quant.centerPrice,color:green,width:2});
+      const centralRatio=forecast.wave==='5'?1:.5,centralFib=(forecast.fib||[]).find(v=>Math.abs(Number(v.ratio)-centralRatio)<1e-8);
+      if(centralFib)levels.push({label:'FIB',price:centralFib.price,color:accent,width:1});
+      levels.filter(lv=>lv.price>=lo&&lv.price<=hi).forEach((lv,i)=>{const yy=y(lv.price);ctx.save();ctx.strokeStyle=lv.color;ctx.globalAlpha=.76;ctx.lineWidth=lv.width;ctx.setLineDash(lv.label==='QUANT'?[]:[5,4]);ctx.beginPath();ctx.moveTo(x(Math.max(viewStart,selected?.endIndex??viewEnd)),yy);ctx.lineTo(w-p.r+3,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=lv.color;ctx.font='bold 9px Space Grotesk,sans-serif';ctx.fillText(`${lv.label} ${fmt(lv.price,4)}`,w-p.r+7,yy+(i%2?12:-5));ctx.restore();});
+    }
+    ctx.restore();
+    // Compact X-axis date ticks follow the current visible bar window.
+    ctx.fillStyle=mut;ctx.font='9px Space Grotesk,sans-serif';ctx.textAlign='center';
+    [0,.25,.5,.75,1].forEach(fr=>{const idx=Math.round(viewStart+fr*(viewEnd-viewStart)),t=bars[idx]?.time;const label=Number.isFinite(t)?new Date(t*1000).toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit'}):'';ctx.fillText(label,x(idx),h-9);});
+    ctx.textAlign='left';const zoomLabel=$('eXZoomLabel');if(zoomLabel)zoomLabel.textContent=`${zoom.toFixed(1)}× · ${visibleCount.toLocaleString('vi-VN')} nến`;
+    const zoomInput=$('eXZoom');if(zoomInput&&Math.abs(Number(zoomInput.value)-zoom)>.04)zoomInput.value=String(zoom);
   }
 
   function moveManualPivot(uid,targetIndex){
@@ -231,7 +288,7 @@
   }
   function handlePlotPointerMove(e){
     if(!state.dragPivotUid||!state.plotTransform)return;const rect=$('ePlot').getBoundingClientRect(),px=e.clientX-rect.left,tr=state.plotTransform;
-    const idx=Math.round((px-tr.p.l)/Math.max(1,tr.w-tr.p.l-tr.p.r)*Math.max(1,state.result.bars.length-1));
+    const idx=Math.round(tr.viewStart+(px-tr.p.l)/Math.max(1,tr.w-tr.p.l-tr.p.r)*Math.max(1,tr.viewEnd-tr.viewStart));
     if(moveManualPivot(state.dragPivotUid,idx)){renderManualCount();manualAudit();drawPlot();}
   }
   function handlePlotPointerUp(){state.dragPivotUid=null;}
@@ -291,7 +348,7 @@
 
   function exportJson(){
     if(!state.result)return;const r=state.result,c=selectedCandidate();
-    const payload={product:'Gexadecimal Elliott Structure Lab',version:r.version,source:state.source,settings:r.settings,diagnostics:r.diagnostics,asOf:{index:r.dataSummary.asOfIndex,time:r.dataSummary.asOfTime,lookaheadProtected:r.dataSummary.lookaheadProtected},manualCount:{pivots:state.manualPivots,labels:state.manualLabels,degrees:state.manualDegrees,parentDegrees:state.manualParents,locks:state.manualLocks},snapshots:state.snapshots.map(x=>({...x,summary:x.summary})),preferred:E().summarizeCandidate(c),alternates:r.candidates.filter(x=>x.id!==c?.id).slice(0,10).map(E().summarizeCandidate),pivotGraph:r.pivotGraph,swingBoxes:r.swingBoxes,degreeHierarchy:r.degreeHierarchy,pivotScale:r.scales.map(s=>({id:s.id,factor:s.factor,thresholdMultiplier:s.thresholdMultiplier,pivots:s.pivots})),bars:r.bars};
+    const payload={product:'Gexadecimal Elliott Structure Lab',version:r.version,source:state.source,settings:r.settings,diagnostics:r.diagnostics,asOf:{index:r.dataSummary.asOfIndex,time:r.dataSummary.asOfTime,lookaheadProtected:r.dataSummary.lookaheadProtected},manualCount:{pivots:state.manualPivots,labels:state.manualLabels,degrees:state.manualDegrees,parentDegrees:state.manualParents,locks:state.manualLocks},snapshots:state.snapshots.map(x=>({...x,summary:x.summary})),preferred:E().summarizeCandidate(c),alternates:r.candidates.filter(x=>x.id!==c?.id).slice(0,10).map(E().summarizeCandidate),pivotGraph:r.pivotGraph,swingBoxes:r.swingBoxes,degreeHierarchy:r.degreeHierarchy,candidateHierarchy:(r.candidateForest||[]).map(x=>({candidateKey:x.candidateKey,pattern:x.pattern,direction:x.direction,degreeIndex:x.degreeIndex,degreeId:x.degreeId,startIndex:x.startIndex,endIndex:x.endIndex,hierarchyScore:x.hierarchyScore,hierarchyDiagnostics:x.hierarchyDiagnostics,recursiveGrammar:x.recursiveGrammar,parentCandidateKeys:x.parentCandidateKeys})),pivotScale:r.scales.map(s=>({id:s.id,factor:s.factor,thresholdMultiplier:s.thresholdMultiplier,pivots:s.pivots})),bars:r.bars};
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='gexadecimal-elliott-structure-analysis.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function init(){
@@ -303,6 +360,9 @@
     $('eCsvBtn').addEventListener('click',()=>$('eCsv').click());
     $('eCsv').addEventListener('change',e=>importCsv(e.target.files&&e.target.files[0]));
     $('eExport').addEventListener('click',exportJson);
+    const plot=$('ePlot');plot?.addEventListener('pointerdown',handlePlotPointerDown);plot?.addEventListener('pointermove',handlePlotPointerMove);plot?.addEventListener('pointerup',handlePlotPointerUp);plot?.addEventListener('pointercancel',handlePlotPointerUp);
+    $('eXZoom')?.addEventListener('input',e=>{state.xZoom=Math.max(1,Math.min(10,Number(e.target.value)||1));if(state.result?.preferred&&!Number.isFinite(state.xCenterIndex))state.xCenterIndex=(state.result.preferred.startIndex+state.result.preferred.endIndex)/2;drawPlot();});
+    $('eXZoomReset')?.addEventListener('click',()=>{state.xZoom=1;state.xCenterIndex=null;const slider=$('eXZoom');if(slider)slider.value='1';drawPlot();});
     $('eAsOfRange')?.addEventListener('input',e=>{state.asOfIndex=Number(e.target.value);syncAsOfControl()});
     $('eAsOfRange')?.addEventListener('change',runAnalysis);
     $('eAsOfFull')?.addEventListener('click',()=>{state.asOfIndex=state.bars.length-1;syncAsOfControl();runAnalysis()});
@@ -314,7 +374,7 @@
     $('eManualClear')?.addEventListener('click',()=>{state.manualPivots=[];state.manualLabels={};state.manualDegrees={};state.manualParents={};state.manualLocks={};state.manualDataKey=null;initializeManualPivots(state.result);renderManualCount();manualAudit();drawPlot();});
     $('eManualAudit')?.addEventListener('click',manualAudit);
     $('eManualTable')?.addEventListener('click',e=>{const lock=e.target.closest('[data-e-manual-lock]');if(lock){const uid=lock.dataset.eManualLock;state.manualLocks[uid]=!state.manualLocks[uid];renderManualCount();manualAudit();drawPlot();return;}const b=e.target.closest('[data-e-manual-remove-label]');if(!b||b.disabled)return;const uid=b.dataset.eManualRemoveLabel;delete state.manualLabels[uid];delete state.manualDegrees[uid];delete state.manualParents[uid];renderManualCount();manualAudit();drawPlot();});
-    $('eCandidates').addEventListener('click',e=>{const b=e.target.closest('[data-e-candidate]');if(!b)return;state.selectedId=b.dataset.eCandidate;state.selected=selectedCandidate();render();});
+    $('eCandidates').addEventListener('click',e=>{const b=e.target.closest('[data-e-candidate]');if(!b)return;state.selectedId=b.dataset.eCandidate;state.selected=selectedCandidate();if(state.selected)state.xCenterIndex=(state.selected.startIndex+state.selected.endIndex)/2;render();});
     window.addEventListener('resize',()=>{if(state.result&&document.body.dataset.v==='elliott')drawPlot()});
     try{loadChart('current');runAnalysis()}catch(e){try{demoBars();runAnalysis()}catch(err){setStatus(err.message,true)}}
   }
