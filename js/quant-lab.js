@@ -2,7 +2,7 @@
 (function(){
   'use strict';
   const $q=id=>document.getElementById(id);
-  const QL={headers:[],rows:[],delimiter:',',source:'',numeric:[],priceIndex:-1,timeIndex:-1,timeSorted:false,invalidTimestampCount:0,timeAudit:null,loadedAt:null,lastRegression:null,lastLaggedRegression:null,lastTsModel:null};
+  const QL={headers:[],rows:[],delimiter:',',source:'',numeric:[],priceIndex:-1,timeIndex:-1,timeSorted:false,invalidTimestampCount:0,timeAudit:null,loadedAt:null,lastRegression:null,lastLaggedRegression:null,lastTsModel:null,lastVolatility:null};
   const fmt=(v,d=4)=>Number.isFinite(v)?Number(v).toLocaleString('en-US',{maximumFractionDigits:d}):'—';
   const pct=(v,d=3)=>Number.isFinite(v)?(v*100).toFixed(d)+'%':'—';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -26,7 +26,7 @@
       const meta=QuantStats.timestampMetadata(rows.map(r=>r[ti]));
       timeAudit={meta,sourceDuplicates,sourceBackwards,reorderedRows,invalidTimestampCount,rawFirst:rows[0]?.[ti]??'',rawLast:rows[rows.length-1]?.[ti]??''};
     }
-    QL.headers=headers;QL.rows=orderedRows;QL.delimiter=normalizedDelimiter;QL.source=source;QL.loadedAt=new Date();QL.lastTsModel=null;QL.lastRegression=null;QL.lastLaggedRegression=null;
+    QL.headers=headers;QL.rows=orderedRows;QL.delimiter=normalizedDelimiter;QL.source=source;QL.loadedAt=new Date();QL.lastTsModel=null;QL.lastRegression=null;QL.lastLaggedRegression=null;QL.lastVolatility=null;
     QL.numeric=numeric;QL.timeIndex=ti;QL.timeSorted=timeSorted;QL.invalidTimestampCount=invalidTimestampCount;QL.timeAudit=timeAudit;
     QL.priceIndex=numeric.some(c=>c.index===pi)?pi:(numeric.find(c=>c.index!==ti)?.index??numeric[0].index);
     populateControls();render();note(`${fmt(QL.rows.length,0)} dòng · ${QL.numeric.length} cột số · ${source}`);
@@ -36,6 +36,7 @@
     if($q('qTsWalkForwardOutput'))$q('qTsWalkForwardOutput').innerHTML='<p class="msg">Dataset đã đổi. Chạy lại Walk-forward.</p>';
     if($q('qTsModelStatus')){$q('qTsModelStatus').textContent='Dữ liệu đã đổi. Hãy ước lượng lại mô hình.';$q('qTsModelStatus').classList.remove('is-good','is-bad')}
     if($q('qTsColumn'))renderCorrelogram();
+    if($q('qVolOutput')){$q('qVolOutput').hidden=true;$q('qVolStatus').textContent='Dataset đã thay đổi. Hãy ước lượng lại Phase 4.';$q('qVolStatus').classList.remove('is-good','is-bad')}
   }
   function populateControls(){
     const p=$q('qPriceColumn'),c=$q('qCorrColumns');
@@ -43,6 +44,7 @@
     const limited=QL.numeric.slice(0,8);c.innerHTML=limited.map(x=>`<label class="ql-check"><input type="checkbox" value="${x.index}" checked><span>${esc(x.name)}</span></label>`).join('');
     populateRegressionControls(undefined,true);
     populateTimeSeriesControls();
+    populateVolatilityControls();
   }
   function populateRegressionControls(preferred,resetY=false){
     const y=$q('qRegY'),x=$q('qRegX');if(!y||!x)return;
@@ -69,6 +71,64 @@
     el.innerHTML=QL.numeric.map(c=>`<option value="${c.index}" ${c.index===preferred?'selected':''}>${esc(c.name)}</option>`).join('');
   }
   function timeSeriesValues(){const i=Number($q('qTsColumn').value);return{index:i,name:QL.headers[i],values:getValues(i)}}
+  function populateVolatilityControls(){
+    const el=$q('qVolColumn');if(!el)return;const preferred=QL.priceIndex;
+    el.innerHTML=QL.numeric.map(c=>`<option value="${c.index}" ${c.index===preferred?'selected':''}>${esc(c.name)}</option>`).join('');
+  }
+  function selectedVolatilityValues(){const i=Number($q('qVolColumn').value);return{index:i,name:QL.headers[i],values:getValues(i)}}
+  function drawVolatilityPlot(inSample,forecast){
+    const cv=$q('qVolPlot');if(!cv)return;const dpr=window.devicePixelRatio||1,w=cv.clientWidth||600,h=230;cv.width=w*dpr;cv.height=h*dpr;const c=cv.getContext('2d');c.scale(dpr,dpr);c.clearRect(0,0,w,h);
+    const all=inSample.filter(Number.isFinite).concat(forecast.map(x=>x.conditionalVolatilityPct));if(!all.length)return;
+    const min=Math.min(...all),max=Math.max(...all),range=max-min||Math.max(1e-6,max*.1),pad={l:42,r:12,t:16,b:25},pw=w-pad.l-pad.r,ph=h-pad.t-pad.b;
+    const styles=getComputedStyle(document.documentElement),acc=styles.getPropertyValue('--acc').trim()||'#d6a84b',green=styles.getPropertyValue('--win').trim()||'#38b98a',mut=styles.getPropertyValue('--mut').trim()||'#89909a',line=styles.getPropertyValue('--line').trim()||'#343943';
+    c.strokeStyle=line;c.beginPath();c.moveTo(pad.l,pad.t);c.lineTo(pad.l,h-pad.b);c.lineTo(w-pad.r,h-pad.b);c.stroke();
+    const total=inSample.length+forecast.length-1,x=i=>pad.l+i/Math.max(1,total)*pw,y=v=>pad.t+(max-v)/range*ph;
+    const step=Math.max(1,Math.ceil(inSample.length/1800));c.strokeStyle=acc;c.lineWidth=1.5;c.beginPath();let started=false;
+    for(let i=0;i<inSample.length;i+=step){const xx=x(i),yy=y(inSample[i]);if(!started){c.moveTo(xx,yy);started=true}else c.lineTo(xx,yy)}c.stroke();
+    c.setLineDash([5,4]);c.strokeStyle=mut;c.beginPath();c.moveTo(x(inSample.length-1),pad.t);c.lineTo(x(inSample.length-1),h-pad.b);c.stroke();c.setLineDash([]);
+    c.strokeStyle=green;c.lineWidth=2;c.beginPath();forecast.forEach((v,i)=>{const xx=x(inSample.length-1+i),yy=y(v.conditionalVolatilityPct);if(i===0)c.moveTo(xx,yy);else c.lineTo(xx,yy)});c.stroke();
+    c.fillStyle=mut;c.font='10px sans-serif';c.fillText(`${fmt(max,4)}%`,4,pad.t+4);c.fillText(`${fmt(min,4)}%`,4,h-pad.b);c.fillText('In-sample',pad.l+5,h-7);c.fillText('Forecast',Math.min(w-70,x(inSample.length)),h-7);
+  }
+  function renderVolatility(result,seriesName){
+    const metric=(name,value,sub='')=>`<div class="ql-metric"><span>${name}</span><b>${value}</b><small>${sub}</small></div>`;
+    const modelLabel=result.model==='ARCH'?`ARCH(${result.order.q})`:result.model==='GARCH'?'GARCH(1,1)':result.model==='EGARCH'?'EGARCH(1,1)':result.model==='TARCH'?'TARCH(1,1) · Zakoian':'GJR-GARCH(1,1)';
+    $q('qVolMetrics').innerHTML=[metric('MODEL',modelLabel,seriesName+' · Log return'),metric('LAST CONDITIONAL VOL.',pct(result.lastConditionalVolatilityPct/100,4),'% per bar'),metric('ANNUALIZED VOL.',pct(result.annualizedLastVolPct/100,2),'theo annualization factor'),metric('PERSISTENCE',fmt(result.persistence,4),'ARCH/GARCH persistence proxy'),metric('HALF-LIFE',Number.isFinite(result.halfLife)?fmt(result.halfLife,1)+' bars':'—','thời gian giảm một nửa')].join('');
+    $q('qVolParameters').innerHTML=`<table class="ql-table"><thead><tr><th>Parameter</th><th>Estimate</th><th>Unit</th></tr></thead><tbody>${result.parameters.map(p=>`<tr><th>${esc(p.name)}</th><td>${fmt(p.value,7)}</td><td>${esc(p.unit)}</td></tr>`).join('')}</tbody></table>`;
+    const lb=result.diagnostics.standardizedResidualLjungBox,arch=result.diagnostics.archLm;
+    const diag=[['Log likelihood',fmt(result.logLikelihood,4)],['AIC',fmt(result.aic,4)],['BIC',fmt(result.bic,4)],['Optimizer',result.optimizer.converged?`Hội tụ · ${result.optimizer.iterations} iterations`:`Chưa xác nhận hội tụ · ${result.optimizer.iterations} iterations`],['Std. residual mean',fmt(result.residualSummary.mean,5)],['Std. residual SD',fmt(result.residualSummary.std,5)],['Std. residual skewness',fmt(result.residualSummary.skewness,4)],['Std. residual excess kurtosis',fmt(result.residualSummary.excessKurtosis,4)],['Ljung–Box standardized residual',`Q=${fmt(lb.statistic,4)} · p=${pval(lb.pValue)} · lag=${lb.lags}`],['ARCH LM on standardized residual²',`LM=${fmt(arch.statistic,4)} · p=${pval(arch.pValue)} · lag=${arch.lags}`],['Long-run volatility / proxy',Number.isFinite(result.longRunVolatilityPct)?pct(result.longRunVolatilityPct/100,4):(result.model==='EGARCH'?'Median proxy không xác định':'Không hữu hạn / không xác định')]];
+    $q('qVolDiagnostics').innerHTML=`<table class="ql-table"><thead><tr><th>Diagnostic</th><th>Value</th></tr></thead><tbody>${diag.map(([a,b])=>`<tr><th>${a}</th><td>${b}</td></tr>`).join('')}</tbody></table>`;
+    $q('qVolForecast').innerHTML=`<table class="ql-table"><thead><tr><th>Step</th><th>Mean return (%)</th><th>Conditional variance (%²)</th><th>Volatility (%/bar)</th><th>Annualized volatility (%)</th></tr></thead><tbody>${result.forecast.map(f=>`<tr><th>${f.step}</th><td>${fmt(f.meanReturnPct,6)}</td><td>${fmt(f.conditionalVariancePct2,7)}</td><td>${fmt(f.conditionalVolatilityPct,6)}</td><td>${fmt(f.annualizedVolatilityPct,4)}</td></tr>`).join('')}</tbody></table>`;
+    drawVolatilityPlot(result.conditionalVolatilityPct,result.forecast);
+    const p=result.persistence,notes=[];
+    if(!result.optimizer.converged)notes.push('Optimizer chưa đạt tiêu chí hội tụ; không nên diễn giải ước lượng như nghiệm tối ưu đã xác nhận.');
+    if(result.model!=='EGARCH'&&p>.9)notes.push('Persistence lớn hơn 0.90: cú sốc biến động có xu hướng kéo dài trong mô hình.');
+    if(result.model==='EGARCH'&&Math.abs(p)>.9)notes.push('|β| lớn hơn 0.90: log variance có độ dai dẳng cao.');
+    if(arch.pValue<.05)notes.push('ARCH LM p < 0.05: standardized residual² còn phụ thuộc; mô hình có thể chưa hấp thụ hết volatility clustering.');else notes.push('Chưa bác bỏ giả thuyết không còn ARCH effect trong standardized residual² ở mức 5%; không đồng nghĩa mô hình hoàn hảo.');
+    if(lb.pValue<.05)notes.push('Ljung–Box p < 0.05: standardized residual còn tự tương quan; phương trình mean/độ trễ có thể cần xem lại.');
+    if(result.distribution==='student-t'&&result.rawParameters.nu<8)notes.push('ν dưới 8: fitted Student-t có đuôi dày; nên kiểm tra độ ổn định ở nhiều mẫu.');
+    if(result.model==='GJR-GARCH'&&result.rawParameters.gamma>0)notes.push('γ > 0: mô hình gán thêm tác động phương sai cho cú sốc âm, thường gọi là leverage/asymmetry effect.');
+    if(result.model==='EGARCH'&&result.rawParameters.gamma<0)notes.push('γ < 0 trong đặc tả EGARCH đang dùng: cú sốc âm làm log variance tăng mạnh hơn cú sốc dương cùng độ lớn.');
+    if(result.model==='TARCH'&&result.rawParameters.gamma>0)notes.push('γ > 0 trong TARCH-Zakoian: shock âm làm conditional standard deviation tăng thêm so với shock dương cùng độ lớn.');
+    if(result.model==='EGARCH')notes.push('Long-run volatility chỉ hiển thị median/plug-in proxy exp(E[log h]/2), không phải unconditional standard deviation chính xác.');
+    $q('qVolInterpretation').innerHTML=`<b>Research interpretation · ${modelLabel}</b><ul>${notes.map(v=>`<li>${esc(v)}</li>`).join('')}</ul><p>Đọc cùng ACF/PACF và ADF/PP của returns. GARCH mô hình hóa độ lớn biến động có điều kiện, không cho biết hướng giá sẽ tăng hay giảm.</p>`;
+    $q('qVolNotes').textContent=result.notes.join(' ')+` Annualization factor đang dùng: ${fmt(result.annualFactor,0)} bars/year. Forecast variance/volatility là dự báo có điều kiện theo mô hình, không phải dải xác suất 95%.`;
+    $q('qVolOutput').hidden=false;
+  }
+  function runVolatilityModel(){
+    const status=$q('qVolStatus');try{
+      const {name,values}=selectedVolatilityValues(),h=Number($q('qVolHorizon').value),annual=Number($q('qVolAnnualFactor').value);
+      if(!Number.isInteger(h)||h<1||h>100)throw new Error('Forecast steps phải từ 1 đến 100.');
+      if(!Number.isInteger(annual)||annual<1||annual>1000000)throw new Error('Annualization factor phải từ 1 đến 1.000.000 bars/year.');
+      const data=QuantVolatility.logReturnsFromPrices(values),model=$q('qVolModel').value,distribution=$q('qVolDistribution').value,q=Number($q('qVolArchOrder').value);
+      const result=QuantVolatility.fit(model,data.returnsPct,{distribution,q,horizon:h,annualFactor:annual});QL.lastVolatility={...result,seriesName:name,returnSeries:data.returnsPct};renderVolatility(QL.lastVolatility,name);
+      const tm=timeSeriesTimeInfo();status.textContent=`Ước lượng ${model} hoàn tất · ${data.returnObservations.toLocaleString('en-US')} log returns (%) · ${distribution} · ${result.optimizer.converged?'optimizer hội tụ':'cảnh báo optimizer chưa hội tụ'}${tm.warning?' · Kiểm tra timestamp/session gaps':''}`;status.classList.toggle('is-good',result.optimizer.converged);status.classList.toggle('is-bad',!result.optimizer.converged);
+    }catch(e){status.textContent=e.message||String(e);status.classList.add('is-bad');status.classList.remove('is-good');$q('qVolOutput').hidden=true;QL.lastVolatility=null;}
+  }
+  function exportVolatility(){
+    const r=QL.lastVolatility;if(!r)return;const rows=[['Section','Metric','Value'],['Model','Name',r.model],['Model','Distribution',r.distribution],['Model','Observations',r.n],['Model','Log likelihood',r.logLikelihood],['Model','AIC',r.aic],['Model','BIC',r.bic],['Model','Persistence',r.persistence],['Model','Half life bars',r.halfLife],['Model','Annual factor',r.annualFactor]];
+    r.parameters.forEach(p=>rows.push(['Parameter',p.name,p.value]));r.forecast.forEach(f=>{rows.push(['Forecast',`Step ${f.step} volatility %/bar`,f.conditionalVolatilityPct]);rows.push(['Forecast',`Step ${f.step} annualized volatility %`,f.annualizedVolatilityPct]);});
+    const csv=rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n'),blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='gexadecimal-phase4-volatility.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
+  }
   function timeSeriesTimeInfo(){
     if(QL.timeIndex<0)return{label:'Không có cột thời gian được nhận diện; các lag chỉ là thứ tự dòng',warning:true,warnings:['Không có timestamp để xác minh thứ tự thời gian hoặc khoảng cách quan sát.']};
     const raw=QL.rows.map(r=>r[QL.timeIndex]),parsed=raw.map(v=>QuantStats.parseTimestamp(v)),meta=QuantStats.timestampMetadata(raw),invalid=parsed.filter(v=>!Number.isFinite(v)).length,warnings=[];
@@ -300,13 +360,16 @@
     $q('qTsRunTests').addEventListener('click',runUnitRootTests);
     $q('qTsFitModel').addEventListener('click',runTsModel);
     $q('qTsRunWalkForward').addEventListener('click',runWalkForward);
+    $q('qVolFit').addEventListener('click',runVolatilityModel);
+    $q('qVolExport').addEventListener('click',exportVolatility);
+    ['qVolColumn','qVolModel','qVolDistribution','qVolArchOrder','qVolHorizon','qVolAnnualFactor'].forEach(id=>$q(id).addEventListener('change',()=>{QL.lastVolatility=null;$q('qVolOutput').hidden=true;$q('qVolStatus').textContent='Thiết lập Phase 4 đã đổi. Hãy ước lượng lại mô hình.';$q('qVolStatus').classList.remove('is-good','is-bad')}));
     const invalidateTsModel=()=>{QL.lastTsModel=null;$q('qTsModelOutput').hidden=true;$q('qTsModelStatus').textContent='Tham số mô hình đã thay đổi. Hãy ước lượng lại.';$q('qTsModelStatus').classList.remove('is-good','is-bad');$q('qTsWalkForwardOutput').innerHTML='<p class="msg">Tham số đã thay đổi. Chạy lại Walk-forward.</p>';$q('qTsWalkForwardStatus').textContent='Tham số đã thay đổi; kết quả cũ không còn áp dụng.'};
     ['qTsModelType','qTsP','qTsD','qTsQ','qTsHorizon'].forEach(id=>$q(id).addEventListener('change',invalidateTsModel));
     ['qTsWfTrainPct','qTsWfPoints'].forEach(id=>$q(id).addEventListener('change',()=>{$q('qTsWalkForwardOutput').innerHTML='<p class="msg">Thiết lập validation đã đổi. Chạy lại Walk-forward.</p>';$q('qTsWalkForwardStatus').textContent='Thiết lập đã thay đổi.';}));
     const invalidateUnitRoot=()=>{$q('qTsUnitRoot').innerHTML='<p class="msg">Thiết lập kiểm định đã thay đổi. Hãy chạy lại ADF + PP.</p>'};
     ['qTsDeterministic','qTsAdfLag','qTsPpBandwidth'].forEach(id=>$q(id).addEventListener('change',invalidateUnitRoot));
 
-    window.addEventListener('resize',()=>{if(QL.rows.length){const i=QL.priceIndex;drawHistogram(QuantStats.histogram(getValues(i).filter(Number.isFinite),24));drawSeries(getValues(i));if(QL.lastRegression)drawResidualPlot(QL.lastRegression.fitted,QL.lastRegression.residuals);if($q('qTsColumn'))renderCorrelogram();if(!$q('qTsModelOutput').hidden&&QL.lastTsModel){drawForecast(QL.lastTsModel.values,QL.lastTsModel.model.forecastRows)}}});
+    window.addEventListener('resize',()=>{if(QL.rows.length){const i=QL.priceIndex;drawHistogram(QuantStats.histogram(getValues(i).filter(Number.isFinite),24));drawSeries(getValues(i));if(QL.lastRegression)drawResidualPlot(QL.lastRegression.fitted,QL.lastRegression.residuals);if($q('qTsColumn'))renderCorrelogram();if(!$q('qTsModelOutput').hidden&&QL.lastTsModel){drawForecast(QL.lastTsModel.values,QL.lastTsModel.model.forecastRows)}if(!$q('qVolOutput').hidden&&QL.lastVolatility){drawVolatilityPlot(QL.lastVolatility.conditionalVolatilityPct,QL.lastVolatility.forecast)}}});
     demo();
     renderCorrelogram();
   }
