@@ -284,14 +284,14 @@ Có ARCH(q), GARCH(1,1), EGARCH(1,1), GJR-GARCH(1,1) và TARCH(1,1) theo Zakoian
 Tài liệu: `QUANTLAB_PHASE4_ARCH_GARCH_GUIDE_VI.md`, `QUANTLAB_RESEARCH_EXTENSION_GUIDE_VI.md`, `QUANTLAB_USER_GUIDE_VI.md`, `QUANTLAB_AUDIT_REPORT.md`. Phase 5 — VAR/VECM, Cointegration/Johansen, Granger Causality, Bootstrap/Monte Carlo và các phương pháp đa biến/nâng cao — vẫn là roadmap, chưa triển khai trong bản này.
 
 
-## Elliott Structure Lab v0.4
+## Elliott Wave Detector v0.6
 
-Elliott Wave đã được tách thành **sidebar/workspace độc lập** (`Elliott Wave`), không nằm trong view Quant Lab. Workspace gồm swing map đa scale, Preferred / Alternate Counts, pattern/rule audit, Fibonacci & channel, Manual Count Builder, degree hierarchy, historical As-of / Replay snapshots và invalidation lifecycle.
+Elliott Wave là sidebar/workspace riêng (`Elliott Wave`), tách khỏi Quant Lab. Giao diện chính được rút gọn: chọn timeframe hoặc M1, Import CSV, nhấn **Tự nhận diện sóng**. Người dùng không cần thiết lập ATR, threshold hay degree; engine tự lựa chọn độ nhạy swing và degree nội bộ.
 
-Engine dùng OHLC từ Chart timeframe, M1, DEMO hoặc CSV; Wilder ATR + Directional Change pivots có confirmation time; multi-scale persistence; candidate detection cho Impulse, Extended/Truncated/Developing Wave 5, Diagonal contracting/expanding, Zigzag, Regular/Expanded/Running Flat, Contracting/Barrier/Expanding Triangle và assisted Double/Triple Zigzag/Three. Combination chỉ ghép khi các component nối đúng shared pivot boundary. Diagonal Leading/Ending dựa vào parent context, không suy đoán chỉ từ hình nêm.
+Chart hiển thị đường cấu trúc đang được ưu tiên và nhãn sóng `0–1–2–3–4–5`, `0–A–B–C`, `0–A–B–C–D–E`, `0–W–X–Y` hoặc `0–W–X–Y–X–Z`; không vẽ nhãn H/L. Nhãn tự điều chỉnh để giảm chồng lấn. Count, rule audit, alternate counts, degree, pivot audit và Manual Count Builder vẫn có trong phần nâng cao.
 
-**Điểm cần hiểu đúng:** `matched` child candidate không đồng nghĩa `verified` internal grammar. Exact 3/5 subdivisions cần được xác minh đệ quy ở degree thấp hơn; Evidence Score không phải xác suất hay win rate. Extended Impulse mới là assisted detection từ lower-scale swing proxy. Chưa có full recursive K-best parser, expert-labelled validation hoặc out-of-sample calibration. Engine không phát tín hiệu Buy/Sell.
+Dự báo gồm hai lớp: (1) Fibonacci cho Wave 5 đang phát triển hoặc Wave A sau impulse hoàn tất; (2) QuantLab historical analogs, so sánh tỷ lệ W2/W1, W3/W1, W4/W3 và thống kê ratio Wave 5/Wave 1 hoặc Wave A/full impulse bằng P25/P50/P75, số mẫu và độ lệch chuẩn. Các analog phải kết thúc trước count hiện tại. Nếu thiếu ngữ cảnh hoặc mẫu, hệ thống không tự tạo dự báo giả.
 
-Các file chính: `js/elliott-structure-engine.js`, `js/elliott-structure-ui.js`, `css/elliott-structure.css`, `tests/elliott-structure.test.js`, `tests/elliott-structure-v04.test.js`. Đặc tả: `ELLIOTT_STRUCTURE_LAB_SPEC_V0.4_VI.md`; changelog: `ELLIOTT_STRUCTURE_CHANGELOG_V0.4_VI.md`; test report: `ELLIOTT_STRUCTURE_TEST_REPORT_V0.4_VI.md`; Knowledge-to-Code Matrix: `docs/Gexadecimal_Elliott_StructureLab_Knowledge_to_Code_Matrix_v0.4.xlsx`.
+Engine vẫn dùng ATR nội bộ để chuẩn hóa biến động nhưng tự đặt thông số; không cần người dùng cấu hình. Đây là hỗ trợ nghiên cứu, không phải tín hiệu Buy/Sell. Evidence Score là heuristic, Quant quantiles là mô tả mẫu lịch sử chứ không phải xác suất giá chạm mục tiêu. Chưa có expert-labelled accuracy benchmark, full recursive K-best parser hoặc Quant forecast-error walk-forward calibration.
 
-Chạy test Elliott bằng `node tests/elliott-structure.test.js` và `node tests/elliott-structure-v04.test.js`. Chạy toàn bộ regression bằng `bash tests/run-all.sh`.
+Tài liệu: `ELLIOTT_STRUCTURE_LAB_SPEC_V0.6_VI.md`, `ELLIOTT_STRUCTURE_CHANGELOG_V0.6_VI.md`, `ELLIOTT_STRUCTURE_TEST_REPORT_V0.6_VI.md`. Tests: `node tests/elliott-structure.test.js`, `node tests/elliott-structure-v04.test.js`, `node tests/elliott-simple-v06.test.js`; full suite: `bash tests/run-all.sh`.

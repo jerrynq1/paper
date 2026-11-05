@@ -1,0 +1,21 @@
+Product: Gexadecimal QuantLab + Elliott Wave Detector
+Version: Elliott Structure Engine 0.6.0
+Workspace: #v-elliott (independent sidebar)
+Core:
+  js/elliott-structure-engine.js
+  js/elliott-structure-ui.js
+  css/elliott-structure.css
+Tests:
+  tests/elliott-structure.test.js
+  tests/elliott-structure-v04.test.js
+  tests/elliott-simple-v06.test.js
+Docs:
+  ELLIOTT_STRUCTURE_LAB_SPEC_V0.6_VI.md
+  ELLIOTT_STRUCTURE_CHANGELOG_V0.6_VI.md
+  ELLIOTT_STRUCTURE_TEST_REPORT_V0.6_VI.md
+  ELLIOTT_STRUCTURE_MANIFEST_V0.6.txt
+Notes:
+  User-facing ATR/threshold controls removed; internal adaptive swing sensitivity retained.
+  Chart displays Elliott wave labels; no H/L chart tags.
+  Forecast includes Fib scenarios and historical QuantLab analog distribution where context/sample permits.
+  Forecast is not a trading signal or calibrated probability.
