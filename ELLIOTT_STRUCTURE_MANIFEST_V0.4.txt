@@ -1,0 +1,27 @@
+GEXADECIMAL QUANTLAB — ELLIOTT STRUCTURE LAB v0.4
+Release date: 2026-11-05
+Engine version: 0.4.0
+
+PRIMARY SOURCE
+- index.html                         Independent Elliott sidebar/view integration
+- js/elliott-structure-engine.js    Wave/pattern detection, rules, Fibonacci, recursive evidence
+- js/elliott-structure-ui.js         Manual count UI, chart overlays, replay/as-of workflow
+- css/elliott-structure.css         Independent workspace styles
+
+KNOWLEDGE & SPECIFICATION
+- docs/Gexadecimal_Elliott_StructureLab_Knowledge_to_Code_Matrix_v0.4.xlsx
+- ELLIOTT_STRUCTURE_LAB_SPEC_V0.4_VI.md
+- ELLIOTT_STRUCTURE_CHANGELOG_V0.4_VI.md
+- ELLIOTT_STRUCTURE_TEST_REPORT_V0.4_VI.md
+
+TESTS
+- tests/elliott-structure.test.js
+- tests/elliott-structure-v04.test.js
+- tests/run-all.sh
+
+SCOPE / CAVEATS
+- Research/decision-support tool, not an automatic trading signal generator.
+- Evidence Score is heuristic ranking, not a probability, win rate, or forecast confidence.
+- Extended impulse and diagonal roles can remain assisted/context-dependent.
+- Full recursive K-best global count search and expert-labelled out-of-sample validation are not complete.
+- Browser UAT on Safari/iOS and low-end device performance benchmarks are not included in this release.

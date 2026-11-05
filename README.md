@@ -284,12 +284,14 @@ Có ARCH(q), GARCH(1,1), EGARCH(1,1), GJR-GARCH(1,1) và TARCH(1,1) theo Zakoian
 Tài liệu: `QUANTLAB_PHASE4_ARCH_GARCH_GUIDE_VI.md`, `QUANTLAB_RESEARCH_EXTENSION_GUIDE_VI.md`, `QUANTLAB_USER_GUIDE_VI.md`, `QUANTLAB_AUDIT_REPORT.md`. Phase 5 — VAR/VECM, Cointegration/Johansen, Granger Causality, Bootstrap/Monte Carlo và các phương pháp đa biến/nâng cao — vẫn là roadmap, chưa triển khai trong bản này.
 
 
-## Elliott Structure Lab v0.1
+## Elliott Structure Lab v0.4
 
-QuantLab có module Elliott Structure Lab độc lập. Module đọc timeframe hiện tại của Chart, M1, dữ liệu OHLC DEMO tổng hợp hoặc CSV OHLC do người dùng nhập. Engine JavaScript thuần sử dụng Wilder ATR, Directional Change pivot chỉ xác nhận sau khi có chuyển động đảo chiều, pivot đa scale, kiểm tra hard rule theo pattern, guideline evidence score, Fibonacci projection, channel projection cho Impulse và invalidation của Impulse đang phát triển.
+Elliott Wave đã được tách thành **sidebar/workspace độc lập** (`Elliott Wave`), không nằm trong view Quant Lab. Workspace gồm swing map đa scale, Preferred / Alternate Counts, pattern/rule audit, Fibonacci & channel, Manual Count Builder, degree hierarchy, historical As-of / Replay snapshots và invalidation lifecycle.
 
-**Giới hạn quan trọng:** candidate là giả thuyết hình học, chưa phải Elliott count đã được chuyên gia xác minh. Internal structure 3/5, recursive degree grammar, chỉnh sửa count thủ công, tìm kiếm đầy đủ W-X-Y/W-X-Y-X-Z và xác nhận bằng orderflow/options chưa được triển khai trong v0.1. Evidence Score không phải xác suất; engine không phát tín hiệu mua/bán.
+Engine dùng OHLC từ Chart timeframe, M1, DEMO hoặc CSV; Wilder ATR + Directional Change pivots có confirmation time; multi-scale persistence; candidate detection cho Impulse, Extended/Truncated/Developing Wave 5, Diagonal contracting/expanding, Zigzag, Regular/Expanded/Running Flat, Contracting/Barrier/Expanding Triangle và assisted Double/Triple Zigzag/Three. Combination chỉ ghép khi các component nối đúng shared pivot boundary. Diagonal Leading/Ending dựa vào parent context, không suy đoán chỉ từ hình nêm.
 
-Các file chính: `js/elliott-structure-engine.js`, `js/elliott-structure-ui.js`, `css/elliott-structure.css`, `tests/elliott-structure.test.js`. Đặc tả tiếng Việt: `ELLIOTT_STRUCTURE_LAB_SPEC_V0.1_VI.md`. Workbook Knowledge-to-Code Matrix: `docs/Gexadecimal_Elliott_StructureLab_Knowledge_to_Code_Matrix_v0.1.xlsx`.
+**Điểm cần hiểu đúng:** `matched` child candidate không đồng nghĩa `verified` internal grammar. Exact 3/5 subdivisions cần được xác minh đệ quy ở degree thấp hơn; Evidence Score không phải xác suất hay win rate. Extended Impulse mới là assisted detection từ lower-scale swing proxy. Chưa có full recursive K-best parser, expert-labelled validation hoặc out-of-sample calibration. Engine không phát tín hiệu Buy/Sell.
 
-Chạy test Elliott bằng `node tests/elliott-structure.test.js`. Chạy toàn bộ test QuantLab bằng `bash tests/run-all.sh`.
+Các file chính: `js/elliott-structure-engine.js`, `js/elliott-structure-ui.js`, `css/elliott-structure.css`, `tests/elliott-structure.test.js`, `tests/elliott-structure-v04.test.js`. Đặc tả: `ELLIOTT_STRUCTURE_LAB_SPEC_V0.4_VI.md`; changelog: `ELLIOTT_STRUCTURE_CHANGELOG_V0.4_VI.md`; test report: `ELLIOTT_STRUCTURE_TEST_REPORT_V0.4_VI.md`; Knowledge-to-Code Matrix: `docs/Gexadecimal_Elliott_StructureLab_Knowledge_to_Code_Matrix_v0.4.xlsx`.
+
+Chạy test Elliott bằng `node tests/elliott-structure.test.js` và `node tests/elliott-structure-v04.test.js`. Chạy toàn bộ regression bằng `bash tests/run-all.sh`.

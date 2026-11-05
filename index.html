@@ -78,41 +78,7 @@
     <div id="qDataMeta" class="ql-data-meta">Đang chuẩn bị bộ dữ liệu mẫu.</div>
     <div class="ql-table-wrap ql-data-audit-wrap" id="qDataAudit"><p class="msg">Đang kiểm tra chất lượng dữ liệu và timestamp…</p></div>
   </div>
-  <section class="card e-structure-card" id="eStructureLab" aria-label="Elliott Structure Lab">
-    <div class="e-head">
-      <div><div class="e-eyebrow">STRUCTURE RESEARCH · ELLIOTT WAVE</div><h3>Elliott <span>Structure Lab</span></h3><p class="msg">Nhận diện swing đa scale, kiểm tra cấu trúc Elliott, giữ alternate counts và tạo Fibonacci / channel projections. Engine chỉ dùng pivot đã được xác nhận bằng chuyển động giá sau pivot; nhãn sóng là candidate, không phải dự báo chắc chắn.</p></div>
-      <span class="ql-local-badge">BROWSER COMPUTATION · V0.1</span>
-    </div>
-    <div class="e-controls">
-      <label class="ql-select-label">CHART DATA SOURCE<select id="eTimeframe"><option value="current">Chart · timeframe hiện tại</option><option value="m1">Chart · M1</option></select></label>
-      <label class="ql-select-label">ATR PERIOD<input id="eAtrPeriod" type="number" min="2" max="200" step="1" value="14"></label>
-      <label class="ql-select-label">PIVOT THRESHOLD · ATR ×<input id="eThreshold" type="number" min="0.1" max="20" step="0.1" value="1.5"></label>
-      <div class="e-actions">
-        <button class="btn ghost" id="eUseChart" type="button">↓ Lấy dữ liệu Chart</button>
-        <button class="btn ghost" id="eDemo" type="button">Nạp DEMO</button>
-        <button class="btn ghost" id="eCsvBtn" type="button">↑ Import OHLC CSV</button><input id="eCsv" type="file" accept=".csv,text/csv" hidden>
-        <button class="btn" id="eRun" type="button">▶ Analyze Structure</button>
-        <button class="btn ghost" id="eExport" type="button" disabled>↓ Export JSON</button>
-      </div>
-    </div>
-    <div class="e-status" id="eStatus" role="status">Đang chuẩn bị dữ liệu DEMO…</div>
-    <div class="e-data-meta" id="eDataMeta">Chưa có dữ liệu.</div>
-    <div class="ql-metrics e-metrics" id="eMetrics"></div>
-    <div class="e-main-grid">
-      <div class="e-panel"><h4>Preferred / Selected Count</h4><div id="ePreferred"><div class="e-empty"><b>Chưa có phân tích</b><span>Nạp dữ liệu rồi nhấn Analyze Structure.</span></div></div></div>
-      <div class="e-panel"><h4>Alternate Counts &amp; Pattern Candidates</h4><p class="msg">Alternate cùng vùng cấu trúc được tách riêng khỏi candidate ở các đoạn giá khác. Chọn một mục để xem rule, guideline và projection.</p><div id="eCandidates"><p class="msg">Chưa có candidate.</p></div></div>
-    </div>
-    <div class="e-panel e-plot-panel"><h4>Confirmed Swing Map</h4><p class="msg">Đường giá đóng cửa và pivot đã xác nhận tại primary scale. Đây là chart nghiên cứu độc lập; chưa vẽ trực tiếp lên chart giao dịch để tránh ảnh hưởng renderer hiện tại.</p><canvas id="ePlot" class="e-plot" aria-label="Đồ thị swing và Elliott candidate"></canvas></div>
-    <div class="e-main-grid">
-      <div class="e-panel"><h4>Rule Validation &amp; Guideline Evidence</h4><div id="eRules"><p class="msg">Chưa có rule report.</p></div></div>
-      <div class="e-panel"><h4>Fibonacci Projection</h4><div id="eFib"><p class="msg">Chưa có projection.</p></div><div class="e-rule-sep"></div><h4>Wave Channel</h4><div id="eChannel"><p class="msg">Chưa có channel.</p></div></div>
-    </div>
-    <div class="e-main-grid">
-      <div class="e-panel"><h4>Multi-scale / Degree Structure</h4><div id="eScales"><p class="msg">Chưa có scale analysis.</p></div></div>
-      <div class="e-panel"><h4>Confirmed Pivot Audit · latest 20</h4><div id="ePivotTable"><p class="msg">Chưa có pivot.</p></div></div>
-    </div>
-    <div class="e-panel" style="margin-top:12px"><h4>Pattern Coverage &amp; Implementation Status</h4><div class="e-catalog" id="eCatalog"></div><p class="e-caveat">“Candidate engine” nghĩa là engine có thể đề xuất mẫu hình bằng hình học pivot, chưa khẳng định đã xác minh cấu trúc con 3/5. “Context required” cần degree lớn hơn hoặc vị trí chu kỳ; “Definition only” mới có định nghĩa kiến thức, chưa tự động phát hiện trong v0.1.</p></div>
-  </section>
+
   <div class="ql-metrics" id="qMetrics"></div>
   <div class="card ql-analysis-card">
     <div class="ql-panel-head"><div><h3>Descriptive Statistics</h3><p class="msg">Thống kê mô tả cho biến số được chọn.</p></div><label class="ql-select-label">VARIABLE<select id="qPriceColumn"></select></label></div>
@@ -318,6 +284,58 @@
     <div class="ql-roadmap"><b>Research roadmap chưa triển khai trong bản này:</b> VAR/VECM · Cointegration/Johansen · Granger Causality · Bootstrap/Monte Carlo · Regime Detection nâng cao. Các mục này cần engine, test và tài liệu riêng; không được xem là đã có chỉ vì roadmap hiển thị.</div>
   </div>
   <div class="ql-footnote"><b>Phạm vi bản cập nhật:</b> Phase 1–4 gồm thống kê, returns, rolling/realized volatility, OLS, ACF/PACF, ADF/PP, AR/MA/ARMA/ARIMA, walk-forward và ARCH/GARCH-family conditional volatility. Phase 4 sử dụng constant-mean conditional likelihood với Gaussian QMLE hoặc standardized Student-t và Nelder–Mead; cần benchmark độc lập trước ứng dụng giao dịch. Chưa có VAR/VECM, Cointegration, Granger hoặc backend/database. TickVolume cTrader là tick-volume/quote proxy, không phải khối lượng Futures tập trung.</div>
+</section>
+
+<section class="view" id="v-elliott">
+  <div class="ql-head"><div><div class="ql-eyebrow">INDEPENDENT WORKSPACE · ELLIOTT WAVE</div><h2>Elliott <span>· Structure Lab</span></h2><p class="msg">Không nằm trong Quant Lab. Đây là workspace riêng cho toàn bộ Elliott Wave: nhận diện pattern, nhiều degree, manual count, rule audit, alternate counts, Replay snapshot và Fibonacci.</p></div><span class="ql-local-badge">BROWSER COMPUTATION</span></div>
+    <section class="card e-structure-card" id="eStructureLab" aria-label="Elliott Structure Lab">
+    <div class="e-head">
+      <div><div class="e-eyebrow">STRUCTURE RESEARCH · ELLIOTT WAVE</div><h3>Elliott <span>Structure Lab</span></h3><p class="msg">Nhận diện swing đa scale, kiểm tra cấu trúc Elliott, giữ alternate counts và tạo Fibonacci / channel projections. Engine chỉ dùng pivot đã được xác nhận bằng chuyển động giá sau pivot; nhãn sóng là candidate, không phải dự báo chắc chắn.</p></div>
+      <span class="ql-local-badge">BROWSER COMPUTATION · V0.4</span>
+    </div>
+    <div class="e-controls">
+      <label class="ql-select-label">CHART DATA SOURCE<select id="eTimeframe"><option value="current">Chart · timeframe hiện tại</option><option value="m1">Chart · M1</option></select></label>
+      <label class="ql-select-label">ATR PERIOD<input id="eAtrPeriod" type="number" min="2" max="200" step="1" value="14"></label>
+      <label class="ql-select-label">PIVOT THRESHOLD · ATR ×<input id="eThreshold" type="number" min="0.1" max="20" step="0.1" value="1.5"></label>
+      <div class="e-actions">
+        <button class="btn ghost" id="eUseChart" type="button">↓ Lấy dữ liệu Chart</button>
+        <button class="btn ghost" id="eDemo" type="button">Nạp DEMO</button>
+        <button class="btn ghost" id="eCsvBtn" type="button">↑ Import OHLC CSV</button><input id="eCsv" type="file" accept=".csv,text/csv" hidden>
+        <button class="btn" id="eRun" type="button">▶ Analyze Structure</button>
+        <button class="btn ghost" id="eReplayCursor" type="button" title="Phân tích đúng phần dữ liệu đã xuất hiện tại replay cursor">◎ Analyze Replay Cursor</button>
+        <button class="btn ghost" id="eExport" type="button" disabled>↓ Export JSON</button>
+      </div>
+    </div>
+    <div class="e-asof-control">
+      <div><b>Historical As-of / Replay Snapshot</b><small>Engine chỉ được nhận nến đến mốc đang chọn; nến phía sau không tham gia việc tạo count.</small></div>
+      <label><span id="eAsOfLabel">Toàn bộ dữ liệu</span><input id="eAsOfRange" type="range" min="19" max="19" value="19" step="1"></label>
+      <button class="btn ghost sm" id="eAsOfFull" type="button">Dùng toàn bộ dữ liệu</button>
+    </div>
+    <div class="e-status" id="eStatus" role="status">Đang chuẩn bị dữ liệu DEMO…</div>
+    <div class="e-data-meta" id="eDataMeta">Chưa có dữ liệu.</div>
+    <div class="ql-metrics e-metrics" id="eMetrics"></div>
+    <div class="e-main-grid">
+      <div class="e-panel"><h4>Preferred / Selected Count</h4><div id="ePreferred"><div class="e-empty"><b>Chưa có phân tích</b><span>Nạp dữ liệu rồi nhấn Analyze Structure.</span></div></div></div>
+      <div class="e-panel"><h4>Alternate Counts &amp; Pattern Candidates</h4><p class="msg">Alternate cùng vùng cấu trúc được tách riêng khỏi candidate ở các đoạn giá khác. Chọn một mục để xem rule, guideline và projection.</p><div id="eCandidates"><p class="msg">Chưa có candidate.</p></div></div>
+    </div>
+    <div class="e-panel e-plot-panel"><div class="e-plot-head"><div><h4>Confirmed Swing Map · Manual Pivot Editor</h4><p class="msg">Kéo các điểm tròn để chỉnh pivot thủ công; pivot sẽ snap về High/Low của nến gần nhất. Thay đổi chỉ áp dụng cho Manual Count, không sửa dữ liệu OHLC hay pivot gốc của engine.</p></div><label class="e-inline-check"><input type="checkbox" id="eShowAlternates"> Hiện alternate trên chart</label></div><canvas id="ePlot" class="e-plot" aria-label="Đồ thị swing Elliott có thể chỉnh pivot"></canvas></div>
+    <div class="e-main-grid">
+      <div class="e-panel"><h4>Rule Validation &amp; Guideline Evidence</h4><div id="eRules"><p class="msg">Chưa có rule report.</p></div></div>
+      <div class="e-panel"><h4>Fibonacci Projection</h4><div id="eFib"><p class="msg">Chưa có projection.</p></div><div class="e-rule-sep"></div><h4>Wave Channel</h4><div id="eChannel"><p class="msg">Chưa có channel.</p></div></div>
+    </div>
+    <div class="e-main-grid">
+      <div class="e-panel"><h4>Multi-scale / Degree Structure</h4><div id="eScales"><p class="msg">Chưa có scale analysis.</p></div></div>
+      <div class="e-panel"><h4>Confirmed Pivot Audit · latest 20</h4><div id="ePivotTable"><p class="msg">Chưa có pivot.</p></div></div>
+    </div>
+    <div class="e-panel" style="margin-top:12px"><h4>Pattern Coverage &amp; Implementation Status</h4><div class="e-catalog" id="eCatalog"></div><p class="e-caveat">“Candidate engine” nghĩa là engine có thể đề xuất mẫu hình bằng hình học pivot, chưa khẳng định đã xác minh cấu trúc con 3/5. “Context required” cần degree lớn hơn hoặc vị trí chu kỳ; “Assisted detection” nghĩa là các component đã được ghép hình học nhưng vẫn cần kiểm tra degree và internal grammar; Evidence Score không phải xác suất.</p></div>
+  </section>
+  <div class="card e-structure-card" id="eManualCount"><div class="e-head"><div><div class="e-eyebrow">COUNT BUILDER · HUMAN-IN-THE-LOOP</div><h3>Manual Count Builder</h3><p class="msg">Chọn, thêm, kéo, khóa pivot; gán nhãn theo degree và gắn parent degree. Khi nhãn/pivot đổi, rule audit tự chạy lại. Manual Count tách biệt với auto detector.</p></div><span class="ql-local-badge">EDITABLE COUNT TREE</span></div>
+    <div class="e-controls"><label class="ql-select-label">PIVOT<select id="eManualPivot"><option value="">Chạy Analyze trước</option></select></label><label class="ql-select-label">DEGREE<select id="eManualDegree"><option value="degree-1">Degree 1 · smallest</option><option value="degree-2" selected>Degree 2 · primary</option><option value="degree-3">Degree 3</option><option value="degree-4">Degree 4 · higher</option></select></label><label class="ql-select-label">PARENT DEGREE<select id="eManualParentDegree"><option value="none">None / top level</option><option value="degree-2">Degree 2</option><option value="degree-3">Degree 3</option><option value="degree-4">Degree 4</option></select></label><label class="ql-select-label">WAVE LABEL<select id="eManualLabel"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>A</option><option>B</option><option>C</option><option>W</option><option>X</option><option>Y</option><option>Z</option><option>a</option><option>b</option><option>c</option><option>d</option><option>e</option></select></label>
+      <label class="ql-select-label">ADD PIVOT AT BAR INDEX<input id="eManualBarIndex" type="number" min="0" step="1" value="20"></label><label class="ql-select-label">PIVOT TYPE<select id="eManualKind"><option value="high">High</option><option value="low">Low</option></select></label>
+      <div class="e-actions"><button class="btn" id="eManualAssign" type="button">＋ Assign label</button><button class="btn ghost" id="eManualAddPivot" type="button">＋ Add pivot</button><button class="btn ghost" id="eManualMovePivot" type="button">↔ Move selected</button><button class="btn ghost" id="eManualDeletePivot" type="button">Delete pivot</button><button class="btn ghost" id="eManualClear" type="button">Reset manual count</button><button class="btn ghost" id="eManualAudit" type="button">Run count audit</button></div></div>
+    <div id="eManualStatus" class="e-status">Chưa có nhãn thủ công.</div><div id="eManualTable" class="ql-table-wrap"><p class="msg">Sau khi phân tích, chọn pivot để bắt đầu xây count.</p></div><div id="eManualHierarchy" class="e-rule-table"></div><div id="eManualAuditResult" class="e-rule-table"></div>
+  </div>
+  <div class="card e-structure-card" id="eScenarioHistory"><div class="e-head"><div><div class="e-eyebrow">EVENT-SOURCED COUNT HISTORY</div><h3>Scenario Snapshots &amp; Invalidation</h3><p class="msg">Mỗi lần Analyze lưu lại một count theo mốc As-of. Dữ liệu sau mốc chỉ dùng để đánh giá trạng thái về sau; không thay đổi nội dung snapshot ban đầu.</p></div></div><div id="eSnapshots"><p class="msg">Chưa có snapshot.</p></div></div>
 </section>
 
 <section class="view" id="v-options">
