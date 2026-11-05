@@ -59,3 +59,18 @@
 
 .e-candidate-section-title{margin:12px 0 7px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);font-weight:700}
 .e-empty-compact{padding:10px 12px;margin:0 0 8px}
+/* v0.2 workspace separation + manual count controls */
+#v-elliott .e-structure-card{margin-top:14px}
+#eManualCount .e-controls{align-items:end}
+#eManualCount .e-controls>label{min-width:180px;flex:1}
+#eManualCount .e-actions{display:flex;flex-wrap:wrap;gap:8px}
+#eManualTable{overflow-x:auto}
+#eManualAuditResult{margin-top:10px}
+@media(max-width:760px){#eManualCount .e-controls{display:flex;flex-direction:column;align-items:stretch}#eManualCount .e-controls>label{width:100%}}
+
+/* Sidebar group separators: Elliott is a first-class workspace, not a Quant Lab subpanel. */
+#nav .nav-sep{pointer-events:none;user-select:none;display:flex;align-items:center;gap:8px;padding:13px 12px 5px;margin-top:5px;color:var(--mut);font:700 8px 'Space Grotesk',sans-serif;letter-spacing:.13em;opacity:.78}
+#nav .nav-sep:after{content:"";height:1px;flex:1;background:var(--line);opacity:.8}
+body.sc #nav .nav-sep{justify-content:center;padding-left:4px;padding-right:4px}
+body.sc #nav .nav-sep span{display:none}
+body.sc #nav .nav-sep:after{max-width:22px}
