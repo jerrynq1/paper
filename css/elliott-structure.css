@@ -74,3 +74,47 @@
 body.sc #nav .nav-sep{justify-content:center;padding-left:4px;padding-right:4px}
 body.sc #nav .nav-sep span{display:none}
 body.sc #nav .nav-sep:after{max-width:22px}
+
+/* v0.5 · simplified Elliott Wave detector */
+#v-elliott .e-controls-simple{grid-template-columns:minmax(190px,240px) 1fr;align-items:end}
+#v-elliott .e-controls-simple .e-actions{grid-column:auto;justify-content:flex-end}
+#v-elliott .e-wave-chart{margin-top:14px;padding:14px}
+#v-elliott .e-plot{height:360px;touch-action:pan-y}
+#v-elliott .e-wave-summary-grid{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(0,1.4fr);gap:12px;margin-top:12px}
+#v-elliott .e-wave-summary-grid>.e-panel{min-width:0}
+#v-elliott .e-forecast-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+#v-elliott .e-forecast-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(250px,1.1fr);gap:12px}
+#v-elliott .e-forecast-grid h5{font:700 11px Sora,sans-serif;margin:0 0 8px}
+#v-elliott .e-quant-forecast{padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--inp)}
+#v-elliott .e-quant-main{display:flex;flex-direction:column;gap:4px}
+#v-elliott .e-quant-main small,#v-elliott .e-quant-stats small{font-size:8px;color:var(--mut);font-weight:800;letter-spacing:.06em}
+#v-elliott .e-quant-main b{font:800 26px 'Space Grotesk',sans-serif;color:var(--acc);font-variant-numeric:tabular-nums}
+#v-elliott .e-quant-main span{font-size:10px;color:var(--mut)}
+#v-elliott .e-quant-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:10px}
+#v-elliott .e-quant-stats>div{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--card);min-width:0}
+#v-elliott .e-quant-stats b{font:700 13px 'Space Grotesk',sans-serif;overflow-wrap:anywhere}
+#v-elliott .e-advanced{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--card);padding:0 13px}
+#v-elliott .e-advanced>summary{cursor:pointer;list-style:none;padding:13px 2px;font-size:11px;font-weight:700;color:var(--mut)}
+#v-elliott .e-advanced>summary::-webkit-details-marker{display:none}
+#v-elliott .e-advanced>summary:after{content:'＋';float:right;color:var(--acc)}
+#v-elliott .e-advanced[open]>summary:after{content:'−'}
+#v-elliott .e-advanced-inner{padding:4px 0 14px}
+#v-elliott .e-advanced-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+#v-elliott #eManualCount{background:var(--card)}
+#v-elliott #eScenarioHistory{background:var(--card)}
+@media(max-width:900px){#v-elliott .e-wave-summary-grid,#v-elliott .e-forecast-grid{grid-template-columns:1fr}}
+@media(max-width:650px){#v-elliott .e-controls-simple{display:flex;flex-direction:column;align-items:stretch}#v-elliott .e-controls-simple .e-actions{justify-content:stretch}#v-elliott .e-controls-simple .e-actions .btn{flex:1 1 120px}#v-elliott .e-plot{height:280px}#v-elliott .e-advanced-grid{grid-template-columns:1fr}#v-elliott .e-quant-stats{grid-template-columns:1fr 1fr}#v-elliott .e-quant-main b{font-size:22px}}
+
+/* Elliott v0.6: cleaner count labels and forecast-first presentation */
+#v-elliott .e-preferred-simple{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+#v-elliott .e-preferred-simple h3{margin:5px 0 8px;font-size:20px;line-height:1.25}
+#v-elliott .e-preferred-simple small,#v-elliott .e-simple-meta small{display:block;color:var(--mut);font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+#v-elliott .e-simple-status{font-size:12px;color:var(--mut);padding:6px 10px;border:1px solid var(--line);border-radius:20px}
+#v-elliott .e-simple-meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+#v-elliott .e-simple-meta b{display:block;margin-top:4px;font-size:12px;font-variant-numeric:tabular-nums}
+#v-elliott .e-simple-forecast-grid{display:grid;grid-template-columns:minmax(180px,.85fr) minmax(240px,1.15fr);gap:14px;margin-top:14px}
+#v-elliott .e-simple-forecast-grid>section{min-width:0}
+#v-elliott .e-target-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
+#v-elliott .e-target-row small{color:var(--mut)}
+#v-elliott .e-forecast-panel{min-width:0}
+@media(max-width:650px){#v-elliott .e-simple-forecast-grid{grid-template-columns:1fr}}
