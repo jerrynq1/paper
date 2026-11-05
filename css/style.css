@@ -591,3 +591,24 @@ a.sb{text-decoration:none}
 @media(max-width:650px){.ql-ts-controls{grid-template-columns:1fr 1fr}.ql-ts-controls .ql-select-label:first-child{grid-column:1/-1}.ql-ts-controls .btn{grid-column:1/-1}.ql-ts-test-controls .btn,.ql-ts-model-controls .btn{flex:1 1 100%}.ql-ts-model-controls .ql-select-label{min-width:65px}}
 
 @media(min-width:951px){.ql-ts-model-output>.ql-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}}
+
+/* Quant Lab research interpretation and validation extensions */
+.ql-data-audit-wrap{margin-top:10px}
+.ql-data-audit-wrap .ql-table{min-width:420px}
+.ql-learning-card{margin-top:14px}
+.ql-learning-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ql-learning-grid>div{padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--inp);min-width:0}
+.ql-learning-grid b{display:block;font-size:11px;margin-bottom:5px}
+.ql-learning-grid p{margin:0;color:var(--mut);font-size:10px;line-height:1.55}
+.ql-roadmap{margin-top:11px;padding:11px 12px;border:1px dashed var(--line);border-radius:10px;color:var(--mut);font-size:10px;line-height:1.6}
+.ql-roadmap b{color:var(--ink)}
+.ql-lagged-panel,.ql-walkforward-box{margin-top:13px;padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--inp)}
+.ql-lagged-panel h4,.ql-walkforward-box h4{margin:0 0 6px;font:700 12px Sora,sans-serif}
+.ql-lagged-panel .ql-reg-options,.ql-walkforward-box .ql-reg-options{display:flex;align-items:end;flex-wrap:wrap;gap:9px;margin:10px 0}
+.ql-lagged-panel .ql-select-label,.ql-walkforward-box .ql-select-label{min-width:120px;max-width:180px}
+.ql-lagged-panel .ql-metrics,.ql-walkforward-box .ql-metrics{margin:10px 0}
+.ql-lagged-panel .ql-table{min-width:520px}
+.ql-walkforward-box .ql-table{min-width:680px}
+.ql-learning-grid,.ql-data-audit-wrap,.ql-lagged-panel,.ql-walkforward-box{overflow-wrap:anywhere}
+@media(max-width:950px){.ql-learning-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.ql-learning-grid{grid-template-columns:1fr}.ql-lagged-panel .ql-reg-options .btn,.ql-walkforward-box .ql-reg-options .btn{flex:1 1 100%}.ql-lagged-panel .ql-select-label,.ql-walkforward-box .ql-select-label{max-width:none;flex:1 1 130px}}
