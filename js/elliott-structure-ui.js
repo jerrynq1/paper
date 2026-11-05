@@ -7,6 +7,10 @@
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fmt=(v,d=2)=>Number.isFinite(Number(v))?Number(v).toLocaleString('en-US',{maximumFractionDigits:d}):'—';
   const timeText=t=>{if(!Number.isFinite(Number(t)))return '—';try{return new Date(Number(t)*1000).toLocaleString('vi-VN',{hour12:false})}catch{return String(t)}};
+  function roundedRectPath(ctx,x,y,w,h,r){
+    if(typeof ctx.roundRect==='function'){ctx.roundRect(x,y,w,h,r);return;}
+    const rr=Math.min(r,w/2,h/2);ctx.moveTo(x+rr,y);ctx.lineTo(x+w-rr,y);ctx.quadraticCurveTo(x+w,y,x+w,y+rr);ctx.lineTo(x+w,y+h-rr);ctx.quadraticCurveTo(x+w,y+h,x+w-rr,y+h);ctx.lineTo(x+rr,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-rr);ctx.lineTo(x,y+rr);ctx.quadraticCurveTo(x,y,x+rr,y);
+  }
   const patternNames={impulse:'Impulse',extended_impulse:'Extended Impulse · proxy',truncated_fifth:'Truncated Fifth',impulse_developing_wave5:'Impulse · Wave 5 đang hình thành',diagonal_candidate:'Contracting Diagonal Candidate',expanding_diagonal_candidate:'Expanding Diagonal Candidate',zigzag:'Zigzag',regular_flat:'Regular Flat',expanded_flat:'Expanded Flat',running_flat:'Running Flat',contracting_triangle:'Contracting Triangle',expanding_triangle:'Expanding Triangle',barrier_triangle:'Barrier Triangle',double_zigzag:'Double Zigzag (W-X-Y)',double_three:'Double Three (W-X-Y)',triple_zigzag:'Triple Zigzag (W-X-Y-X-Z)',triple_three:'Triple Three (W-X-Y-X-Z)'};
   const setStatus=(message,bad=false)=>{const el=$('eStatus');if(el){el.textContent=message;el.classList.toggle('is-bad',!!bad);el.classList.toggle('is-good',!bad)}};
   const showSource=(message)=>{const el=$('eDataMeta');if(el)el.textContent=message};
@@ -90,7 +94,7 @@
     return E().normalizeBars(rows);
   }
   function importCsv(file){
-    if(!file)return;const reader=new FileReader();reader.onload=()=>{try{state.bars=parseOhlcCsv(reader.result);state.source=`CSV · ${file.name}`;state.asOfIndex=state.bars.length-1;syncAsOfControl();showSource(`${state.source} · ${state.bars.length.toLocaleString('vi-VN')} nến · ${timeText(state.bars[0].time)} → ${timeText(state.bars[state.bars.length-1].time)}`);setStatus('CSV OHLC hợp lệ. Nhấn Analyze Structure để phân tích.')}catch(e){setStatus(e.message,true)}};reader.onerror=()=>setStatus('Không đọc được file CSV.',true);reader.readAsText(file);
+    if(!file)return;const reader=new FileReader();reader.onload=()=>{try{state.bars=parseOhlcCsv(reader.result);state.source=`CSV · ${file.name}`;state.asOfIndex=state.bars.length-1;syncAsOfControl();showSource(`${state.source} · ${state.bars.length.toLocaleString('vi-VN')} nến · ${timeText(state.bars[0].time)} → ${timeText(state.bars[state.bars.length-1].time)}`);setStatus('CSV OHLC hợp lệ. Đang tự nhận diện cấu trúc…');runAnalysis()}catch(e){setStatus(e.message,true)}};reader.onerror=()=>setStatus('Không đọc được file CSV.',true);reader.readAsText(file);
   }
   function selectedCandidate(){
     if(!state.result)return null;
@@ -101,11 +105,11 @@
       if(!state.bars.length)loadChart('current');
       if(state.asOfIndex==null||state.asOfIndex>=state.bars.length)state.asOfIndex=state.bars.length-1;
       syncAsOfControl();
-      const options={atrPeriod:Number($('eAtrPeriod').value),thresholdMultiplier:Number($('eThreshold').value),scaleFactors:[.70,1,1.45,2.05],primaryScaleIndex:1,maxCandidates:48,asOfIndex:state.asOfIndex,projectionMode:'arithmetic',zoneAtrMultiplier:.05};
+      const options={autoMode:true,maxCandidates:96,asOfIndex:state.asOfIndex,projectionMode:'arithmetic',zoneAtrMultiplier:.05,quantStats:window.QuantStats||null};
       const result=E().analyze(state.bars,options);state.result=result;initializeManualPivots(result);state.selectedId=result.preferred?.id||null;state.selected=selectedCandidate();
       render();saveScenarioSnapshot();
       const recursive=result.diagnostics.recursiveCounts||0,matched=result.diagnostics.recursiveMatchedCounts||0;
-      setStatus(result.candidates.length?`Analyze xong · ${result.candidates.length} candidate · ${result.diagnostics.pivotCount} pivot · ${matched} count khớp child candidates · ${recursive} count verified đệ quy · As-of ${timeText(result.dataSummary.asOfTime)}.`:'No Clear Count · không ép nhãn sóng. Kiểm tra threshold hoặc nạp thêm dữ liệu.',!result.candidates.length);
+      setStatus(result.candidates.length?`Đã nhận diện ${patternNames[result.preferred?.pattern]||'cấu trúc sóng'} · ${result.diagnostics.pivotCount} điểm cấu trúc · ${result.diagnostics.candidateCount} giả thuyết · ${timeText(result.dataSummary.asOfTime)}.`:'Chưa có count đủ điều kiện. Hãy thử timeframe khác hoặc nạp thêm dữ liệu.',!result.candidates.length);
       window.dispatchEvent(new CustomEvent('gx:elliott:analysis',{detail:{version:result.version,source:state.source,asOfTime:result.dataSummary.asOfTime,lookaheadProtected:true,summary:{bars:result.dataSummary.observations,pivots:result.diagnostics.pivotCount,candidates:result.diagnostics.candidateCount,preferred:E().summarizeCandidate(result.preferred)}}}));
     }catch(e){setStatus(e.message||'Không thể phân tích dữ liệu.',true)}
   }
@@ -125,10 +129,11 @@
   }
   function renderPreferred(){
     const r=state.result,c=selectedCandidate(),box=$('ePreferred');if(!r||!box)return;
-    if(!c){box.innerHTML='<div class="e-empty"><b>No Clear Count</b><span>Chưa có cấu trúc ứng viên vượt qua các điều kiện hình học ở scale đang chọn. Có thể giảm/tăng sensitivity hoặc nạp thêm dữ liệu.</span></div>';return;}
-    const status=c.status==='rules-passed'?'Các hard rules được kiểm tra đều đạt':c.status==='provisional'?'Candidate tạm thời · còn điều kiện chưa xác minh':'Candidate';
-    const roles=[...new Set((c.contextualRoleEvidence||[]).map(x=>x.role.replace('_diagonal','')))],roleHtml=roles.length?`<div><small>Parent context</small><b>${esc(roles.join(' / '))}${roles.length>1?' · ambiguous':''}</b></div>`:'';
-    box.innerHTML=`<div class="e-preferred-top"><div><small>SELECTED CANDIDATE</small><h3>${esc(patternNames[c.pattern]||c.pattern)}</h3><span class="e-dir ${c.direction}">${c.direction==='bullish'?'BULLISH':'BEARISH'}</span></div><div class="e-score"><b>${fmt(c.evidenceScore,1)}</b><small>Evidence / 100</small></div></div><p class="e-preferred-desc">${esc(status)} · ${esc(c.scoreLabel)}</p><div class="e-preferred-grid"><div><small>From</small><b>${esc(timeText(c.startTime))}</b></div><div><small>To</small><b>${esc(timeText(c.endTime))}</b></div><div><small>Hard rules</small><b>${c.ruleSummary.passed} pass · ${c.ruleSummary.failed} fail · ${c.ruleSummary.unverified} unverified</b></div><div><small>Scale agreement</small><b>${fmt(c.scaleAgreement*100,0)}%</b></div><div><small>Internal grammar</small><b>${esc(c.internalStructure?.status||'unverified')} · ${c.internalStructure?.matchedLegs??0}/${c.internalStructure?.totalLegs??0} legs</b></div>${roleHtml}</div>${c.invalidation?.levels?.length?`<div class="e-invalidation"><b>Structural invalidation</b>${c.invalidation.levels.map(x=>`<div><span>${esc(x.name)}</span><strong>${fmt(x.price,5)}</strong><small>${esc(x.condition)}</small></div>`).join('')}<small>${esc(c.invalidation.note||'')}</small></div>`:''}${c.warnings?.length?`<ul class="e-warning-list">${c.warnings.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}`;
+    if(!c){box.innerHTML='<div class="e-empty"><b>Chưa nhận diện được cấu trúc sóng rõ ràng</b><span>Thử đổi timeframe hoặc nạp thêm dữ liệu. Hệ thống không tự gán nhãn khi chưa đủ điều kiện.</span></div>';return;}
+    const status=c.status==='rules-passed'?'Đạt các hard rule có thể kiểm tra':c.status==='provisional'?'Đang chờ thêm xác nhận':'Ứng viên cấu trúc';
+    const direction=c.direction==='bullish'?'Tăng':'Giảm';
+    const invalidation=c.invalidation?.levels?.[0];
+    box.innerHTML=`<div class="e-preferred-simple"><div><small>COUNT ĐANG ƯU TIÊN</small><h3>${esc(patternNames[c.pattern]||c.pattern)}</h3><span class="e-dir ${c.direction}">${direction}</span></div><div class="e-simple-status">${esc(status)}</div></div><div class="e-simple-meta"><span><small>Bắt đầu</small><b>${esc(timeText(c.startTime))}</b></span><span><small>Cập nhật đến</small><b>${esc(timeText(c.endTime))}</b></span>${invalidation?`<span><small>Mốc vô hiệu hóa chính</small><b>${fmt(invalidation.price,5)}</b></span>`:''}</div>${c.warnings?.length?`<p class="e-caveat">${esc(c.warnings.slice(0,2).join(' '))}</p>`:''}`;
   }
   function renderCandidates(){
     const r=state.result;if(!r)return;
@@ -138,7 +143,7 @@
     const row=(c,i)=>`<button type="button" class="e-candidate-row${c.id===state.selectedId?' selected':''}" data-e-candidate="${esc(c.id)}"><span class="e-cand-rank">${i+1}</span><span class="e-cand-main"><b>${esc(patternNames[c.pattern]||c.pattern)}</b><small>${c.direction==='bullish'?'Bullish':'Bearish'} · ${c.status==='provisional'?'Provisional':'Rules passed'} · ${c.ruleSummary.passed} rule pass</small></span><span class="e-cand-score">${fmt(c.evidenceScore,1)}</span></button>`;
     const alternateHtml=alternates.length?`<h5 class="e-candidate-section-title">Alternate interpretations · same swing interval</h5><div class="e-candidate-list">${alternates.map(row).join('')}</div>`:'<div class="e-empty e-empty-compact"><b>No close alternate count</b><span>Chưa có cách đếm khác có điểm đầu/cuối gần với Preferred Count.</span></div>';
     const otherHtml=otherCandidates.length?`<h5 class="e-candidate-section-title">Other pattern candidates · other intervals</h5><div class="e-candidate-list">${otherCandidates.map(row).join('')}</div>`:'';
-    $('eCandidates').innerHTML=r.preferred?`${alternateHtml}${otherHtml}`:'<div class="e-empty"><b>No candidate detected</b><span>Thử kiểm tra chất lượng dữ liệu, timeframe và ATR threshold.</span></div>';
+    $('eCandidates').innerHTML=r.preferred?`${alternateHtml}${otherHtml}`:'<div class="e-empty"><b>No candidate detected</b><span>Thử timeframe khác hoặc nạp thêm dữ liệu để cấu trúc được xác nhận.</span></div>';
   }
   function renderRules(){
     const c=selectedCandidate();if(!c){$('eRules').innerHTML='<p class="msg">Chưa có candidate để kiểm tra.</p>';return;}
@@ -150,6 +155,17 @@
     $('eFib').innerHTML=c.fibTargets?.length?`<div class="ql-table-wrap"><table class="ql-table"><thead><tr><th>Projection / zone</th><th>Ratio</th><th>Price / metric</th><th>Zone</th><th>Formula · Source</th></tr></thead><tbody>${c.fibTargets.map(x=>`<tr><th>${esc(x.label)}</th><td>${fmt(x.ratio,3)}</td><td>${x.price==null?'—':fmt(x.price,5)}</td><td>${x.zoneLow==null?'—':`${fmt(x.zoneLow,5)} – ${fmt(x.zoneHigh,5)}`}</td><td>${esc(x.formula||x.method||'')} · ${esc(x.source||'')}</td></tr>`).join('')}</tbody></table></div><p class="e-caveat">Zone width là tolerance kỹ thuật ban đầu (tick floor / ATR multiplier), chưa được hiệu chỉnh trên dữ liệu forecast error. Fibonacci là guideline, không phải hard rule hoặc xác suất chạm đích.</p>`:'<p class="msg">Mẫu hình đang chọn chưa có projection được định nghĩa trong phiên bản này.</p>';
   }
 
+  function renderForecast(){
+    const el=$('eForecast');if(!el)return;
+    const c=selectedCandidate();const f=c?.id===state.result?.preferred?.id?state.result.nextWaveForecast:E().buildNextWaveForecast(c,state.result?.candidates||[],state.result?.bars||[],{quantStats:window.QuantStats||null});
+    if(!f||!f.available){el.innerHTML=`<div class="e-empty"><b>Chưa đủ ngữ cảnh để dự đoán sóng kế tiếp</b><span>${esc(f?.reason||'Khi chưa xác định được nhịp kế tiếp ở degree phù hợp, hệ thống sẽ không tự tạo mục tiêu.')}</span></div>`;return;}
+    const direction=f.direction==='up'?'Tăng':'Giảm',q=f.quant;
+    const preferredRatio=f.wave==='5'?1:.5;
+    const keyFib=(f.fib||[]).filter(x=>Math.abs(Number(x.ratio)-preferredRatio)<1e-8).slice(0,1);
+    const fibRows=(keyFib.length?keyFib:f.fib||[]).slice(0,3).map(x=>`<div class="e-target-row"><span>${esc(x.label)}</span><b>${fmt(x.price,5)}</b><small>${fmt(x.ratio,3)}×</small></div>`).join('');
+    const quantHtml=q?`<div class="e-quant-forecast"><div class="e-quant-main"><small>QUANT · TRUNG VỊ MẪU TƯƠNG ĐỒNG</small><b>${fmt(q.centerPrice,5)}</b><span>Khoảng P25–P75: ${fmt(q.lowPrice,5)} – ${fmt(q.highPrice,5)}</span></div><div class="e-quant-stats"><div><small>Số mẫu</small><b>${q.sampleCount}</b></div><div><small>Tỷ lệ trung vị</small><b>${fmt(q.ratioP50,3)}×</b></div></div><p class="e-caveat">${q.sampleCount<5?'Mẫu rất ít; chỉ nên xem là tham khảo.':q.sampleCount<12?'Mẫu còn nhỏ, vùng giá có thể thay đổi đáng kể.':'Phân vị mô tả lịch sử tương đồng, không phải xác suất chạm mục tiêu.'} ${esc(q.method||'Historical analogs')}.</p></div>`:`<div class="e-empty e-empty-compact"><b>Quant chưa đủ mẫu tương đồng</b><span>Vẫn có thể tham khảo các mốc Fibonacci bên cạnh. Cần thêm lịch sử OHLC để thống kê đáng tin cậy hơn.</span></div>`;
+    el.innerHTML=`<div class="e-forecast-head"><span class="e-dir ${f.direction==='up'?'bullish':'bearish'}">Wave ${esc(f.wave)} · kỳ vọng ${direction}</span><small>Điểm xuất phát: ${fmt(f.origin,5)}</small></div><div class="e-simple-forecast-grid"><section><h5>Fibonacci</h5>${fibRows||'<p class="msg">Không có mốc phù hợp.</p>'}</section><section><h5>QuantLab · mẫu tương đồng</h5>${quantHtml}</section></div><p class="e-caveat">Đây là vùng mục tiêu theo kịch bản, không phải lời hứa giá hay tín hiệu giao dịch. Count có thể thay đổi khi có cấu trúc mới hoặc bị vô hiệu hóa.</p>`;
+  }
   function renderChannel(){
     const c=selectedCandidate(),el=$('eChannel');if(!el)return;
     if(!c||!c.channel){el.innerHTML='<p class="msg">Channel hiện được tính cho Impulse hoàn chỉnh hoặc kịch bản Wave 5 đang phát triển.</p>';return;}
@@ -164,25 +180,38 @@
   function renderScale(){
     const r=state.result;if(!r)return;
     const hierarchy=r.degreeHierarchy||[];
-    $('eScales').innerHTML=`<div class="e-scale-grid">${r.scales.map((s,i)=>{const level=hierarchy[i]||{};const childCount=(hierarchy[i-1]?.legs||[]).reduce((n,leg)=>n+(leg.children||[]).length,0);return`<div class="e-scale-cell ${i===r.primaryScaleIndex?'active':''}"><small>${i===r.primaryScaleIndex?'PRIMARY DEGREE':`DEGREE ${i+1}`}</small><b>${s.pivots.length} pivots</b><span>${fmt(s.thresholdMultiplier,2)} × ATR · ${level.legs?.length||0} legs</span><span>${childCount} child-leg links</span></div>`}).join('')}</div><p class="e-caveat">Degree được biểu diễn bằng threshold và interval nesting, không gán cứng M5 = Minor hay H1 = Intermediate. Child-leg link chỉ mô tả quan hệ thời gian bao chứa; recursive grammar phải có candidate con tương ứng mới được đánh dấu matched.</p>`;
+    $('eScales').innerHTML=`<div class="e-scale-grid">${r.scales.map((s,i)=>{const level=hierarchy[i]||{};const childCount=(hierarchy[i-1]?.legs||[]).reduce((n,leg)=>n+(leg.children||[]).length,0);return`<div class="e-scale-cell ${i===r.primaryScaleIndex?'active':''}"><small>${i===r.primaryScaleIndex?'PRIMARY DEGREE':`DEGREE ${i+1}`}</small><b>${s.pivots.length} pivots</b><span>Tự động điều chỉnh · ${level.legs?.length||0} legs</span><span>${childCount} child-leg links</span></div>`}).join('')}</div><p class="e-caveat">Degree được biểu diễn bằng threshold và interval nesting, không gán cứng M5 = Minor hay H1 = Intermediate. Child-leg link chỉ mô tả quan hệ thời gian bao chứa; recursive grammar phải có candidate con tương ứng mới được đánh dấu matched.</p>`;
+  }
+
+  function waveStructureLabels(c){
+    if(!c?.pivots?.length)return[];
+    const n=c.pivots.length,id=c.pattern;
+    if(id==='impulse_developing_wave5')return['0','1','2','3','4'];
+    if(['impulse','extended_impulse','truncated_fifth','diagonal_candidate','expanding_diagonal_candidate','leading_diagonal','ending_diagonal'].includes(id))return n===6?['0','1','2','3','4','5']:c.pivots.map((_,i)=>String(i));
+    if(['zigzag','regular_flat','expanded_flat','running_flat'].includes(id))return n===4?['0','A','B','C']:c.pivots.map((_,i)=>String(i));
+    if(id.includes('triangle'))return n===6?['0','A','B','C','D','E']:c.pivots.map((_,i)=>String.fromCharCode(65+i));
+    if(id==='double_zigzag'||id==='double_three')return n===4?['0','W','X','Y']:c.pivots.map((_,i)=>String(i));
+    if(id==='triple_zigzag'||id==='triple_three')return n===6?['0','W','X','Y','X','Z']:c.pivots.map((_,i)=>String(i));
+    return c.pivots.map((_,i)=>String(i));
   }
 
   function drawPlot(){
     const cv=$('ePlot');if(!cv||!state.result)return;
-    const dpr=window.devicePixelRatio||1,w=Math.max(320,cv.clientWidth||720),h=260;cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
-    const bars=state.result.bars,vals=bars.flatMap(b=>[b.high,b.low]),lo=Math.min(...vals),hi=Math.max(...vals),range=hi-lo||1,p={l:46,r:14,t:18,b:26};
-    const x=i=>p.l+(i/Math.max(1,bars.length-1))*(w-p.l-p.r),y=v=>p.t+(hi-v)/range*(h-p.t-p.b);
-    state.plotTransform={w,h,p,lo,hi,x,y};
+    const dpr=window.devicePixelRatio||1,w=Math.max(320,cv.clientWidth||720),h=Math.max(240,cv.clientHeight||320);cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+    const bars=state.result.bars,selected=selectedCandidate(),forecast=selected?.id===state.result.preferred?.id?state.result.nextWaveForecast:E().buildNextWaveForecast(selected,state.result.candidates||[],bars,{quantStats:window.QuantStats||null});
+    const values=bars.flatMap(b=>[b.high,b.low]);let lo=Math.min(...values),hi=Math.max(...values);if(!(hi>lo)){lo-=1;hi+=1;}const pad=(hi-lo)*.055;lo-=pad;hi+=pad;const range=hi-lo,p={l:56,r:Math.max(92,Math.min(140,w*.16)),t:24,b:34};
+    const x=i=>p.l+(i/Math.max(1,bars.length-1))*(w-p.l-p.r),y=v=>p.t+(hi-v)/range*(h-p.t-p.b);state.plotTransform={w,h,p,lo,hi,x,y};
     const css=getComputedStyle(document.documentElement),mut=css.getPropertyValue('--mut').trim()||'#9b927d',line=css.getPropertyValue('--line').trim()||'#555',accent=css.getPropertyValue('--acc').trim()||'#d8aa4c',green=css.getPropertyValue('--win').trim()||'#38b98a',red=css.getPropertyValue('--loss').trim()||'#de6682';
     ctx.strokeStyle=line;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(p.l,h-p.b);ctx.lineTo(w-p.r,h-p.b);ctx.stroke();
-    ctx.fillStyle=mut;ctx.font='10px Space Grotesk,sans-serif';ctx.fillText(fmt(hi,4),4,p.t+6);ctx.fillText(fmt(lo,4),4,h-p.b);
-    const step=Math.max(1,Math.ceil(bars.length/1600));ctx.strokeStyle=accent;ctx.lineWidth=1.45;ctx.beginPath();let started=false;for(let i=0;i<bars.length;i+=step){const xx=x(i),yy=y(bars[i].close);if(!started){ctx.moveTo(xx,yy);started=true}else ctx.lineTo(xx,yy)}if((bars.length-1)%step!==0)ctx.lineTo(x(bars.length-1),y(bars[bars.length-1].close));ctx.stroke();
-    const drawCandidate=(c,color,dashed=false)=>{if(!c?.pivots?.length)return;ctx.save();ctx.strokeStyle=color;ctx.lineWidth=dashed?1.1:2;ctx.setLineDash(dashed?[5,4]:[]);ctx.beginPath();c.pivots.forEach((q,i)=>{if(i===0)ctx.moveTo(x(q.index),y(q.price));else ctx.lineTo(x(q.index),y(q.price));});ctx.stroke();ctx.restore();};
-    const selected=selectedCandidate();drawCandidate(selected,accent,false);
-    if(state.showAlternates){(state.result.alternates||[]).slice(0,4).forEach((c,i)=>{if(c.id!==selected?.id)drawCandidate(c,i%2?green:red,true);});}
-    const pivots=visibleManualPivots();
-    pivots.forEach((piv,i)=>{const xx=x(piv.index),yy=y(piv.price),isManual=!!piv.manual;ctx.fillStyle=piv.kind==='high'?red:green;ctx.beginPath();ctx.arc(xx,yy,isManual?5:3.2,0,Math.PI*2);ctx.fill();if(isManual){ctx.strokeStyle=accent;ctx.lineWidth=1.5;ctx.stroke();}const label=state.manualLabels[piv.uid]||piv.kind[0].toUpperCase();ctx.fillStyle=mut;ctx.font='bold 9px Space Grotesk,sans-serif';ctx.textAlign='center';ctx.fillText(label,xx,yy+(piv.kind==='high'?-10:16));ctx.textAlign='left';});
-    ctx.fillStyle=mut;ctx.font='10px Space Grotesk,sans-serif';ctx.fillText(`${bars.length.toLocaleString('vi-VN')} bars · as-of ${timeText(state.result.dataSummary.asOfTime)} · manual pivots: drag to move`,p.l,h-7);
+    ctx.fillStyle=mut;ctx.font='10px Space Grotesk,sans-serif';ctx.fillText(fmt(hi,4),5,p.t+4);ctx.fillText(fmt(lo,4),5,h-p.b);
+    const step=Math.max(1,Math.ceil(bars.length/1800));ctx.strokeStyle=mut;ctx.globalAlpha=.64;ctx.lineWidth=1;ctx.beginPath();let started=false;for(let i=0;i<bars.length;i+=step){const xx=x(i),yy=y(bars[i].close);if(!started){ctx.moveTo(xx,yy);started=true}else ctx.lineTo(xx,yy)}if((bars.length-1)%step!==0)ctx.lineTo(x(bars.length-1),y(bars[bars.length-1].close));ctx.stroke();ctx.globalAlpha=1;
+    if(selected?.pivots?.length){const labels=waveStructureLabels(selected),pts=selected.pivots;ctx.strokeStyle=accent;ctx.lineWidth=2.4;ctx.beginPath();pts.forEach((q,i)=>{if(i===0)ctx.moveTo(x(q.index),y(q.price));else ctx.lineTo(x(q.index),y(q.price));});ctx.stroke();
+      const placed=[];const cardColor=getComputedStyle(document.documentElement).getPropertyValue('--card').trim()||'#111';
+      pts.forEach((q,i)=>{const xx=x(q.index),yy=y(q.price),label=labels[i]||String(i);ctx.fillStyle=accent;ctx.beginPath();ctx.arc(xx,yy,3.8,0,Math.PI*2);ctx.fill();ctx.font='800 10px Space Grotesk,sans-serif';const bw=Math.max(20,ctx.measureText(label).width+9),bh=18;const preferUp=q.kind==='high';let bx=Math.max(p.l+bw/2+2,Math.min(w-p.r-bw/2-2,xx)),by=yy+(preferUp?-22:22);const shifts=[0,-18,18,-34,34,-50,50];for(const shift of shifts){const cy=Math.max(p.t+bh/2+2,Math.min(h-p.b-bh/2-2,by+shift));const clash=placed.some(a=>Math.abs(a.x-bx)<(a.w+bw)/2+3&&Math.abs(a.y-cy)<(a.h+bh)/2+2);if(!clash){by=cy;break;}}const box={x:bx,y:Math.max(p.t+bh/2+2,Math.min(h-p.b-bh/2-2,by)),w:bw,h:bh};placed.push(box);ctx.save();ctx.strokeStyle=accent;ctx.globalAlpha=.65;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xx,yy);ctx.lineTo(box.x,box.y+(preferUp?bh/2:-bh/2));ctx.stroke();ctx.globalAlpha=1;ctx.fillStyle=cardColor;ctx.strokeStyle=accent;ctx.lineWidth=1;ctx.beginPath();roundedRectPath(ctx,box.x-bw/2,box.y-bh/2,bw,bh,5);ctx.fill();ctx.stroke();ctx.fillStyle=accent;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,box.x,box.y);ctx.restore();});ctx.textAlign='left';ctx.textBaseline='alphabetic';}
+    // Keep the price chart clean: one Quant midpoint and one central Fibonacci reference at most.
+    if(forecast?.available){const levels=[];if(forecast.quant)levels.push({label:'QUANT',price:forecast.quant.centerPrice,color:green,width:2});const centralRatio=forecast.wave==='5'?1:.5;const centralFib=(forecast.fib||[]).find(v=>Math.abs(Number(v.ratio)-centralRatio)<1e-8);if(centralFib)levels.push({label:'FIB',price:centralFib.price,color:accent,width:1});
+      levels.filter(lv=>lv.price>=lo&&lv.price<=hi).forEach((lv,i)=>{const yy=y(lv.price);ctx.save();ctx.strokeStyle=lv.color;ctx.globalAlpha=.76;ctx.lineWidth=lv.width;ctx.setLineDash(lv.label==='QUANT'?[]:[5,4]);ctx.beginPath();ctx.moveTo(x(Math.max(0,selected?.endIndex??bars.length-1)),yy);ctx.lineTo(w-p.r+3,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=lv.color;ctx.font='bold 9px Space Grotesk,sans-serif';ctx.fillText(`${lv.label} ${fmt(lv.price,4)}`,w-p.r+7,yy+(i%2?12:-5));ctx.restore();});}
+    ctx.fillStyle=mut;ctx.font='10px Space Grotesk,sans-serif';ctx.fillText(`${bars.length.toLocaleString('vi-VN')} nến · ${selected?patternNames[selected.pattern]||selected.pattern:'chưa có cấu trúc'} · nhãn sóng tự động`,p.l,h-9);
   }
 
   function moveManualPivot(uid,targetIndex){
@@ -212,7 +241,7 @@
     $('ePivotTable').innerHTML=list.length?`<div class="ql-table-wrap"><table class="ql-table"><thead><tr><th>#</th><th>Type</th><th>Price</th><th>Pivot time</th><th>Confirmed at</th><th>Delay</th><th>Scale support</th></tr></thead><tbody>${list.map((p,i)=>`<tr><th>${r.scales[r.primaryScaleIndex].pivots.length-list.length+i+1}</th><td>${p.kind.toUpperCase()}</td><td>${fmt(p.price,5)}</td><td>${esc(timeText(p.time))}</td><td>${esc(timeText(p.confirmationTime))}</td><td>${p.confirmationDelayBars} bars</td><td>${p.scaleSupport}/${r.scales.length}</td></tr>`).join('')}</tbody></table></div>`:'<p class="msg">Chưa có pivot xác nhận.</p>';
   }
   function render(){
-    renderMetrics();renderPreferred();renderCandidates();renderRules();renderFib();renderChannel();renderScale();renderPivots();renderCatalog();renderManualCount();drawPlot();
+    renderMetrics();renderPreferred();renderForecast();renderCandidates();renderRules();renderFib();renderChannel();renderScale();renderPivots();renderCatalog();renderManualCount();drawPlot();
     const b=$('eExport');if(b)b.disabled=!state.result;
   }
 
@@ -269,8 +298,8 @@
     if(!$('eRun'))return;
     $('eRun').addEventListener('click',runAnalysis);
     $('eReplayCursor')?.addEventListener('click',analyzeReplayCursor);
-    $('eUseChart').addEventListener('click',()=>{try{loadChart($('eTimeframe').value)}catch(e){setStatus(e.message,true)}});
-    $('eDemo').addEventListener('click',()=>{try{demoBars();runAnalysis()}catch(e){setStatus(e.message,true)}});
+    $('eUseChart').addEventListener('click',()=>{try{loadChart($('eTimeframe').value);runAnalysis()}catch(e){setStatus(e.message,true)}});
+    $('eDemo')?.addEventListener('click',()=>{try{demoBars();runAnalysis()}catch(e){setStatus(e.message,true)}});
     $('eCsvBtn').addEventListener('click',()=>$('eCsv').click());
     $('eCsv').addEventListener('change',e=>importCsv(e.target.files&&e.target.files[0]));
     $('eExport').addEventListener('click',exportJson);
@@ -285,13 +314,9 @@
     $('eManualClear')?.addEventListener('click',()=>{state.manualPivots=[];state.manualLabels={};state.manualDegrees={};state.manualParents={};state.manualLocks={};state.manualDataKey=null;initializeManualPivots(state.result);renderManualCount();manualAudit();drawPlot();});
     $('eManualAudit')?.addEventListener('click',manualAudit);
     $('eManualTable')?.addEventListener('click',e=>{const lock=e.target.closest('[data-e-manual-lock]');if(lock){const uid=lock.dataset.eManualLock;state.manualLocks[uid]=!state.manualLocks[uid];renderManualCount();manualAudit();drawPlot();return;}const b=e.target.closest('[data-e-manual-remove-label]');if(!b||b.disabled)return;const uid=b.dataset.eManualRemoveLabel;delete state.manualLabels[uid];delete state.manualDegrees[uid];delete state.manualParents[uid];renderManualCount();manualAudit();drawPlot();});
-    $('ePlot')?.addEventListener('pointerdown',handlePlotPointerDown);
-    $('ePlot')?.addEventListener('pointermove',handlePlotPointerMove);
-    $('ePlot')?.addEventListener('pointerup',handlePlotPointerUp);
-    $('ePlot')?.addEventListener('pointercancel',handlePlotPointerUp);
     $('eCandidates').addEventListener('click',e=>{const b=e.target.closest('[data-e-candidate]');if(!b)return;state.selectedId=b.dataset.eCandidate;state.selected=selectedCandidate();render();});
     window.addEventListener('resize',()=>{if(state.result&&document.body.dataset.v==='elliott')drawPlot()});
-    try{demoBars();runAnalysis()}catch(e){setStatus(e.message,true)}
+    try{loadChart('current');runAnalysis()}catch(e){try{demoBars();runAnalysis()}catch(err){setStatus(err.message,true)}}
   }
 
   window.ElliottStructureLab={loadChart,analyze:runAnalysis,analyzeReplayCursor,getResult:()=>state.result,getBars:()=>state.bars.slice(),getSelected:()=>selectedCandidate(),getSnapshots:()=>state.snapshots.slice(),getManualCount:()=>({pivots:state.manualPivots,labels:state.manualLabels,degrees:state.manualDegrees,parents:state.manualParents})};

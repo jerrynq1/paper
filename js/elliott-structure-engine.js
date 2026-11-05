@@ -1,4 +1,4 @@
-/* Gexadecimal Elliott Structure Lab · v0.4
+/* Gexadecimal Elliott Structure Lab · v0.6
  * Deterministic, explainable Elliott candidate engine.
  * Important: pivots are only confirmed after a subsequent directional change.
  * Candidate scores are heuristic evidence scores, NOT probabilities or trade signals.
@@ -10,7 +10,7 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
 
-  const VERSION='0.4.0';
+  const VERSION='0.6.0';
   const DEFAULTS={
     atrPeriod:14,
     thresholdMultiplier:1.5,
@@ -49,6 +49,17 @@
   const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
   const mean=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:NaN;
   const median=a=>{if(!a.length)return NaN;const s=a.slice().sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+  const quantile=(values,p)=>{const s=values.filter(Number.isFinite).slice().sort((a,b)=>a-b);if(!s.length)return NaN;const x=clamp(p,0,1)*(s.length-1),lo=Math.floor(x),hi=Math.ceil(x);return s[lo]+(s[hi]-s[lo])*(x-lo)};
+
+  function automaticSwingSettings(bars){
+    const closes=bars.map(b=>b.close);let total=0;
+    for(let i=1;i<closes.length;i++)total+=abs(closes[i]-closes[i-1]);
+    const efficiency=total>0?abs(closes.at(-1)-closes[0])/total:0;
+    // Internal-only sensitivity: noisier/rangier samples need wider swing thresholds.
+    const thresholdMultiplier=efficiency>.48?1.18:efficiency<.18?1.62:1.38;
+    const atrPeriod=clamp(Math.round(Math.sqrt(bars.length)/3),8,21);
+    return{atrPeriod,thresholdMultiplier,scaleFactors:[.78,1.08,1.52,2.15],autoPrimaryScale:true,autoMode:true,efficiency};
+  }
   const abs=x=>Math.abs(x);
   const sign=x=>x>0?1:x<0?-1:0;
   const timeOf=t=>{
@@ -175,12 +186,23 @@
 
   function detectMultiScalePivots(bars,options={}){
     const factors=Array.isArray(options.scaleFactors)&&options.scaleFactors.length>=2?options.scaleFactors.slice():DEFAULTS.scaleFactors.slice();
-    const primaryScaleIndex=clamp(Number(options.primaryScaleIndex??DEFAULTS.primaryScaleIndex),0,factors.length-1)|0;
     if(factors.some(x=>!Number.isFinite(Number(x))||Number(x)<=0))throw new Error('Mọi scale factor phải là số dương.');
     const scales=factors.map((factor,i)=>{
       const r=directionalChangePivots(bars,{...options,thresholdMultiplier:Number(options.thresholdMultiplier??DEFAULTS.thresholdMultiplier)*Number(factor)});
       return{id:`degree-${i+1}`,factor:Number(factor),thresholdMultiplier:r.thresholdMultiplier,pivots:r.pivots,active:r.active};
     });
+    let primaryScaleIndex=clamp(Number(options.primaryScaleIndex??DEFAULTS.primaryScaleIndex),0,factors.length-1)|0;
+    if(options.autoPrimaryScale){
+      const target=clamp(Math.round(Math.sqrt(bars.length)/2.7),6,24);
+      let best=Infinity;
+      scales.forEach((scale,i)=>{const count=scale.pivots.length,penalty=count<4?1.2:0;
+        // Prefer the middle/default scale when several thresholds produce the same pivot count.
+        // This avoids silently selecting the noisiest degree on a scale-count tie.
+        const tieBreak=abs(i-DEFAULTS.primaryScaleIndex)*0.015;
+        const score=abs(Math.log((count+1)/(target+1)))+penalty+tieBreak;
+        if(score<best){best=score;primaryScaleIndex=i;}
+      });
+    }
     // Persistence: the same pivot recurring at nearby scales is more stable, but is not a probability.
     for(const s of scales){
       for(const p of s.pivots){
@@ -693,6 +715,56 @@
     return zones;
   }
 
+  function buildNextWaveForecast(candidate,allCandidates=[],bars=[],options={}){
+    if(!candidate?.pivots?.length)return null;
+    const p=candidate.pivots,pattern=candidate.pattern,d=candidate.directionSign||1;
+    const fib=[];let wave=null,origin=null,baseLength=0,forecastDirection=0,formula='';
+    const addFib=(label,ratio,price,source='Fibonacci')=>{if(Number.isFinite(price))fib.push({label,ratio,price,source});};
+    if(pattern==='impulse_developing_wave5'&&p.length===5){
+      wave='5';origin=p[4].price;forecastDirection=d;baseLength=abs(p[1].price-p[0].price);
+      [.618,1,1.618].forEach(r=>addFib(`Wave 5 = ${r} × Wave 1`,r,origin+d*baseLength*r));
+      const net13=abs(p[3].price-p[0].price);[.382,.618,1].forEach(r=>addFib(`Wave 5 = ${r} × net Wave 1–3`,r,origin+d*net13*r));
+      formula='W4 + ratio × W1';
+    }else if(['impulse','extended_impulse','truncated_fifth'].includes(pattern)&&p.length===6){
+      wave='A';origin=p[5].price;forecastDirection=-d;baseLength=abs(p[5].price-p[0].price);
+      [.382,.5,.618].forEach(r=>addFib(`Wave A retracement ${r}`,r,origin+forecastDirection*baseLength*r));
+      formula='W5 end − retracement × full impulse range';
+    }else return{wave:null,available:false,reason:'Chưa có cấu trúc kết thúc phù hợp để ước lượng sóng kế tiếp. Cần bối cảnh degree lớn hơn.',fib:[],quant:null};
+
+    const eligible=new Map(),candidatePool=allCandidates||[];
+    const impulseFeatures=pts=>{if(!pts||pts.length<5)return null;const w1=abs(pts[1].price-pts[0].price),w3=abs(pts[3].price-pts[2].price),w4=abs(pts[4].price-pts[3].price);if(w1<=0||w3<=0)return null;return[abs(pts[2].price-pts[1].price)/w1,w3/w1,w4/w3]};
+    const currentFeatures=wave==='5'?impulseFeatures(p):(wave==='A'?impulseFeatures(p):null);
+    const featureDistance=(a,b)=>{if(!a||!b)return 0;const scales=[.3,.75,.4];return Math.sqrt(a.reduce((sum,v,i)=>sum+((v-b[i])/scales[i])**2,0));};
+    if(wave==='5'){
+      for(const c of candidatePool){
+        if(!c||c.endIndex>=candidate.startIndex||c.directionSign!==d||!['impulse','extended_impulse','truncated_fifth'].includes(c.pattern)||c.pivots?.length!==6)continue;
+        const q0=c.pivots,w1=abs(q0[1].price-q0[0].price),w5=abs(q0[5].price-q0[4].price),features=impulseFeatures(q0);
+        if(w1>0&&w5>0){const key=`${c.startIndex}:${c.endIndex}`;eligible.set(key,{candidate:c,ratio:w5/w1,distance:featureDistance(currentFeatures,features)});}
+      }
+    }else if(wave==='A'){
+      const impulses=candidatePool.filter(c=>c&&c.endIndex<candidate.startIndex&&c.directionSign===d&&['impulse','extended_impulse','truncated_fifth'].includes(c.pattern)&&c.pivots?.length===6);
+      const corrections=candidatePool.filter(c=>c&&c.endIndex<candidate.startIndex&&c.directionSign===-d&&(['zigzag','regular_flat','expanded_flat','running_flat'].includes(c.pattern))&&c.pivots?.length===4);
+      impulses.forEach(imp=>{
+        const correction=corrections.find(c=>c.startIndex===imp.endIndex);
+        if(!correction)return;const whole=abs(imp.pivots[5].price-imp.pivots[0].price),a=abs(correction.pivots[1].price-correction.pivots[0].price),features=impulseFeatures(imp.pivots);
+        if(whole>0&&a>0)eligible.set(`${imp.startIndex}:${correction.endIndex}`,{candidate:imp,ratio:a/whole,distance:featureDistance(currentFeatures,features)});
+      });
+    }
+    // Keep nearest structural analogs instead of mixing every historical impulse equally.
+    const analogs=[...eligible.values()].filter(x=>Number.isFinite(x.ratio)&&x.ratio>0&&x.ratio<6).sort((a,b)=>a.distance-b.distance).slice(0,24);
+    const samples=analogs.map(x=>x.ratio);
+    const statsApi=options.quantStats||null,sortedSamples=samples.slice().sort((a,b)=>a-b);
+    const q=(v)=>{try{return typeof statsApi?.quantile==='function'?statsApi.quantile(sortedSamples,v):quantile(sortedSamples,v)}catch{return quantile(sortedSamples,v)}};
+    let stats=null;
+    if(samples.length){
+      try{stats=typeof statsApi?.stats==='function'?statsApi.stats(samples):null}catch{}
+      if(!stats)stats={n:samples.length,mean:mean(samples),median:median(samples),stdDev:samples.length>1?Math.sqrt(samples.reduce((sum,x)=>sum+(x-mean(samples))**2,0)/(samples.length-1)):0};
+    }
+    const quant=samples.length?{sampleCount:samples.length,ratioP25:q(.25),ratioP50:q(.5),ratioP75:q(.75),ratioP10:q(.10),ratioP90:q(.90),mean:stats.mean,median:stats.median,stdDev:stats.stdDev,centerPrice:origin+forecastDirection*baseLength*q(.5),lowPrice:origin+forecastDirection*baseLength*q(.25),highPrice:origin+forecastDirection*baseLength*q(.75),formula,method:'Historical Elliott analogs · empirical quantiles',quality:samples.length>=12?'usable sample':samples.length>=5?'small sample':'very small sample',ratioLabel:wave==='5'?'Wave 5 / Wave 1':'Wave A / full impulse'}:null;
+    if(quant&&quant.lowPrice>quant.highPrice){const t=quant.lowPrice;quant.lowPrice=quant.highPrice;quant.highPrice=t;}
+    return{available:true,wave,origin,baseLength,direction:forecastDirection>0?'up':'down',fib,quant,formula,historyCount:samples.length,meanAnalogDistance:analogs.length?mean(analogs.map(x=>x.distance)):null,analogMethod:'Nearest structural analogs · Wave 2/Wave 1, Wave 3/Wave 1, Wave 4/Wave 3',notes:['Fibonacci ratios are reference scenarios, not guaranteed targets.','Quant projection uses only completed same-direction structures ending before the current count begins.','Empirical quantiles are descriptive; sample size and market regime can materially change the range.']};
+  }
+
   function updateScenarioLifecycle(snapshots,fullBars){
     return (snapshots||[]).map(s=>{
       if(s.status==='invalidated')return s;
@@ -704,13 +776,16 @@
   }
 
   function analyze(input,options={}){
-    const opts={...DEFAULTS,...options};
+    const autoMode=options.autoMode===true||(!Object.hasOwn(options,'atrPeriod')&&!Object.hasOwn(options,'thresholdMultiplier')&&!Object.hasOwn(options,'scaleFactors')&&!Object.hasOwn(options,'primaryScaleIndex'));
+    let opts={...DEFAULTS,...options};
     let bars=normalizeBars(input,opts);
     const requestedAsOf=Number.isFinite(Number(opts.asOfTime))?Number(opts.asOfTime):null;
     const requestedIndex=Number.isInteger(Number(opts.asOfIndex))?Number(opts.asOfIndex):null;
     if(requestedAsOf!=null)bars=bars.filter(b=>b.time<=requestedAsOf);
     else if(requestedIndex!=null)bars=bars.slice(0,Math.max(0,Math.min(bars.length,requestedIndex+1)));
     if(bars.length<20)throw new Error('Mốc As-of cần tối thiểu 20 nến OHLC đã đóng.');
+    // Default user path uses adaptive internal sensitivity; explicit developer/test parameters remain supported.
+    if(autoMode)opts={...opts,...automaticSwingSettings(bars),...options,autoPrimaryScale:true};
     // Rebase indices after an as-of slice: all pivots/candidates use indices local to this immutable snapshot.
     bars=bars.map((b,index)=>({...b,index}));
     const multi=detectMultiScalePivots(bars,opts);
@@ -726,12 +801,19 @@
     const ranked=addScaleAgreement(all,multi.scales,primaryIndex)
       .map(c=>{c.fibTargets=buildProjectionZones(c,{...opts,atrValue:atrWilder(bars,opts.atrPeriod).values.at(-1)});return c;})
       .sort((a,b)=>b.evidenceScore-a.evidenceScore||b.endIndex-a.endIndex);
-    const candidates=diversifyCandidates(ranked,opts.maxCandidates);
-    const preferred=candidates[0]||null;
+    // Prioritize structures near the right edge so the default view describes the current market,
+    // while keeping older patterns available as alternates and historical analogs.
+    const recentCutoff=Math.max(0,bars.length-Math.max(12,Math.round(bars.length*.14)));
+    const recentRanked=ranked.filter(c=>c.endIndex>=recentCutoff).sort((a,b)=>b.endIndex-a.endIndex||b.evidenceScore-a.evidenceScore);
+    const candidates=diversifyCandidates([...recentRanked,...ranked],opts.maxCandidates);
+    // In a live chart, prefer the most recent coherent count over an older, higher-scoring historical pattern.
+    const latestPool=candidates.filter(c=>c.endIndex>=recentCutoff);
+    const preferred=(latestPool.length?latestPool:candidates).slice().sort((a,b)=>b.endIndex-a.endIndex||b.evidenceScore-a.evidenceScore)[0]||null;
+    const nextWaveForecast=buildNextWaveForecast(preferred,ranked,bars,{quantStats:opts.quantStats});
     const rejectedCandidateCount=rejectedByScale.reduce((sum,group)=>sum+Object.values(group).reduce((s,n)=>s+n,0),0);
     const primaryPivots=multi.primary;
     return{
-      version:VERSION,createdAt:new Date().toISOString(),bars,
+      version:VERSION,createdAt:new Date().toISOString(),bars,nextWaveForecast,
       dataSummary:{observations:bars.length,startTime:bars[0].time,endTime:bars[bars.length-1].time,asOfTime:bars[bars.length-1].time,asOfIndex:bars.length-1,source:'OHLC',lookaheadProtected:true},
       atr:{period:opts.atrPeriod,values:atrWilder(bars,opts.atrPeriod).values},
       scales:multi.scales,primaryScaleIndex:primaryIndex,parentLegs:multi.parentLegs,degreeHierarchy:multi.degreeHierarchy,
@@ -739,7 +821,7 @@
       swingBoxes:primaryPivots.length?buildSwingBoxes(primaryPivots,opts):[],
       candidates,preferred,alternates:selectAlternateCounts(candidates,preferred,5),
       diagnostics:{pivotCount:primaryPivots.length,scalePivotCounts:multi.scales.map(s=>s.pivots.length),candidateCount:candidates.length,rejectedCandidateCount,rejectedByScale,hasClearCount:candidates.length>0,asOfTime:bars[bars.length-1].time,recursiveCounts:candidates.filter(c=>c.recursiveGrammar?.status==='verified').length,recursiveMatchedCounts:candidates.filter(c=>c.recursiveGrammar?.status==='matched').length,provisionalCounts:candidates.filter(c=>c.status==='provisional').length,disclaimer:'Evidence Score không phải xác suất. Candidate là giả thuyết hình học trên pivot đã xác nhận; grammar chỉ VERIFIED khi child grammar cũng được xác minh đệ quy; swing-count đơn thuần chỉ là proxy.',patternCoverage:['Impulse','Extended Impulse candidate','Truncated Fifth','Developing Wave 5','Contracting/expanding Diagonal candidates · role-dependent','Zigzag','Regular/Expanded/Running Flat','Contracting/Barrier/Expanding Triangle','Double/Triple Zigzag','Double/Triple Three']},
-      settings:{atrPeriod:opts.atrPeriod,thresholdMultiplier:opts.thresholdMultiplier,scaleFactors:opts.scaleFactors,primaryScaleIndex:primaryIndex,asOfTime:bars[bars.length-1].time,projectionMode:opts.projectionMode||'arithmetic',zoneAtrMultiplier:opts.zoneAtrMultiplier||.05}
+      settings:{mode:autoMode?'automatic':'explicit',atrPeriod:opts.atrPeriod,thresholdMultiplier:opts.thresholdMultiplier,scaleFactors:opts.scaleFactors,primaryScaleIndex:primaryIndex,asOfTime:bars[bars.length-1].time,projectionMode:opts.projectionMode||'arithmetic',zoneAtrMultiplier:opts.zoneAtrMultiplier||.05}
     };
   }
 
@@ -753,9 +835,9 @@
   }
 
   return{
-    VERSION,DEFAULTS,PATTERN_CATALOG,normalizeBars,trueRanges,atrWilder,
+    VERSION,DEFAULTS,PATTERN_CATALOG,normalizeBars,trueRanges,atrWilder,automaticSwingSettings,quantile,
     directionalChangePivots,detectMultiScalePivots,
     evaluateImpulse,evaluateDevelopingImpulse,evaluateZigzag,evaluateFlat,evaluateTriangle,evaluateDiagonal,
-    detectAtScale,composeCombinationCandidates,attachRecursiveGrammar,auditManualSequence,buildDegreeHierarchy,buildSwingBoxes,buildPivotGraph,buildProjectionZones,updateScenarioLifecycle,diversifyCandidates,selectAlternateCounts,buildFibTargets,buildImpulseChannel,analyze,summarizeCandidate
+    detectAtScale,composeCombinationCandidates,attachRecursiveGrammar,auditManualSequence,buildDegreeHierarchy,buildSwingBoxes,buildPivotGraph,buildProjectionZones,buildNextWaveForecast,updateScenarioLifecycle,diversifyCandidates,selectAlternateCounts,buildFibTargets,buildImpulseChannel,analyze,summarizeCandidate
   };
 });
