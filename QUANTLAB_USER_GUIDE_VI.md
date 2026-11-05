@@ -252,3 +252,13 @@ Khoảng dự báo sử dụng psi weights và tích phân theo bậc d nhưng c
 - CFD cTrader, tick volume và quote proxies không tương đương Futures centralized exchange volume.
 - Bản MVP không hỗ trợ VAR/VECM, Cointegration, GARCH/EGARCH, Bootstrap/Monte Carlo, walk-forward engine, multi-asset sync backend hoặc database persistent.
 - PDF hướng dẫn có hình minh họa vẽ lại; không nên hiểu là ảnh chụp UI hiện hành.
+
+---
+
+## 8. Bản cập nhật Research Extensions 1.1 (05-11-2026)
+
+Quant Lab hiện bổ sung bảng Data quality check cho timezone/ordering/duplicate/gaps; Return Distribution (Jarque–Bera và quantiles); Rolling Realized Volatility (RV/BV/jump variation); ACF/Ljung–Box cho returns, absolute returns và squared returns; Lagged Return Regression dùng X lùi bar để giảm same-bar look-ahead; và expanding-window Walk-forward so với baseline Random Walk.
+
+Đọc hướng dẫn chi tiết, công thức, cách diễn giải, giả định và giới hạn tại `QUANTLAB_RESEARCH_EXTENSION_GUIDE_VI.md` trong thư mục source.
+
+Lưu ý kiểm chứng: ADF và phần AR-only đã có cross-check trên dữ liệu mô phỏng với statsmodels 0.14.6; PP chưa được đối chiếu bằng package PP chuyên biệt; MA/ARMA CSS/Nelder–Mead vẫn là ước lượng thử nghiệm. Không dùng một kết quả thống kê đơn lẻ làm tín hiệu giao dịch.

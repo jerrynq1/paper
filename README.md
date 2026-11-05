@@ -272,3 +272,10 @@ Mở `http://localhost:8000/#quant` sau khi chạy web server tĩnh. Các phép 
 ## Gexadecimal Quant Lab (Phase 1–3)
 
 Bản source hiện có Quant Lab cho Statistical Data Explorer, OLS Regression và Time Series. Đọc hướng dẫn tiếng Việt và báo cáo rà soát: `QUANTLAB_USER_GUIDE_VI.md`, `QUANTLAB_AUDIT_REPORT.md`, `QUANT_LAB_MVP.md`, `QUANT_PHASE3_GUIDE.md`. Quant Lab chạy client-side; không cần Python để sử dụng.
+
+
+## Quant Lab Research Extensions 1.1 (05-11-2026)
+
+Bản source này mở rộng Quant Lab Phase 1–3 với Data Quality Audit cho timestamp/timezone/duplicate/order/gaps; Return Distribution và quantiles; rolling volatility nhiều cửa sổ; Realized Volatility, Bipower Variation và Jump Variation ước lượng; ACF/Ljung–Box cho returns, absolute returns và squared returns; Lagged Return Regression; expanding-window Walk-forward so với naïve Random Walk; cùng phần Research Interpretation trong giao diện.
+
+Xem `QUANTLAB_RESEARCH_EXTENSION_GUIDE_VI.md` để biết công thức, cách đọc kết quả, giả định và giới hạn. Các engine ARCH/GARCH, VAR/VECM, Cointegration, Granger, Bootstrap/Monte Carlo và Regime Detection nâng cao vẫn chưa được triển khai.

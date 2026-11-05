@@ -119,3 +119,33 @@ Các module giao dịch hiện có như Chart, Footprint, Options, TPO, Replay, 
 4. Bổ sung timestamp-aware resampling và chính sách session gaps rõ ràng cho dữ liệu giao dịch.
 5. Trước khi hỗ trợ nhiều người dùng, thiết kế backend, auth, rate limits, secure credential storage và data warehouse.
 6. Tiếp theo phát triển Phase 4 ARCH/GARCH sau khi Data Foundation và kiểm định Phase 1–3 được người dùng smoke-test.
+
+## 7. Audit bổ sung — Research Extensions 1.1 (05-11-2026)
+
+### Các thay đổi
+
+- Sửa Ljung–Box: thay multiplier sai `m(m+2)` bằng chuẩn `n(n+2)`; p-value dùng chi-square survival với df = m - p - q cho residual ARMA.
+- Thêm timestamp metadata và UI cảnh báo timezone mơ hồ, timestamp lỗi, duplicate, thứ tự nguồn, gaps và timestamp cuối ở tương lai so với đồng hồ browser.
+- Thêm Return Distribution: moments, Jarque–Bera asymptotic reference p-value và quantiles.
+- Thêm rolling RV/BV/jump-variation estimates; chưa annualize.
+- Thêm dependence diagnostics cho returns, absolute returns và squared returns.
+- Thêm lagged return OLS: Y log return hiện tại, X changes được shift lùi; HC1 standard errors.
+- Thêm expanding-window walk-forward checkpoint evaluation so với naïve random-walk baseline.
+- Thêm UI Research Interpretation và tài liệu `QUANTLAB_RESEARCH_EXTENSION_GUIDE_VI.md`.
+
+### Kiểm chứng thực hiện
+
+- Tất cả `js/*.js` vượt qua `node --check`.
+- Tất cả `tests/*.test.js` chạy thành công trong lượt kiểm tra này.
+- Ljung–Box có test tính Q độc lập theo công thức chuẩn `n(n+2)Σρ²/(n-k)`.
+- Return distribution, RV/BV, timestamp metadata, dependence diagnostics và walk-forward có test mới.
+- ADF trên dữ liệu seeded đối chiếu với statsmodels 0.14.6; AR(1) OLS và ARIMA(1,1,0) AR-only trên sai phân khớp statsmodels AutoReg tới sai số số học.
+- HTML có 186 ID, không trùng; 75 tham chiếu `$q(...)` trong `quant-lab.js` đều có ID. Có 19 file test và 39 file JavaScript trong source package.
+
+### Giới hạn xác minh
+
+- PP chưa được cross-check độc lập bằng package Phillips–Perron chuyên biệt.
+- MA/ARMA CSS + Nelder–Mead không phải exact maximum likelihood; chưa được xác minh là tương đương statsmodels/R/Stata.
+- Chưa có CSV XAUUSD M1 gốc để tái tạo kết quả từ PDF và chạy forecast validation trên dữ liệu thật.
+- Browser E2E automation chưa hoàn tất trong môi trường đóng gói; cần smoke-test trên browser/hosting thật.
+- ARCH/GARCH, VAR/VECM, Cointegration, Granger, Bootstrap/Monte Carlo, Regime Detection nâng cao và backend/database vẫn chưa triển khai.

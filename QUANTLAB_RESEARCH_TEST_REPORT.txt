@@ -1,0 +1,39 @@
+GEXADECIMAL QUANT LAB — RESEARCH EXTENSIONS 1.1
+Test report: 2026-11-05
+
+STATIC CHECKS
+- JavaScript files passed node --check: 39/39
+- HTML IDs: 186
+- Duplicate HTML IDs: 0
+- Static $q(...) references in js/quant-lab.js: 75
+- Missing IDs among those references: 0
+
+NODE TESTS
+- Test files run: 19/19
+- Result: all tests passed
+- New tests cover:
+  * Ljung-Box standard n(n+2) multiplier
+  * Ljung-Box lag cap on a short series
+  * Realized variance, bipower variation and jump variation
+  * Return distribution, Jarque-Bera reference p-value and tail quantiles
+  * Explicit UTC offsets versus ambiguous timestamps
+  * Return/absolute-return/squared-return dependence diagnostics
+  * Expanding-window walk-forward using only prior observations
+
+INDEPENDENT NUMERICAL CROSS-CHECKS (SYNTHETIC SEEDED DATA)
+- ADF statistic and lag selection cross-checked with statsmodels 0.14.6.
+- AR(1) OLS coefficients cross-checked with statsmodels AutoReg.
+- ARIMA(1,1,0) AR-only coefficients on first differences cross-checked with statsmodels AutoReg.
+- These checks validate specific controlled examples, not all market datasets or all model specifications.
+
+NOT VERIFIED / LIMITATIONS
+- No original XAUUSD M1 CSV was available in this build, so the PDF report's numbers were not recomputed from raw market rows.
+- Phillips-Perron was not independently cross-checked against a specialized PP package.
+- MA/ARMA use CSS + Nelder-Mead, not exact maximum likelihood; parity with statsmodels/R/Stata is not claimed.
+- Forecast uncertainty still excludes parameter uncertainty and conditional heteroskedasticity.
+- Browser end-to-end automation was not completed in this environment. Manual smoke test in Live Server/hosting is still required.
+- RV/BV/jump variation are high-frequency estimates and have not been adjusted for microstructure noise or session-specific sampling.
+- Walk-forward evaluates a limited number of evenly spaced one-step checkpoints, not every bar; no spread, commission, slippage, latency or market impact is included.
+
+NOT IMPLEMENTED
+- ARCH/GARCH/EGARCH/TGARCH, VAR/VECM, Cointegration/Johansen, Granger, Bootstrap/Monte Carlo, advanced regime detection, backend/database/authentication.
