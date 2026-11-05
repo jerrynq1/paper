@@ -612,3 +612,27 @@ a.sb{text-decoration:none}
 .ql-learning-grid,.ql-data-audit-wrap,.ql-lagged-panel,.ql-walkforward-box{overflow-wrap:anywhere}
 @media(max-width:950px){.ql-learning-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.ql-learning-grid{grid-template-columns:1fr}.ql-lagged-panel .ql-reg-options .btn,.ql-walkforward-box .ql-reg-options .btn{flex:1 1 100%}.ql-lagged-panel .ql-select-label,.ql-walkforward-box .ql-select-label{max-width:none;flex:1 1 130px}}
+
+/* Quant Lab · Phase 4 conditional volatility */
+.ql-volatility-card{overflow:hidden}
+.ql-vol-intro{padding:11px 13px;margin:0 0 12px;border:1px solid var(--line);border-radius:10px;background:var(--inp);color:var(--mut);font-size:10px;line-height:1.55}
+.ql-vol-intro b{color:var(--ink)}
+.ql-vol-controls{display:grid;grid-template-columns:minmax(155px,1.2fr) minmax(130px,.9fr) minmax(160px,1fr) minmax(90px,.55fr) minmax(100px,.6fr) minmax(120px,.8fr) auto;gap:9px;align-items:end;padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--inp)}
+.ql-vol-controls .ql-select-label{min-width:0}
+.ql-vol-controls input,.ql-vol-controls select{min-width:0;width:100%;height:35px;padding:5px 8px;font-size:11px}
+.ql-vol-controls .btn{min-height:35px;white-space:nowrap}
+.ql-vol-output{display:grid;gap:12px;margin-top:12px}
+.ql-vol-output .ql-metrics{margin:0;grid-template-columns:repeat(5,minmax(0,1fr))}
+.ql-vol-canvas{height:230px}
+.ql-vol-output .ql-table{min-width:340px}
+.ql-vol-interpretation{padding:12px 14px;border:1px solid var(--line);border-radius:11px;background:var(--inp);font-size:10px;line-height:1.6}
+.ql-vol-interpretation b{font-size:11px}
+.ql-vol-interpretation ul{margin:7px 0;padding-left:18px}
+.ql-vol-interpretation li{margin:4px 0}
+.ql-vol-interpretation p{margin:7px 0 0;color:var(--mut)}
+.ql-vol-actions{display:flex;justify-content:flex-end}
+.ql-vol-learning{margin-top:13px;padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.ql-vol-learning h4{margin:0 0 9px;font:700 12px Sora,sans-serif}
+.ql-vol-learning-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1100px){.ql-vol-controls{grid-template-columns:repeat(3,minmax(0,1fr))}.ql-vol-controls .btn{grid-column:1/-1}.ql-vol-output .ql-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.ql-vol-learning-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.ql-vol-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.ql-vol-controls .ql-select-label:first-child{grid-column:1/-1}.ql-vol-controls .btn{grid-column:1/-1}.ql-vol-output .ql-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ql-vol-learning-grid{grid-template-columns:1fr}}
