@@ -269,13 +269,27 @@ Mở `http://localhost:8000/#quant` sau khi chạy web server tĩnh. Các phép 
 **Giới hạn dữ liệu:** cột Volume lấy từ cTrader trong bản này vẫn là tick-volume/quote proxy do broker cung cấp, không phải contract volume Futures tập trung.
 
 
-## Gexadecimal Quant Lab (Phase 1–3)
+## Gexadecimal Quant Lab (Phase 1–4)
 
-Bản source hiện có Quant Lab cho Statistical Data Explorer, OLS Regression và Time Series. Đọc hướng dẫn tiếng Việt và báo cáo rà soát: `QUANTLAB_USER_GUIDE_VI.md`, `QUANTLAB_AUDIT_REPORT.md`, `QUANT_LAB_MVP.md`, `QUANT_PHASE3_GUIDE.md`. Quant Lab chạy client-side; không cần Python để sử dụng.
+Quant Lab chạy client-side và hiện gồm Statistical Data Explorer, OLS Regression, Time Series, các phần Research Extensions 1.1 và Phase 4 Conditional Volatility. Không cần cài Python để sử dụng giao diện.
+
+### Research Extensions 1.1
+
+Data Quality Audit cho timestamp/timezone/duplicate/order/gaps; Return Distribution và quantiles; rolling volatility nhiều cửa sổ; Realized Volatility, Bipower Variation và Jump Variation ước lượng; ACF/Ljung–Box cho returns, absolute returns và squared returns; Lagged Return Regression; expanding-window Walk-forward so với naïve Random Walk; cùng phần Research Interpretation trong giao diện.
+
+### Phase 4 — ARCH/GARCH Volatility Laboratory
+
+Có ARCH(q), GARCH(1,1), EGARCH(1,1), GJR-GARCH(1,1) và TARCH(1,1) theo Zakoian; Gaussian và standardized Student-t innovations; conditional volatility, persistence, half-life, diagnostics và volatility forecast. Mô hình hóa volatility, không dự báo hướng giá. Engine browser-side dùng conditional likelihood và Nelder–Mead, chưa có Hessian/parameter standard errors, ARMA mean + GARCH hoặc VaR/ES.
+
+Tài liệu: `QUANTLAB_PHASE4_ARCH_GARCH_GUIDE_VI.md`, `QUANTLAB_RESEARCH_EXTENSION_GUIDE_VI.md`, `QUANTLAB_USER_GUIDE_VI.md`, `QUANTLAB_AUDIT_REPORT.md`. Phase 5 — VAR/VECM, Cointegration/Johansen, Granger Causality, Bootstrap/Monte Carlo và các phương pháp đa biến/nâng cao — vẫn là roadmap, chưa triển khai trong bản này.
 
 
-## Quant Lab Research Extensions 1.1 (05-11-2026)
+## Elliott Structure Lab v0.1
 
-Bản source này mở rộng Quant Lab Phase 1–3 với Data Quality Audit cho timestamp/timezone/duplicate/order/gaps; Return Distribution và quantiles; rolling volatility nhiều cửa sổ; Realized Volatility, Bipower Variation và Jump Variation ước lượng; ACF/Ljung–Box cho returns, absolute returns và squared returns; Lagged Return Regression; expanding-window Walk-forward so với naïve Random Walk; cùng phần Research Interpretation trong giao diện.
+QuantLab có module Elliott Structure Lab độc lập. Module đọc timeframe hiện tại của Chart, M1, dữ liệu OHLC DEMO tổng hợp hoặc CSV OHLC do người dùng nhập. Engine JavaScript thuần sử dụng Wilder ATR, Directional Change pivot chỉ xác nhận sau khi có chuyển động đảo chiều, pivot đa scale, kiểm tra hard rule theo pattern, guideline evidence score, Fibonacci projection, channel projection cho Impulse và invalidation của Impulse đang phát triển.
 
-Xem `QUANTLAB_RESEARCH_EXTENSION_GUIDE_VI.md` để biết công thức, cách đọc kết quả, giả định và giới hạn. Các engine ARCH/GARCH, VAR/VECM, Cointegration, Granger, Bootstrap/Monte Carlo và Regime Detection nâng cao vẫn chưa được triển khai.
+**Giới hạn quan trọng:** candidate là giả thuyết hình học, chưa phải Elliott count đã được chuyên gia xác minh. Internal structure 3/5, recursive degree grammar, chỉnh sửa count thủ công, tìm kiếm đầy đủ W-X-Y/W-X-Y-X-Z và xác nhận bằng orderflow/options chưa được triển khai trong v0.1. Evidence Score không phải xác suất; engine không phát tín hiệu mua/bán.
+
+Các file chính: `js/elliott-structure-engine.js`, `js/elliott-structure-ui.js`, `css/elliott-structure.css`, `tests/elliott-structure.test.js`. Đặc tả tiếng Việt: `ELLIOTT_STRUCTURE_LAB_SPEC_V0.1_VI.md`. Workbook Knowledge-to-Code Matrix: `docs/Gexadecimal_Elliott_StructureLab_Knowledge_to_Code_Matrix_v0.1.xlsx`.
+
+Chạy test Elliott bằng `node tests/elliott-structure.test.js`. Chạy toàn bộ test QuantLab bằng `bash tests/run-all.sh`.

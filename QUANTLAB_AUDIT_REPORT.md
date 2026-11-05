@@ -118,7 +118,7 @@ Các module giao dịch hiện có như Chart, Footprint, Options, TPO, Replay, 
 3. Với OLS/ARIMA, thêm train/test theo thời gian, rolling/expanding walk-forward, tránh look-ahead bias.
 4. Bổ sung timestamp-aware resampling và chính sách session gaps rõ ràng cho dữ liệu giao dịch.
 5. Trước khi hỗ trợ nhiều người dùng, thiết kế backend, auth, rate limits, secure credential storage và data warehouse.
-6. Tiếp theo phát triển Phase 4 ARCH/GARCH sau khi Data Foundation và kiểm định Phase 1–3 được người dùng smoke-test.
+6. Roadmap tại thời điểm báo cáo baseline Phase 1–3 (trước khi bổ sung Phase 4): phát triển ARCH/GARCH sau khi Data Foundation và kiểm định Phase 1–3 được smoke-test. Phase 4 hiện đã được triển khai trong bản cập nhật riêng, xem mục 8.
 
 ## 7. Audit bổ sung — Research Extensions 1.1 (05-11-2026)
 
@@ -148,4 +148,34 @@ Các module giao dịch hiện có như Chart, Footprint, Options, TPO, Replay, 
 - MA/ARMA CSS + Nelder–Mead không phải exact maximum likelihood; chưa được xác minh là tương đương statsmodels/R/Stata.
 - Chưa có CSV XAUUSD M1 gốc để tái tạo kết quả từ PDF và chạy forecast validation trên dữ liệu thật.
 - Browser E2E automation chưa hoàn tất trong môi trường đóng gói; cần smoke-test trên browser/hosting thật.
-- ARCH/GARCH, VAR/VECM, Cointegration, Granger, Bootstrap/Monte Carlo, Regime Detection nâng cao và backend/database vẫn chưa triển khai.
+- Tại thời điểm Research Extensions 1.1: ARCH/GARCH, VAR/VECM, Cointegration, Granger, Bootstrap/Monte Carlo và Regime Detection nâng cao chưa triển khai. Phase 4 hiện đã bổ sung ARCH/GARCH-family; VAR/VECM, Cointegration, Granger, Bootstrap/Monte Carlo và Regime Detection nâng cao vẫn thuộc Phase 5/roadmap.
+
+
+## 8. Audit bổ sung — Phase 4 ARCH/GARCH Volatility Laboratory (05-11-2026)
+
+### Phạm vi thêm vào
+
+- `js/quant-volatility.js`: engine browser-side cho ARCH(q), GARCH(1,1), EGARCH(1,1), GJR-GARCH(1,1), TARCH(1,1) theo Zakoian.
+- `index.html`, `css/style.css`, `js/quant-lab.js`: panel Phase 4, controls, parameter/diagnostic tables, conditional volatility plot, forecast và export CSV.
+- `tests/quant-volatility.test.js`: 12 nhóm test chuyển giá sang log returns, dữ liệu không hợp lệ, fit từng model, Gaussian/Student-t, điều kiện tham số, forecast, annualization và diagnostics.
+- `QUANTLAB_PHASE4_ARCH_GARCH_GUIDE_VI.md`: công thức, thiết lập, diễn giải, giả định và giới hạn.
+
+### Phương pháp và giới hạn
+
+- Returns được tạo bằng `100 × ln(P_t/P_(t-1))`; mean equation là hằng số. ARCH/GARCH-family fit conditional likelihood với Gaussian QMLE hoặc standardized Student-t, tối ưu bằng Nelder–Mead.
+- Phase 4 hiển thị conditional volatility, persistence, half-life, annualized volatility theo factor người dùng nhập, Ljung–Box trên standardized residual, ARCH LM trên standardized residual² và forecast volatility.
+- EGARCH `exp(E[log h])` chỉ là median/plug-in proxy do Jensen inequality; không được gắn nhãn unconditional variance chính xác. TARCH-Zakoian mô hình hóa conditional standard deviation; forecast nhiều bước là plug-in approximation.
+- Chưa có Hessian/parameter standard errors, ARMA mean + GARCH, skewed-t/GED, VaR/ES, stress test hoặc cross-validation tích hợp riêng cho GARCH.
+- Chưa có benchmark trên CSV XAUUSD M1 gốc hoặc cross-check toàn bộ mô hình với `arch`/`rugarch`. Kết quả tối ưu và test trên dữ liệu mô phỏng không chứng minh hiệu năng ngoài mẫu.
+
+### Kiểm chứng Phase 4
+
+- `node tests/quant-volatility.test.js`: 12 nhóm kiểm thử thành công.
+- Đã đối chiếu GARCH(1,1) Gaussian trên 900 returns mô phỏng có seed giữa engine JavaScript và SciPy/SLSQP độc lập. Sai lệch hệ số ước lượng tối đa xấp xỉ `1.2e-5`; sai khác negative log-likelihood trung bình xấp xỉ `2.7e-10`. Đây là kiểm tra một bộ synthetic fixture, không thay thế benchmark bằng package ARCH chuyên biệt trên dữ liệu thị trường.
+- Đã thêm kiểm thử annualization factor tùy chọn, integer-only validation và đảm bảo EGARCH median proxy không bị coi là unconditional variance.
+- Kiểm tra tĩnh mới nhất: 203 HTML IDs không trùng; 92 tham chiếu `$q(...)` trong `quant-lab.js` đều có ID; `quant-volatility.js` được nạp trước `quant-lab.js`. Có 40 file JavaScript ở thư mục `js/` và 20 file test trong `tests/`.
+- Browser end-to-end trên hosting thật vẫn cần smoke-test thủ công.
+
+### Phase tiếp theo
+
+Phase 5 chưa được triển khai trong bản này. Các chủ đề được ghi nhận làm roadmap gồm VAR/VECM, Cointegration/Johansen, Granger Causality, Bootstrap/Monte Carlo và Regime Detection nâng cao; mỗi module cần đặc tả dữ liệu, kiểm định và benchmark riêng.

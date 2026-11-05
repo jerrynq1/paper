@@ -1,8 +1,8 @@
 # Gexadecimal Quant Lab — Hướng dẫn phần mở rộng nghiên cứu
 
-**Phiên bản:** Phase 1–3 + Research Extensions 1.1  
+**Phiên bản:** Phase 1–4 + Research Extensions 1.1  
 **Ngày cập nhật:** 05-11-2026  
-**Phạm vi:** giải thích các phần mới được thêm vào source Quant Lab đã audit. Đây là hướng dẫn sử dụng và diễn giải, không phải cam kết hiệu quả giao dịch.
+**Phạm vi:** giải thích Research Extensions 1.1; Phase 4 có tài liệu chuyên biệt `QUANTLAB_PHASE4_ARCH_GARCH_GUIDE_VI.md`. Đây là hướng dẫn sử dụng và diễn giải, không phải cam kết hiệu quả giao dịch.
 
 ---
 
@@ -203,4 +203,4 @@ Không dùng một p-value, một R², một forecast hay một nhãn “station
 
 ### Chưa triển khai
 
-ARCH/GARCH/EGARCH/TGARCH, VAR/VECM, Cointegration/Johansen, Granger Causality, Bootstrap/Monte Carlo, Regime Detection nâng cao, backend Python, database, authentication và multi-user storage vẫn là các hạng mục roadmap, không phải tính năng đã hoạt động.
+Từ bản Phase 4 trở đi, ARCH/GARCH/EGARCH/GJR-GARCH/TARCH đã có engine riêng trong `QUANTLAB_PHASE4_ARCH_GARCH_GUIDE_VI.md`. VAR/VECM, Cointegration/Johansen, Granger Causality, Bootstrap/Monte Carlo, Regime Detection nâng cao, backend Python, database, authentication và multi-user storage vẫn là roadmap, chưa phải tính năng đã hoạt động.

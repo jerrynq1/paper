@@ -1,14 +1,15 @@
-# Hướng dẫn sử dụng Gexadecimal Quant Lab — Phase 1, 2 và 3
+# Hướng dẫn sử dụng Gexadecimal Quant Lab — Phase 1 đến Phase 4
 
 > Tài liệu này hướng dẫn bản Quant Lab đã được rà soát. Hình minh họa trong PDF là sơ đồ/mockup và biểu đồ dữ liệu mô phỏng, không phải ảnh chụp phiên chạy live. Quant Lab hiện tính toán trong trình duyệt, không cần cài Python.
 
 ## 1. Quant Lab là gì?
 
-Quant Lab là khu vực phân tích định lượng được thêm vào Gexadecimal. Ba phase hiện có gồm:
+Quant Lab là khu vực phân tích định lượng được thêm vào Gexadecimal. Các phase hiện có gồm:
 
 - **Phase 1 — Statistical Data Explorer:** nhập dữ liệu, xem thống kê mô tả, phân phối, lợi suất, tương quan, hiệp phương sai và rolling statistics.
 - **Phase 2 — Regression Laboratory:** hồi quy OLS đơn/đa biến, kiểm định hệ số, kiểm định F cổ điển, confidence interval, HC1, VIF và chẩn đoán phần dư.
 - **Phase 3 — Time Series Laboratory:** ACF/PACF, ADF/PP, sai phân, AR/MA/ARMA/ARIMA, dự báo và chẩn đoán phần dư/nghiệm.
+- **Phase 4 — ARCH/GARCH Volatility Laboratory:** ARCH, GARCH, EGARCH, GJR-GARCH và TARCH-Zakoian; Gaussian/standardized Student-t; conditional volatility, persistence, diagnostics và volatility forecast.
 
 Đây là MVP nghiên cứu/học tập, chưa phải bộ phần mềm econometrics được chứng nhận và chưa có backend hay database.
 
@@ -218,7 +219,7 @@ AR-only dùng OLS. MA/ARMA dùng CSS + Nelder–Mead, không phải exact ML. `A
 
 Nghiệm AR/MA chỉ được chẩn đoán sau fit, không bị ràng buộc trong quá trình tối ưu. Nếu optimizer không hội tụ, roots không đạt/chưa xác minh hoặc Ljung–Box có p nhỏ, không nên tin mô hình ngay.
 
-Khoảng dự báo sử dụng psi weights và tích phân theo bậc d nhưng chưa tính bất định tham số. Không có GARCH nên không mô hình hóa volatility clustering. AIC/BIC giữa mô hình có burn-in khác nhau có thể không hoàn toàn so sánh tương thích.
+Khoảng dự báo sử dụng psi weights và tích phân theo bậc d nhưng chưa tính bất định tham số. Ở baseline Phase 1–3, chưa có GARCH nên chưa mô hình hóa volatility clustering; Phase 4 hiện bổ sung ARCH/GARCH-family trong một panel riêng. AIC/BIC của ARIMA giữa mô hình có burn-in khác nhau có thể không hoàn toàn so sánh tương thích.
 
 ## 7. Workflow nghiên cứu thị trường gợi ý
 
@@ -250,7 +251,7 @@ Khoảng dự báo sử dụng psi weights và tích phân theo bậc d nhưng c
 - Quant Lab tính trong trình duyệt, không gửi dữ liệu Quant Lab lên server và không lưu sau khi tải lại trang.
 - App gốc hiện lưu cấu hình cTrader và token theo cơ chế localStorage hiện có; không public multi-user trước khi có backend bảo vệ secrets, authentication và access controls.
 - CFD cTrader, tick volume và quote proxies không tương đương Futures centralized exchange volume.
-- Bản MVP không hỗ trợ VAR/VECM, Cointegration, GARCH/EGARCH, Bootstrap/Monte Carlo, walk-forward engine, multi-asset sync backend hoặc database persistent.
+- Bản baseline Phase 1–3 không hỗ trợ VAR/VECM, Cointegration, GARCH/EGARCH hoặc Bootstrap/Monte Carlo. Các phiên bản Research Extensions 1.1 và Phase 4 bổ sung walk-forward cơ bản cùng ARCH/GARCH-family; VAR/VECM, Cointegration/Johansen, Granger, Bootstrap/Monte Carlo, multi-asset sync backend và database persistent vẫn chưa triển khai.
 - PDF hướng dẫn có hình minh họa vẽ lại; không nên hiểu là ảnh chụp UI hiện hành.
 
 ---
@@ -262,3 +263,50 @@ Quant Lab hiện bổ sung bảng Data quality check cho timezone/ordering/dupli
 Đọc hướng dẫn chi tiết, công thức, cách diễn giải, giả định và giới hạn tại `QUANTLAB_RESEARCH_EXTENSION_GUIDE_VI.md` trong thư mục source.
 
 Lưu ý kiểm chứng: ADF và phần AR-only đã có cross-check trên dữ liệu mô phỏng với statsmodels 0.14.6; PP chưa được đối chiếu bằng package PP chuyên biệt; MA/ARMA CSS/Nelder–Mead vẫn là ước lượng thử nghiệm. Không dùng một kết quả thống kê đơn lẻ làm tín hiệu giao dịch.
+
+---
+
+## 9. Phase 4 — ARCH / GARCH Volatility Laboratory
+
+Phase 4 mô hình hóa **phương sai có điều kiện của Log Returns**; nó nghiên cứu mức độ biến động, không trực tiếp dự đoán hướng giá.
+
+### 9.1 Chuẩn bị chuỗi
+
+Chọn một cột giá dương (thường là Close). Engine tạo:
+
+`r_t = 100 × ln(P_t / P_(t-1))`
+
+Dữ liệu phải có ít nhất 100 returns; nên dùng 500–1.000 hoặc nhiều hơn. Không được có missing values. Chuỗi phải được sắp theo thời gian và cần xem Data Quality Check trước khi diễn giải lag.
+
+### 9.2 Các mô hình
+
+- **ARCH(q):** phương sai hiện tại phụ thuộc bình phương cú sốc quá khứ; q từ 1 đến 5.
+- **GARCH(1,1):** `h_t = omega + alpha × epsilon_(t-1)^2 + beta × h_(t-1)`. Persistence thường là alpha + beta.
+- **EGARCH(1,1):** mô hình hóa log variance; gamma mô tả hiệu ứng dấu, và forecast nhiều bước là plug-in approximation.
+- **GJR-GARCH(1,1):** thêm `gamma × I(epsilon<0) × epsilon²` trong phương trình variance; gamma dương là bất đối xứng theo cú sốc âm.
+- **TARCH(1,1) theo Zakoian:** mô hình hóa conditional standard deviation thay vì variance; không đồng nhất công thức này với GJR-GARCH.
+
+Công thức, điều kiện tham số, likelihood, cách đọc và ví dụ đầy đủ nằm trong `QUANTLAB_PHASE4_ARCH_GARCH_GUIDE_VI.md`.
+
+### 9.3 Gaussian và Student-t
+
+Gaussian là giả định đơn giản. Standardized Student-t cho phép đuôi dày hơn và ước lượng degrees of freedom `nu > 2` (trong engine hiện tại giới hạn tới 200). Hãy đọc nu cùng skewness/kurtosis của returns; Student-t không tự đảm bảo forecast tốt hơn.
+
+### 9.4 Output quan trọng
+
+- Conditional volatility: độ lệch chuẩn có điều kiện theo % mỗi bar.
+- Annualized volatility: phụ thuộc Annualization Factor do người dùng nhập; mặc định 362.880 bars/năm là quy ước gần đúng cho M1 liên tục, không phải lịch session thực tế của mọi broker.
+- Persistence và Half-life: mô tả mức độ dai dẳng của phương sai/log variance/độ lệch chuẩn tùy mô hình; không phải thời gian giá quay lại mean.
+- AIC/BIC và Log likelihood: chỉ so sánh các mô hình trên cùng biến, cùng sample window và phân phối.
+- Ljung–Box trên standardized residual: kiểm tra tự tương quan còn lại.
+- ARCH LM trên bình phương standardized residual: kiểm tra ARCH effect còn sót.
+
+### 9.5 Cách diễn giải
+
+Nếu ARCH LM p-value nhỏ, mô hình có thể chưa hấp thụ hết volatility clustering. Nếu Ljung–Box p-value nhỏ, phương trình mean hoặc cấu trúc độ trễ có thể chưa phù hợp. Optimizer hội tụ không chứng minh mô hình đúng.
+
+Forecast Phase 4 là forecast volatility, không phải dự báo giá tăng/giảm, và không phải dải xác suất 95% của giá.
+
+### 9.6 Giới hạn
+
+Phase 4 dùng constant-mean equation, browser-side conditional likelihood và Nelder–Mead. Chưa có Hessian/standard errors của tham số, ARMA mean + GARCH, skewed-t/GED, VaR/ES hoặc backend. Chưa có cross-check đầy đủ với package ARCH chuyên biệt bằng dữ liệu thực. Cần kiểm tra ngoài mẫu và benchmark độc lập trước ứng dụng giao dịch.

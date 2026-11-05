@@ -1,0 +1,38 @@
+GEXADECIMAL QUANT LAB — PHASE 4 TEST REPORT
+Date: 2026-11-05
+Base: Research Extensions 1.1
+
+1) Automated tests
+- 20 test files in tests/ completed with zero failures.
+- Phase 4 module: 12 test groups passed.
+- All top-level JavaScript files in js/ passed node --check.
+
+2) Static integration checks
+- HTML IDs: 203; duplicate IDs: 0.
+- Quant Lab static $q(...) references: 92; missing DOM IDs: 0.
+- js/quant-volatility.js is loaded before js/quant-lab.js.
+
+3) Independent numerical cross-check
+A seeded synthetic GARCH(1,1) series (n=900) was fitted with the browser engine's JavaScript Nelder-Mead conditional Gaussian likelihood and independently with SciPy/SLSQP using the same recursion and initialization.
+- JS: mu=0.0062376001, omega=0.0238833135, alpha=0.0778953148, beta=0.8725901646.
+- SciPy: mu=0.0062314500, omega=0.0238815622, alpha=0.0779067895, beta=0.8725839562.
+- Maximum absolute coefficient difference: approximately 1.2e-5.
+- Average negative log-likelihood difference: approximately 2.7e-10.
+This is one controlled synthetic fixture. It is not a cross-check of all models, Student-t distribution, or real XAUUSD broker data.
+
+4) Phase 4 included
+- ARCH(q), q=1..5.
+- GARCH(1,1).
+- EGARCH(1,1).
+- GJR-GARCH(1,1).
+- TARCH(1,1), Zakoian conditional-standard-deviation form.
+- Gaussian and standardized Student-t innovations.
+- Conditional volatility, persistence/half-life, diagnostics, forecasts, annualization factor and CSV export.
+
+5) Known limitations / manual steps
+- Constant-mean equation only; no ARMA mean + GARCH.
+- No Hessian, parameter standard errors, confidence intervals, skewed-t/GED, VaR/ES, or stress testing.
+- EGARCH and TARCH multi-step forecasts use documented plug-in approximations.
+- No validation yet on the user's raw XAUUSD M1 CSV or a multi-period out-of-sample market dataset.
+- Browser end-to-end smoke test on Live Server and the deployed hosting must be completed manually.
+- Phase 5 (VAR/VECM, Cointegration/Johansen, Granger, Bootstrap/Monte Carlo and advanced regime work) is not included in this package.

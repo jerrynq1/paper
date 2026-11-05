@@ -1,0 +1,33 @@
+GEXADECIMAL — ELLIOTT STRUCTURE LAB v0.1
+Build date: 2026-11-05
+
+Main files:
+  js/elliott-structure-engine.js
+  js/elliott-structure-ui.js
+  css/elliott-structure.css
+  tests/elliott-structure.test.js
+  tests/run-all.sh
+
+Documentation:
+  ELLIOTT_STRUCTURE_LAB_SPEC_V0.1_VI.md
+  ELLIOTT_STRUCTURE_CHANGELOG_VI.md
+  ELLIOTT_STRUCTURE_TEST_REPORT_V0.1_VI.md
+  docs/Gexadecimal_Elliott_StructureLab_Knowledge_to_Code_Matrix_v0.1.xlsx
+
+Integration:
+  index.html adds the Structure Lab panel inside Quant Lab.
+  The module reads chart data and renders in an isolated research canvas.
+  The original chart series, Replay, Footprint, Options and TPO engines are not mutated.
+
+Validation:
+  21/21 existing test files passed.
+  10 Elliott Structure test groups passed.
+  42/42 JavaScript files passed node --check.
+  225 HTML IDs, no duplicates.
+
+Limitations:
+  Geometric candidates only; internal Elliott 3/5 grammar is not fully verified.
+  Leading/Ending Diagonal roles require larger-degree context.
+  WXY/WXYXZ are catalog-only in v0.1.
+  Evidence Score is heuristic ranking, not probability.
+  No automated entries, stop orders, or trade signals.

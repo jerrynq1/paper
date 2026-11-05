@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Unbounded:wght@800&family=Sora:wght@500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/options.css">
+<link rel="stylesheet" href="css/elliott-structure.css">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -62,7 +63,7 @@
 
 <section class="view" id="v-quant">
   <div class="ql-head">
-    <div><div class="ql-eyebrow">QUANTITATIVE RESEARCH · PHASE 1 + 2 + 3</div><h2>Quant Lab <span>· Statistical, Regression &amp; Time Series Analysis</span></h2><p class="msg">Phân tích thống kê, rolling analysis, hồi quy OLS, chuỗi thời gian, kiểm định tính dừng và mô hình ARIMA. Nạp CSV hoặc lấy nến M1 đã tải trên Chart.</p></div>
+    <div><div class="ql-eyebrow">QUANTITATIVE RESEARCH · PHASE 1 + 2 + 3 + 4</div><h2>Quant Lab <span>· Statistical, Regression, Time Series &amp; Volatility Research</span></h2><p class="msg">Phân tích thống kê, rolling/realized volatility, hồi quy OLS, chuỗi thời gian, kiểm định tính dừng, ARIMA và mô hình ARCH/GARCH có điều kiện. Nạp CSV hoặc lấy nến M1 đã tải trên Chart.</p></div>
     <span class="ql-local-badge">BROWSER-ONLY MVP</span>
   </div>
   <div class="card ql-source-card">
@@ -77,6 +78,41 @@
     <div id="qDataMeta" class="ql-data-meta">Đang chuẩn bị bộ dữ liệu mẫu.</div>
     <div class="ql-table-wrap ql-data-audit-wrap" id="qDataAudit"><p class="msg">Đang kiểm tra chất lượng dữ liệu và timestamp…</p></div>
   </div>
+  <section class="card e-structure-card" id="eStructureLab" aria-label="Elliott Structure Lab">
+    <div class="e-head">
+      <div><div class="e-eyebrow">STRUCTURE RESEARCH · ELLIOTT WAVE</div><h3>Elliott <span>Structure Lab</span></h3><p class="msg">Nhận diện swing đa scale, kiểm tra cấu trúc Elliott, giữ alternate counts và tạo Fibonacci / channel projections. Engine chỉ dùng pivot đã được xác nhận bằng chuyển động giá sau pivot; nhãn sóng là candidate, không phải dự báo chắc chắn.</p></div>
+      <span class="ql-local-badge">BROWSER COMPUTATION · V0.1</span>
+    </div>
+    <div class="e-controls">
+      <label class="ql-select-label">CHART DATA SOURCE<select id="eTimeframe"><option value="current">Chart · timeframe hiện tại</option><option value="m1">Chart · M1</option></select></label>
+      <label class="ql-select-label">ATR PERIOD<input id="eAtrPeriod" type="number" min="2" max="200" step="1" value="14"></label>
+      <label class="ql-select-label">PIVOT THRESHOLD · ATR ×<input id="eThreshold" type="number" min="0.1" max="20" step="0.1" value="1.5"></label>
+      <div class="e-actions">
+        <button class="btn ghost" id="eUseChart" type="button">↓ Lấy dữ liệu Chart</button>
+        <button class="btn ghost" id="eDemo" type="button">Nạp DEMO</button>
+        <button class="btn ghost" id="eCsvBtn" type="button">↑ Import OHLC CSV</button><input id="eCsv" type="file" accept=".csv,text/csv" hidden>
+        <button class="btn" id="eRun" type="button">▶ Analyze Structure</button>
+        <button class="btn ghost" id="eExport" type="button" disabled>↓ Export JSON</button>
+      </div>
+    </div>
+    <div class="e-status" id="eStatus" role="status">Đang chuẩn bị dữ liệu DEMO…</div>
+    <div class="e-data-meta" id="eDataMeta">Chưa có dữ liệu.</div>
+    <div class="ql-metrics e-metrics" id="eMetrics"></div>
+    <div class="e-main-grid">
+      <div class="e-panel"><h4>Preferred / Selected Count</h4><div id="ePreferred"><div class="e-empty"><b>Chưa có phân tích</b><span>Nạp dữ liệu rồi nhấn Analyze Structure.</span></div></div></div>
+      <div class="e-panel"><h4>Alternate Counts &amp; Pattern Candidates</h4><p class="msg">Alternate cùng vùng cấu trúc được tách riêng khỏi candidate ở các đoạn giá khác. Chọn một mục để xem rule, guideline và projection.</p><div id="eCandidates"><p class="msg">Chưa có candidate.</p></div></div>
+    </div>
+    <div class="e-panel e-plot-panel"><h4>Confirmed Swing Map</h4><p class="msg">Đường giá đóng cửa và pivot đã xác nhận tại primary scale. Đây là chart nghiên cứu độc lập; chưa vẽ trực tiếp lên chart giao dịch để tránh ảnh hưởng renderer hiện tại.</p><canvas id="ePlot" class="e-plot" aria-label="Đồ thị swing và Elliott candidate"></canvas></div>
+    <div class="e-main-grid">
+      <div class="e-panel"><h4>Rule Validation &amp; Guideline Evidence</h4><div id="eRules"><p class="msg">Chưa có rule report.</p></div></div>
+      <div class="e-panel"><h4>Fibonacci Projection</h4><div id="eFib"><p class="msg">Chưa có projection.</p></div><div class="e-rule-sep"></div><h4>Wave Channel</h4><div id="eChannel"><p class="msg">Chưa có channel.</p></div></div>
+    </div>
+    <div class="e-main-grid">
+      <div class="e-panel"><h4>Multi-scale / Degree Structure</h4><div id="eScales"><p class="msg">Chưa có scale analysis.</p></div></div>
+      <div class="e-panel"><h4>Confirmed Pivot Audit · latest 20</h4><div id="ePivotTable"><p class="msg">Chưa có pivot.</p></div></div>
+    </div>
+    <div class="e-panel" style="margin-top:12px"><h4>Pattern Coverage &amp; Implementation Status</h4><div class="e-catalog" id="eCatalog"></div><p class="e-caveat">“Candidate engine” nghĩa là engine có thể đề xuất mẫu hình bằng hình học pivot, chưa khẳng định đã xác minh cấu trúc con 3/5. “Context required” cần degree lớn hơn hoặc vị trí chu kỳ; “Definition only” mới có định nghĩa kiến thức, chưa tự động phát hiện trong v0.1.</p></div>
+  </section>
   <div class="ql-metrics" id="qMetrics"></div>
   <div class="card ql-analysis-card">
     <div class="ql-panel-head"><div><h3>Descriptive Statistics</h3><p class="msg">Thống kê mô tả cho biến số được chọn.</p></div><label class="ql-select-label">VARIABLE<select id="qPriceColumn"></select></label></div>
@@ -227,6 +263,44 @@
       </div>
     </div>
   </div>
+  <div class="card ql-analysis-card ql-volatility-card">
+    <div class="ql-panel-head"><div><div class="ql-eyebrow">PHASE 4 · CONDITIONAL VOLATILITY ECONOMETRICS</div><h3>ARCH / GARCH Volatility Laboratory</h3><p class="msg">Mô hình hóa phương sai có điều kiện của log returns: ARCH(q), GARCH(1,1), EGARCH(1,1) và GJR-GARCH(1,1). Đây là mô hình biến động, không phải mô hình dự đoán hướng giá.</p></div><span class="ql-local-badge">BROWSER MLE · RESEARCH MVP</span></div>
+    <div class="ql-vol-intro"><b>Quy trình:</b> chọn cột giá dương → tạo log return (%) → ước lượng conditional variance → kiểm tra standardized residuals → xem persistence và forecast volatility. Dữ liệu vẫn nằm trong bộ nhớ trình duyệt.</div>
+    <div class="ql-vol-controls">
+      <label class="ql-select-label">PRICE SERIES<select id="qVolColumn"></select></label>
+      <label class="ql-select-label">MODEL<select id="qVolModel"><option value="ARCH">ARCH(q)</option><option value="GARCH" selected>GARCH(1,1)</option><option value="EGARCH">EGARCH(1,1)</option><option value="GJR-GARCH">GJR-GARCH(1,1)</option><option value="TARCH">TARCH(1,1) · Zakoian</option></select></label>
+      <label class="ql-select-label">INNOVATION DISTRIBUTION<select id="qVolDistribution"><option value="gaussian" selected>Gaussian / Normal</option><option value="student-t">Standardized Student-t</option></select></label>
+      <label class="ql-select-label">ARCH ORDER q<input id="qVolArchOrder" type="number" min="1" max="5" step="1" value="1"></label>
+      <label class="ql-select-label">FORECAST STEPS<input id="qVolHorizon" type="number" min="1" max="100" step="1" value="24"></label>
+      <label class="ql-select-label">ANNUALIZATION FACTOR<input id="qVolAnnualFactor" type="number" min="1" max="1000000" step="1" value="362880"></label>
+      <button class="btn" id="qVolFit" type="button">▶ Estimate Volatility Model</button>
+    </div>
+    <div id="qVolStatus" class="ql-reg-status">Chọn một cột giá dương và ước lượng mô hình. Khuyến nghị tối thiểu 500–1.000 returns.</div>
+    <div id="qVolOutput" hidden class="ql-vol-output">
+      <div id="qVolMetrics" class="ql-metrics ql-reg-metrics"></div>
+      <div class="ql-ts-grid">
+        <div class="ql-reg-panel"><h4>Conditional Volatility · In-sample</h4><p class="msg">Độ lệch chuẩn có điều kiện ước lượng từ mô hình, theo đơn vị % mỗi bar.</p><canvas id="qVolPlot" class="ql-canvas ql-vol-canvas"></canvas></div>
+        <div class="ql-reg-panel"><h4>Parameter Estimates</h4><p class="msg">Ước lượng maximum likelihood có điều kiện; chưa hiển thị sai số chuẩn/Hessian.</p><div id="qVolParameters" class="ql-table-wrap"></div></div>
+      </div>
+      <div class="ql-ts-grid">
+        <div class="ql-reg-panel"><h4>Model Diagnostics</h4><div id="qVolDiagnostics" class="ql-table-wrap"></div></div>
+        <div class="ql-reg-panel"><h4>Volatility Forecast</h4><p class="msg">Annualized volatility dùng đúng Annualization Factor đã chọn ở trên; TARCH/EGARCH có bước forecast plug-in riêng.</p><div id="qVolForecast" class="ql-table-wrap"></div></div>
+      </div>
+      <div id="qVolInterpretation" class="ql-vol-interpretation"></div>
+      <p id="qVolNotes" class="ql-reg-note"></p>
+      <div class="ql-vol-actions"><button class="btn ghost" id="qVolExport" type="button">↓ Export Phase 4 CSV</button></div>
+    </div>
+    <div class="ql-vol-learning">
+      <h4>Giải thích các mô hình</h4>
+      <div class="ql-learning-grid ql-vol-learning-grid">
+        <div><b>ARCH(q)</b><p>Phương sai hiện tại phụ thuộc vào bình phương các cú sốc quá khứ. Thích hợp để học hiệu ứng volatility clustering, nhưng ARCH bậc cao cần nhiều tham số.</p></div>
+        <div><b>GARCH(1,1)</b><p>Kết hợp cú sốc quá khứ và phương sai có điều kiện quá khứ. α đo phản ứng với tin mới; β đo độ dai dẳng của biến động.</p></div>
+        <div><b>EGARCH(1,1)</b><p>Mô hình log phương sai nên phương sai luôn dương; hệ số γ mô tả phản ứng bất đối xứng với cú sốc âm/dương.</p></div>
+        <div><b>GJR-GARCH(1,1)</b><p>Thêm thành phần ngưỡng I(ε&lt;0)ε² trong phương trình phương sai. Nếu γ dương, cú sốc âm có tác động biến động lớn hơn.</p></div><div><b>TARCH(1,1) · Zakoian</b><p>Mô hình hóa độ lệch chuẩn có điều kiện thay vì phương sai; dùng |ε| và thành phần bất đối xứng theo dấu cú sốc.</p></div>
+      </div>
+      <p class="ql-analysis-note">Lưu ý tên gọi: GJR-GARCH là mô hình ngưỡng trong phương trình phương sai. Một số phần mềm gọi biến thể này là Threshold GARCH/TGARCH; TARCH theo Zakoian dùng phương trình độ lệch chuẩn và là đặc tả khác. Phase 4 triển khai riêng cả GJR-GARCH và TARCH theo Zakoian, với hai phương trình khác nhau.</p>
+    </div>
+  </div>
   <div class="card ql-analysis-card">
     <div class="ql-panel-head"><div><h3>Data Preview</h3><p class="msg">12 dòng đầu tiên sau khi xử lý thứ tự thời gian (nếu nhận diện được).</p></div></div>
     <div class="ql-table-wrap" id="qPreview"></div>
@@ -241,9 +315,9 @@
       <div><b>5 · Kiểm tra gì tiếp theo?</b><p>Dùng return, lagged inputs, benchmark đơn giản, holdout theo thời gian và walk-forward; không chọn mô hình chỉ vì AIC thấp.</p></div>
       <div><b>6 · Có thể kết luận giao dịch chưa?</b><p>Chỉ khi kết quả ổn định ngoài mẫu, có kiểm soát chi phí và được tái lập trên dữ liệu độc lập.</p></div>
     </div>
-    <div class="ql-roadmap"><b>Research roadmap chưa triển khai trong bản này:</b> ARCH/GARCH/EGARCH/TGARCH · VAR/VECM · Cointegration/Johansen · Granger Causality · Bootstrap/Monte Carlo · Regime Detection nâng cao. Các mục này cần engine, test và tài liệu riêng; không được xem là đã có chỉ vì roadmap hiển thị.</div>
+    <div class="ql-roadmap"><b>Research roadmap chưa triển khai trong bản này:</b> VAR/VECM · Cointegration/Johansen · Granger Causality · Bootstrap/Monte Carlo · Regime Detection nâng cao. Các mục này cần engine, test và tài liệu riêng; không được xem là đã có chỉ vì roadmap hiển thị.</div>
   </div>
-  <div class="ql-footnote"><b>Phạm vi bản cập nhật:</b> Phase 1–3 gồm thống kê, phân phối returns, rolling/realized volatility, correlation/covariance, OLS, lagged return regression, ACF/PACF, ADF/PP, AR/MA/ARMA/ARIMA và walk-forward checkpoint evaluation. Các phép đo RV/BV chưa annualize; ARIMA vẫn là CSS/Nelder–Mead thử nghiệm và cần benchmark độc lập. Chưa có ARCH/GARCH, VAR/VECM, Cointegration, Granger hoặc backend/database. TickVolume cTrader là tick-volume/quote proxy, không phải khối lượng Futures tập trung.</div>
+  <div class="ql-footnote"><b>Phạm vi bản cập nhật:</b> Phase 1–4 gồm thống kê, returns, rolling/realized volatility, OLS, ACF/PACF, ADF/PP, AR/MA/ARMA/ARIMA, walk-forward và ARCH/GARCH-family conditional volatility. Phase 4 sử dụng constant-mean conditional likelihood với Gaussian QMLE hoặc standardized Student-t và Nelder–Mead; cần benchmark độc lập trước ứng dụng giao dịch. Chưa có VAR/VECM, Cointegration, Granger hoặc backend/database. TickVolume cTrader là tick-volume/quote proxy, không phải khối lượng Futures tập trung.</div>
 </section>
 
 <section class="view" id="v-options">
@@ -391,7 +465,10 @@
 <script src="js/quant-stats.js"></script>
 <script src="js/quant-regression.js"></script>
 <script src="js/quant-timeseries.js"></script>
+<script src="js/quant-volatility.js"></script>
 <script src="js/quant-lab.js"></script>
+<script src="js/elliott-structure-engine.js"></script>
+<script src="js/elliott-structure-ui.js"></script>
 <script src="js/init.js"></script>
 <script src="js/drawings-core.js"></script>
 <script src="js/volume-profile.js"></script>

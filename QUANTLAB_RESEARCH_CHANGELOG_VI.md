@@ -34,6 +34,17 @@
 
 Không viết lại Chart, cTrader, Footprint, Options, TPO, Replay hoặc Paper Trading. Không thêm backend, Python service, database hoặc user authentication.
 
-## Chưa triển khai — roadmap sau
+## Phase 4 — ARCH/GARCH Volatility Laboratory (05-11-2026)
 
-ARCH/GARCH/EGARCH/TGARCH; VAR/VECM; Cointegration/Johansen; Granger Causality; Bootstrap/Monte Carlo; Regime Detection nâng cao.
+- Thêm engine browser-side cho ARCH(q=1..5), GARCH(1,1), EGARCH(1,1), GJR-GARCH(1,1) và TARCH(1,1) theo Zakoian.
+- Thêm Gaussian conditional likelihood/QMLE và standardized Student-t likelihood (ν trong miền 2.05–200).
+- Thêm conditional volatility series, persistence, half-life, long-run volatility theo đặc tả, volatility forecast và annualization factor do người dùng chọn.
+- Thêm Ljung–Box trên standardized residual và ARCH LM trên bình phương standardized residual.
+- Thêm giải thích trong giao diện về từng mô hình, leverage/asymmetry, persistence, half-life và giới hạn forecast.
+- Thêm tài liệu `QUANTLAB_PHASE4_ARCH_GARCH_GUIDE_VI.md` và test `tests/quant-volatility.test.js`.
+- Giữ Phase 4 ở phạm vi constant-mean equation; chưa có ARMA-mean+GARCH, Hessian/standard errors, skewed-t/GED hoặc VaR/ES.
+- Phân biệt GJR-GARCH (threshold trong phương trình variance) với TARCH theo Zakoian (threshold trong phương trình standard deviation); không gộp hai công thức thành một.
+
+## Chưa triển khai — Phase 5 / roadmap sau
+
+VAR/VECM; Cointegration/Johansen; Granger Causality; Bootstrap/Monte Carlo; Regime Detection nâng cao; backend Python/database và multi-user storage.
