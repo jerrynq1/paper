@@ -97,6 +97,38 @@
     for(let i=w-1;i<values.length;i++){const window=values.slice(i-w+1,i+1);if(window.length!==w||window.some(v=>v===null||v===undefined||String(v).trim()===''||!Number.isFinite(Number(v))))continue;const s=stats(window);out[i]={mean:s.mean,stdDev:s.stdDev,n:s.n}}
     return out;
   }
+  // Realized measures use consecutive log returns. They are expressed as decimal
+  // returns (not annualized); callers must document the sampling/session convention.
+  function rollingRealizedVolatility(logReturns,windowSize){
+    const w=Math.max(2,Math.floor(Number(windowSize)||2)),out=Array(logReturns.length).fill(null);
+    for(let i=w-1;i<logReturns.length;i++){
+      const a=logReturns.slice(i-w+1,i+1).map(v=>v===null||v===undefined||String(v).trim()===''?NaN:Number(v));
+      if(a.length!==w||a.some(v=>!Number.isFinite(v)))continue;
+      const rv=a.reduce((s,v)=>s+v*v,0);
+      let bv=0;for(let j=1;j<a.length;j++)bv+=Math.abs(a[j])*Math.abs(a[j-1]);bv*=Math.PI/2;
+      out[i]={n:w,realizedVariance:rv,realizedVolatility:Math.sqrt(rv),bipowerVariance:bv,bipowerVolatility:Math.sqrt(Math.max(0,bv)),jumpVariation:Math.max(0,rv-bv)};
+    }
+    return out;
+  }
+  function returnDistribution(logReturns){
+    const a=clean(logReturns),s=stats(a),sorted=a.slice().sort((x,y)=>x-y);
+    if(!a.length)return{...s,jarqueBera:NaN,jarqueBeraP:NaN,positiveRatio:NaN,quantiles:{}};
+    const canTest=a.length>=3&&Number.isFinite(s.skewness)&&Number.isFinite(s.excessKurtosis);
+    const jb=canTest?a.length/6*(s.skewness*s.skewness+(s.excessKurtosis*s.excessKurtosis)/4):NaN;
+    return{...s,jarqueBera:jb,jarqueBeraP:Number.isFinite(jb)?Math.exp(-jb/2):NaN,positiveRatio:a.filter(v=>v>0).length/a.length,quantiles:{p01:quantile(sorted,.01),p05:quantile(sorted,.05),p50:quantile(sorted,.5),p95:quantile(sorted,.95),p99:quantile(sorted,.99)}};
+  }
+  function timestampZone(rawValue){
+    const raw=String(rawValue??'').trim();if(!raw)return{kind:'missing',label:'Thiếu timestamp'};
+    if(/^\d{8}$/.test(raw)||/^\d{4}-\d{2}-\d{2}$/.test(raw))return{kind:'date-only',label:'Chỉ có ngày, không có giờ/múi giờ'};
+    if(/^[-+]?\d+(?:\.\d+)?$/.test(raw)&&Math.abs(Number(raw))>=1e8)return{kind:'unix',label:'Unix timestamp (quy ước UTC)'};
+    if(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw))return{kind:'explicit-offset',label:/Z$/i.test(raw)?'UTC (Z)':`Có UTC offset (${raw.slice(-6)})`};
+    return{kind:'ambiguous',label:'Không ghi múi giờ (timezone chưa xác định)'};
+  }
+  function timestampMetadata(values){
+    const zones=values.map(timestampZone),valid=values.filter(v=>Number.isFinite(parseTimestamp(v))).length;
+    const counts=zones.reduce((o,z)=>(o[z.kind]=(o[z.kind]||0)+1,o),{});
+    return{total:values.length,valid,invalid:values.length-valid,counts,ambiguous:(counts.ambiguous||0)+(counts['date-only']||0),explicit:(counts['explicit-offset']||0)+(counts.unix||0),allExplicit:values.length>0&&valid===values.length&&(counts.ambiguous||0)===0&&(counts['date-only']||0)===0};
+  }
   function detectTimeColumn(headers){
     const aliases=new Set(['time','date','timestamp','datetime','datetimeutc','timeutc','bar time','bar_time','open time','open_time','date time','date_time','time (utc)','timestamp (utc)','datetime (utc)','open time (utc)','date (utc)','open time','thoi gian','gio']);
     return headers.findIndex(h=>{const raw=String(h||'').trim().toLowerCase(),norm=raw.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\s-]+/g,' ').trim();return aliases.has(raw)||aliases.has(norm)||/^(time|date|timestamp|datetime)[ _-](utc|gmt|local)$/.test(raw)||/^(thoi gian|gio) (mo|dong) cua?$/.test(norm)});
@@ -108,5 +140,5 @@
     const parsed=Date.parse(raw);return Number.isFinite(parsed)?parsed:NaN;
   }
   function detectPriceColumn(headers){return headers.findIndex(h=>/^(close|last|price|c|close price|giá đóng cửa)$/i.test(h.trim()))}
-  return{parseCSV,parseNumber,numericColumns,stats,returns,correlation,correlationMatrix,covariance,covarianceMatrix,histogram,rolling,detectTimeColumn,detectPriceColumn,parseTimestamp,quantile};
+  return{parseCSV,parseNumber,numericColumns,stats,returns,correlation,correlationMatrix,covariance,covarianceMatrix,histogram,rolling,rollingRealizedVolatility,returnDistribution,timestampZone,timestampMetadata,detectTimeColumn,detectPriceColumn,parseTimestamp,quantile};
 });

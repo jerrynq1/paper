@@ -32,6 +32,21 @@
     const out=[1];for(let lag=1;lag<=L;lag++){let c=0;for(let t=lag;t<n;t++)c+=z[t]*z[t-lag];out.push(c/den)}
     return out;
   }
+  // Ljung–Box portmanteau test. The leading multiplier is n(n+2), not
+  // m(m+2); m is only the number of autocorrelation lags being tested.
+  function ljungBox(values,maxLag=10,modelDf=0){
+    const x=cleanSeries(values),n=x.length,m=Math.max(1,Math.min(Math.floor(Number(maxLag)||10),n-2,200));
+    const fittedDf=Math.max(0,Math.floor(Number(modelDf)||0)),df=m-fittedDf;
+    if(df<=0)throw new Error(`Ljung–Box cần số lag lớn hơn số tham số AR + MA (m=${m}, model df=${fittedDf}).`);
+    const r=acf(x,m);let q=0;for(let k=1;k<=m;k++)q+=r[k]*r[k]/(n-k);
+    q*=n*(n+2);
+    return{statistic:q,df,pValue:QuantRegression.regularizedGammaQ(df/2,q/2),lags:m,n,modelDf:fittedDf,acf:r.slice(1)};
+  }
+  function dependenceDiagnostics(values,maxLag=20){
+    const x=cleanSeries(values),absolute=x.map(Math.abs),squared=x.map(v=>v*v);
+    const make=(series)=>{try{const l=Math.max(1,Math.min(Math.floor(Number(maxLag)||20),series.length-2,200)),r=acf(series,l),lb=ljungBox(series,l,0),pick=[1,5,10,20].filter(k=>k<=l).map(k=>({lag:k,acf:r[k]}));return{n:series.length,lags:l,acf:pick,ljungBox:{statistic:lb.statistic,df:lb.df,pValue:lb.pValue}}}catch(e){return{n:series.length,error:e.message,acf:[],ljungBox:null}}};
+    return{returns:make(x),absoluteReturns:make(absolute),squaredReturns:make(squared)};
+  }
   function pacf(values,maxLag=24){
     const r=acf(values,maxLag),L=r.length-1,out=[1];let prev=[];
     for(let k=1;k<=L;k++){
@@ -178,6 +193,7 @@
     if(!d)return forecasts.slice();const layers=[original.slice()];for(let k=1;k<=d;k++)layers[k]=layers[k-1].slice(1).map((v,i)=>v-layers[k-1][i]);
     const out=[];for(const f of forecasts){let v=f;for(let k=d-1;k>=0;k--){v+=layers[k][layers[k].length-1];layers[k].push(v)}out.push(v)}return out;
   }
+  function ljungBoxTestForResiduals(residuals,maxLag,modelDf){return ljungBox(residuals,maxLag,modelDf);}
   function fitModel(values,options={}){
     const original=cleanSeries(values),type=String(options.type||'ARIMA').toUpperCase();
     const readOrder=(name,fallback,max)=>{const raw=options[name];if(raw===undefined||raw===null||raw==='')return fallback;const v=Number(raw);if(!Number.isInteger(v)||v<0||v>max)throw new Error(`${name} phải là số nguyên từ 0 đến ${max}.`);return v;};
@@ -211,8 +227,34 @@
     const psi=integratedImpulseResponse(armaImpulseResponse(params,p,q,horizon),d);
     const forecastRows=forecast.map((value,i)=>{const h=i+1,varianceH=innovationVariance*sum(psi.slice(0,h).map(v=>v*v)),se=Math.sqrt(Math.max(0,varianceH));return{step:h,value,forecastVariance:varianceH,forecastStdError:se,lower:value-1.96*se,upper:value+1.96*se}});
     const names=['Intercept',...Array.from({length:p},(_,i)=>`AR(${i+1})`),...Array.from({length:q},(_,i)=>`MA(${i+1})`)];
-    const roots=armaRootDiagnostics(params,p,q);let residualAcf1=NaN,ljungBox=null;try{if(fit.residuals.length>2){residualAcf1=acf(fit.residuals,1)[1];const mLag=Math.min(10,Math.floor(fit.residuals.length/5),fit.residuals.length-1);if(mLag>p+q){const ac=acf(fit.residuals,mLag),Q=mLag*(mLag+2)*sum(ac.slice(1).map((r,i)=>r*r/(fit.residuals.length-(i+1)))),df=mLag-p-q;ljungBox={statistic:Q,df,pValue:QuantRegression.regularizedGammaQ(df/2,Q/2),lags:mLag};}}}catch{}
+    const roots=armaRootDiagnostics(params,p,q);let residualAcf1=NaN,ljungBox=null;try{if(fit.residuals.length>2){residualAcf1=acf(fit.residuals,1)[1];const mLag=Math.min(10,Math.floor(fit.residuals.length/5),fit.residuals.length-1);if(mLag>p+q)ljungBox=ljungBoxTestForResiduals(fit.residuals,mLag,p+q);}}catch{}
     return{type,order:{p,d,q},n:fit.n,nOriginal:original.length,parameters:names.map((name,i)=>({name,value:params[i]})),sse:fit.sse,rmse,residualStdError,innovationVariance,innovationStdDev,aic:ic.aic,bic:ic.bic,converged:optimizer.converged,iterations:optimizer.iterations,forecast,forecastSigma:innovationStdDev,forecastRows,fitted:fit.fitted.slice(fit.start),residuals:fit.residuals,diagnostics:{residualMean:mean(fit.residuals),residualStd:variance(fit.residuals)>=0?Math.sqrt(variance(fit.residuals)):NaN,acf1:residualAcf1,ljungBox,...roots},notes:['Ước lượng Conditional Sum of Squares (CSS); AR-only dùng OLS, MA/ARMA dùng Nelder–Mead.','AIC/BIC tính trên residual sau burn-in và có tính tham số phương sai nhiễu.','Khoảng dự báo dùng phương sai sai số dự báo từ hệ số MA vô hạn (psi weights), đã tích phân theo bậc d; vẫn chưa bao gồm bất định tham số.','Cần kiểm tra điều kiện nghiệm AR nằm ngoài vòng tròn đơn vị và nghiệm MA khả nghịch; hệ thống báo kiểm tra nghiệm số ở bảng chẩn đoán.','ARIMA(0,d,0) được ước lượng như mô hình chỉ có hằng số trên chuỗi sai phân. Kết quả CSS/Nelder–Mead là ước lượng thử nghiệm; đối chiếu bằng statsmodels/R/Stata trước khi dùng nghiên cứu chính thức.']};
   }
-  return{difference,acf,pacf,adf,pp,fitModel,cleanSeries,informationCriteria,polynomialRootModuli,armaRootDiagnostics,armaImpulseResponse,integratedImpulseResponse};
+  // Expanding-window, one-step-ahead evaluation at evenly spaced checkpoints.
+  // Each fit sees data only up to (not including) its forecast target.
+  function walkForward(values,options={}){
+    const x=cleanSeries(values),type=String(options.type||'ARIMA').toUpperCase();
+    const p=Number(options.p??1),d=Number(options.d??1),q=Number(options.q??1);
+    const trainPct=Math.max(50,Math.min(90,Number(options.initialTrainPercent)||70));
+    const maxPoints=Math.max(3,Math.min(30,Math.floor(Number(options.maxForecastPoints)||12)));
+    const initialTrain=Math.max(40,Math.floor(x.length*trainPct/100));
+    if(x.length-initialTrain<3)throw new Error('Quá ít dữ liệu ngoài mẫu. Hãy giảm tỷ lệ dữ liệu train hoặc nạp thêm quan sát.');
+    const available=x.length-initialTrain,count=Math.min(maxPoints,available),indices=[];
+    for(let j=0;j<count;j++){
+      const idx=count===1?x.length-1:Math.round(initialTrain+j*(available-1)/(count-1));
+      if(indices[indices.length-1]!==idx)indices.push(idx);
+    }
+    const points=[];
+    for(const targetIndex of indices){
+      const train=x.slice(0,targetIndex),actual=x[targetIndex];
+      const fitted=fitModel(train,{type,p,d,q,horizon:1});
+      const predicted=fitted.forecast[0],naive=train[train.length-1];
+      points.push({targetIndex,trainN:train.length,actual,predicted,naive,modelError:actual-predicted,naiveError:actual-naive});
+    }
+    const mae=a=>mean(a.map(Math.abs)),rmse=a=>Math.sqrt(mean(a.map(v=>v*v)));
+    const modelErrors=points.map(v=>v.modelError),naiveErrors=points.map(v=>v.naiveError),directional=points.filter(v=>Math.sign(v.predicted-v.naive)===Math.sign(v.actual-v.naive));
+    const modelRmse=rmse(modelErrors),naiveRmse=rmse(naiveErrors);
+    return{type,order:{p,d:type==='ARIMA'?d:0,q},trainPercent:trainPct,initialTrain,availableTest:available,evaluated:points.length,points,metrics:{mae:mae(modelErrors),rmse:modelRmse,naiveMae:mae(naiveErrors),naiveRmse,directionalAccuracy:directional.length/Math.max(1,points.length),rmseImprovementPct:Number.isFinite(naiveRmse)&&naiveRmse>0?(naiveRmse-modelRmse)/naiveRmse*100:NaN,beatsNaive:modelRmse<naiveRmse}};
+  }
+  return{difference,acf,pacf,ljungBox,dependenceDiagnostics,adf,pp,fitModel,walkForward,cleanSeries,informationCriteria,polynomialRootModuli,armaRootDiagnostics,armaImpulseResponse,integratedImpulseResponse};
 });
