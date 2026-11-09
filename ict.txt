@@ -1,0 +1,230 @@
+thị trường giảm khi tăng giá
+
+
+                   mảng giảm giá
+tiền đầu cơ thiếu hiểu biết
+mảng cao cấp không hợp lệ
+     Phạm vi giao dịch xuất hiện trên mọi khung thời gian, bạn có thể tìm kiếm phạm vi giao dịch trong phạm vi giao dịch trong
+     phạm vi giao dịch và như vậy, bạn có thể hình thành xu hướng và dựa vào đó để giao dịch.
+
+
+
+
+                                                                                                         Trong ví dụ này bạn có thể thấy rằng
+                                                                                                         chúng ta đang trong xu hướng giảm.
+
+                                                                                                         Điều này có nghĩa là chúng ta nên tìm
+                                                                                                         kiếm các lệnh bán khống. Chúng ta đã
+- Xu hướng HTF nhận dạng                                                                                 có BOS, vì vậy chúng ta có thể vẽ phạm
+- Xác định BOS trong xu hướng                                                                            vi bằng cách sử dụng công cụ thoái lui
+                                                                                                         fib. Chỉ ra mức thấp và mức cao
+- Xác định POI và tiến tới LTF
+                                                                                                         và vẽ phạm vi. Phạm vi cao cấp là khu
+- Đợi kiểm tra lại POΙ của bạn, hãy
+                                                                                                         vực cần chú ý đến các lệnh bán khống.
+vào lệnh giao dịch khi bạn có BOS
+một lần nữa trên LTF
+dự đoán như DOL
+
+
+
+
+                  đảo ngược khung điểm xoay
+         Giá không vượt qua mức cao nhất của ngày hôm
+         trước - sau đó sẽ giảm xuống mức thấp nhất của
+         ngày hôm trước.
+
+
+
+
+Giá không giảm xuống dưới mức thấp của
+ngày hôm trước mà sẽ tăng lên mức cao của
+ngày hôm trước.
+Mỗi thanh hoặc nến riêng lẻ sẽ được gọi là Daily
+Range hoặc Daily Bar.
+                                            thao túng
+
+
+
+
+                            tích lũy
+
+
+
+
+                                                        phân bổ
+
+
+
+
+Nếu bi quan, bạn đang tìm kiếm sự thao túng xảy ra trên mức giá mở cửa nửa đêm. Khi sự thao túng xảy
+ra, đây là nơi tiền thông minh tích lũy các vị thế bán khống.
+                                                      Vì vậy, trên biểu đồ hàng tuần ở trên, chúng ta có SSL. Ngoài ra,
+                                                      2 tuần trước có mức thấp bằng nhau - đó là mục tiêu. Chúng ta
+                                                      hãy xem điều gì xảy ra tiếp theo.
+
+
+
+
+Tuần mới mở ra - giá bắt đầu củng cố. Sau đó, nó đã kiểm tra EQL và lấy SSL.
+Sau khi nhóm thanh khoản được tiếp nhận, giá bắt đầu tăng. Điều này có hiệu quả với tất cả các TF. Hãy tự
+mình xem trên biểu đồ.
+Nhưng điều quan trọng ở đây là sự tích lũy đã bắt đầu vào tuần trước, điều này có thể thấy trên khung thời
+gian 1 giờ.
+                                                                           Sau khi thao túng, một động thái hung hăng xảy ra.
+                                                                           Điều này được thực hiện để không ai có thể vào và
+                                                                           mua dài hạn ở mức cao, và một người chơi chính tại
+                                                                           thời điểm này đang bán vị thế. Sau đó, các nhà giao
+                                                                           dịch tham lam trải qua FOMO vẫn tiếp tục thua lỗ.
+
+
+
+
+Giá mở cửa là giá trị ban đầu - trước khi có bất kỳ sự mất cân bằng nào.
+Phần tạo nên phạm vi giữa giá mở cửa và giá đóng cửa được gọi là mở rộng phạm vi và đây là sự
+mất cân bằng giá động.
+
+
+
+
+Giá mở cửa cao hơn hoặc thấp hơn một chút khi chúng ta lạc quan, đó là nơi các vị thế mua được tích
+lũy. Ai đang tích lũy các vị thế mua đó? Tiền thông minh.
+Nếu tin tức có tác động lớn từ T2 - T4 không thể tác động đến phạm vi bên ngoài, hãy dự đoán khả
+năng đảo ngược xu hướng hợp nhất.
+cấu trúc và xu hướng thị trường giảm giá
+Bạn KHÔNG cần phải dự đoán mức thấp sẽ hình thành ở đâu hoặc nến sẽ đóng ở đâu để CÓ LỢI NHUẬN.
+                                                             Kết hợp các sự kiện tin tức với giá mở cửa.
+
+                                                             Nếu giá tạo ra Biến động giá giả trước khi có Bản tin, Tin tức sẽ khiến Mức dịch chuyển giảm
+                                                             xuống.
+
+
+
+
+                                                                                       Nếu giá không hình thành Biến động giá giả
+                                                                                       trước khi có Bản tin, Tin tức sẽ gây ra Biến
+                                                                                       động giá giả.
+
+
+
+
+Kết hợp các sự kiện tin tức với giá mở cửa.
+
+
+Nếu giá tạo ra Biến động giá giả trước khi có Bản tin, Tin
+tức sẽ khiến Mức dịch chuyển giảm xuống.
+
+
+
+
+             Phân tích từ trên xuống
+
+             Giả sử xung lực này được tạo ra hàng tuần, tôi muốn xác định các mức chính trong một xung lực quan
+             trọng. Điểm tham chiếu lý tưởng thường là FVG trong một nhánh dịch chuyển mạnh.
+                                     Điểm tham chiếu HTF (FVG)
+
+
+
+
+                                     Điểm tham chiếu HTF (FVG)
+
+
+
+
+Bên trong điểm tham chiếu, tìm kiếm sự dịch chuyển (FVG sau phản ứng).
+Bây giờ, mục đích của việc phân tích HTF là gì nếu bạn không thể vào lệnh? Đây có lẽ là mô hình vào lệnh DỄ
+NHẤT được sử dụng khi dự đoán xu hướng trong ngày Một động thái rõ ràng xuống dưới mức giá 12 giờ sáng
+theo giờ miền Đông vào một mức quan trọng từ ngày (các ngày) trước đó.
+1. Trong quá trình dịch chuyển này bắt đầu thực hiện Phân tích từ trên xuống cho các mục nhập.
+
+2. Bạn muốn theo dõi thứ tự thời gian của Biểu đồ 5, 4, 3, 2, 1 phút.
+
+3. Nếu bạn tìm thấy FVG ở phút thứ 5, bạn không cần phải xuống thấp hơn.
+
+4. Nếu bạn tìm thấy FVG ở phút thứ 2, bạn không cần phải xuống thấp hơn.
+
+5. Một khi bạn tìm thấy FVG, bạn không thể đi xuống thấp hơn nữa.
+
+6. Nếu bạn không tìm thấy FVG trong phút thứ 1 thì sẽ không có giao dịch nào.
+1) Khung thời gian cao nhất sẽ đóng vai trò là Quan điểm dài hạn
+Mức cao/thấp trung hạn - Bất kỳ mức thấp ngắn hạn (STL) nào có mức thấp ngắn hạn (STL) cao hơn ở cả hai
+bên của nó được coi là mức thấp trung hạn (ITL). Bất kỳ mức cao ngắn hạn (STH) nào có mức cao ngắn hạn
+(STH) thấp hơn ở cả hai bên của nó được coi là mức cao trung hạn (ITH).
+Trong quá trình củng cố, bạn tìm kiếm các mức hỗ trợ/kháng cự
+động để giao dịch cho đến khi đạt đến mức hỗ trợ/kháng cự
+chính (HTF).
+Nếu Giá là Bearish, chúng tôi muốn thấy giá dành ít thời gian trên mức cao, tạo ra các đợt chạy nông trên mức
+cao, từ chối và/hoặc Tôn trọng Mảng cao cấp. Và DỊCH CHUYỂN THẤP HƠN. Vi phạm các mảng giảm giá
+và/hoặc LT, IT, ST THẤP.
+[Bạn thấy giá dao động màu vàng ở bên trái. Ngay khi mức thấp được đưa ra, bạn có thể sử dụng phép chiếu dao
+động để làm mục tiêu]
+Các khối có thứ tự xác suất cao được kết hợp với Lý thuyết thời gian.
+
+
+
+
+                        khối lệnh trung hạn
+Biến động giá trên thị trường chịu ảnh hưởng của khái niệm thanh khoản và mất cân bằng.
+
+Tính thanh khoản đề cập đến sự sẵn có của các lệnh mua hoặc bán trên thị trường. Hiểu
+Phân tích dòng lệnh là một khía cạnh quan trọng để hiểu được động lực thị trường và hiểu rõ hơn về hành
+động của các nhà giao dịch tiền thông minh hoặc liên ngân hàng.
+Xác nhận tương tự như giảm giá. Khi giá bắt đầu phá vỡ thanh khoản bán nội bộ và chạm vào vùng POI tăng giá hoặc
+tiếp nhận thanh khoản bên ngoài, và ngay khi giá giảm trở lại và thoát khỏi vùng dòng lệnh, Dòng lệnh được kích hoạt.
+
+
+Logic của dòng lệnh tăng giá. Vốn lớn thực hiện bán tháo để lấy thanh khoản dưới dạng lệnh dừng mua, và tại thời
+điểm này vốn lớn mở vị thế thứ hai cho lệnh mua dài hạn. Giá cần quay trở lại vùng dòng lệnh để đóng các vị thế bán
+không có lợi nhuận, sau đó giá bật lại khỏi dòng lệnh.
+Order Flow về cơ bản là một vị trí trên biểu đồ nơi chúng ta có thể thấy "dấu vết" của vốn lớn, nơi nó đạt được vị
+thế của mình. Khi tiếp cận (kiểm tra lại) giá của vùng Order Flow, chúng ta mong đợi giá bật lại, điều này cho biết
+hướng giá theo hướng nào để giao dịch.
+
+
+Phiên bản mở rộng của Order Flow là Order Blocks, trong đó chúng ta tìm kiếm điểm vào lệnh giao dịch. Sẽ không
+có lợi nhuận nếu vào lệnh từ chính vùng Order Flow, mức dừng lỗ đã quá lớn.
+
+
+Ý tưởng của BIAS
+Điểm quan tâm
+
+POI là điểm quan tâm của một người chơi lớn, nơi anh ta hoặc cô ta tích lũy các giao dịch của mình. Người
+chơi lớn sẽ "bảo vệ" khu vực vào của họ.
+Trong hai POl, POl nào mạnh hơn? Cả hai vùng đều mạnh và đáng để chờ xác nhận về LTF.
+Từ vùng OTE và vùng OB, giá tăng mạnh, mang đến cho chúng ta điểm vào lệnh tuyệt vời với tỷ lệ rủi ro/phần
+thưởng tuyệt vời.
+
+
+
+
+                                   Tìm Điểm Vào
+
+                                   1. Xác định cấu trúc trên khung thời gian 4 giờ
+
+                                   2. Xác định cấu trúc trong khung thời gian 1 giờ
+Cũng có những lúc S&P 500 và đồng đô la Mỹ cùng tăng. Đây thường là thời điểm phục hồi kinh tế... khi mọi
+thứ đang diễn ra tốt đẹp.
+DXY là chỉ số giá trị của đồng đô la Mỹ so với các loại tiền tệ khác, được JP Morgan tạo ra vào năm 1973.
+Điều quan trọng cần lưu ý là điều kiện thị trường và các yếu tố khác có
+thể ảnh hưởng đến mối tương quan này và không phải lúc nào cũng
+đúng.
+cân bằng trung gian
+Điều quan trọng là phải hiểu rằng khoảng cách tăng đóng vai trò là vùng hỗ trợ và khoảng cách giảm đóng
+vai trò là vùng kháng cự.
+Phiên giao dịch New York - Mua dưới giá mở cửa 05:00 và 07:00 EST và Bán trên giá mở cửa 05:00 và
+07:00 EST.
+có vị thế chiến lược trên thị trường và có khả năng hưởng lợi từ các hoạt động mua bán của những người tham gia
+thị trường lớn hơn.
+Một người chơi lớn đạt đến mức dừng
+lỗ của người mua (rút thanh khoản)
+ngưỡng trung bình
+mức chốt lời lý tưởng là 2 độ lệch nhưng nó có thể lên tới 3
+thao túng
+            thao túng
+
+
+
+
+phân phối
+mong đợi sự đảo ngược
+
