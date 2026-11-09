@@ -51,11 +51,12 @@ Sửa `js/indicators-custom.js` (đã có sẵn một mẫu `IND.mine` và hư�
 - `js/hvn-profile.js`: HVN Profile (tính cụm HVN + vẽ canvas); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.hvn`)
 - `js/dtt.js`: Digital Time Theory (DTT) + Digital Root Engine (overlay canvas; khung phiên/model, Root Candle, Weekly/Yearly macro, Quote/Tick/OHLC Root)
 - `js/killzones.js`: Killzones & Pivots (tính phiên/pivot/level/D-W-M + vẽ canvas + bảng thống kê); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.kz`)
+- `js/crt.js`: CRT - Candle Range Theory (nến HTF dựng từ M1, 4 model CRT, PD Array OID/RB/FVG/OB/BB, nến HTF ở mép phải, bảng thông tin + cảnh báo; vẽ canvas); khai báo thông số ở `js/indicators-custom.js` (`IND.crt`)
 - `js/goldbach.js`: Goldbach Levels (tính PO3 + level + vẽ canvas); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.gb`)
 - `js/qt.js`: Quarterly Theory (tính chu kỳ A-M-D-X + vẽ thanh các làn); khai báo thông số ở cuối `js/indicators-custom.js` (`IND.qt`)
 - `js/replay.js`: Replay để backtest (thanh điều khiển nổi, cắt/nối lại mảng `m1`); `RP` và `RPLIM()` khai báo ở đầu `js/chart.js`
 - `js/drawings-*.js`, `js/mobile.js`: công cụ vẽ và cử chỉ cảm ứng
-- `tests/`: `node tests/dtt.test.js`, `node tests/footprint.test.js`, `node tests/customtf.test.js`, `node tests/hvn.test.js`, `node tests/hab.test.js`, `node tests/dom.test.js`, `node tests/replay.test.js`, `node tests/killzones.test.js`, `node tests/goldbach.test.js`, `node tests/qt.test.js`, `node tests/kinematics.test.js`
+- `tests/`: `node tests/dtt.test.js`, `node tests/footprint.test.js`, `node tests/customtf.test.js`, `node tests/hvn.test.js`, `node tests/hab.test.js`, `node tests/dom.test.js`, `node tests/replay.test.js`, `node tests/killzones.test.js`, `node tests/crt.test.js`, `node tests/goldbach.test.js`, `node tests/qt.test.js`, `node tests/kinematics.test.js`
 
 ## Replay (backtest)
 
@@ -284,7 +285,7 @@ Có ARCH(q), GARCH(1,1), EGARCH(1,1), GJR-GARCH(1,1) và TARCH(1,1) theo Zakoian
 Tài liệu: `QUANTLAB_PHASE4_ARCH_GARCH_GUIDE_VI.md`, `QUANTLAB_RESEARCH_EXTENSION_GUIDE_VI.md`, `QUANTLAB_USER_GUIDE_VI.md`, `QUANTLAB_AUDIT_REPORT.md`. Phase 5 — VAR/VECM, Cointegration/Johansen, Granger Causality, Bootstrap/Monte Carlo và các phương pháp đa biến/nâng cao — vẫn là roadmap, chưa triển khai trong bản này.
 
 
-## Elliott Wave Detector v0.6
+## Elliott Wave Detector v0.6 (superseded by v0.7)
 
 Elliott Wave là sidebar/workspace riêng (`Elliott Wave`), tách khỏi Quant Lab. Giao diện chính được rút gọn: chọn timeframe hoặc M1, Import CSV, nhấn **Tự nhận diện sóng**. Người dùng không cần thiết lập ATR, threshold hay degree; engine tự lựa chọn độ nhạy swing và degree nội bộ.
 
@@ -295,3 +296,17 @@ Dự báo gồm hai lớp: (1) Fibonacci cho Wave 5 đang phát triển hoặc W
 Engine vẫn dùng ATR nội bộ để chuẩn hóa biến động nhưng tự đặt thông số; không cần người dùng cấu hình. Đây là hỗ trợ nghiên cứu, không phải tín hiệu Buy/Sell. Evidence Score là heuristic, Quant quantiles là mô tả mẫu lịch sử chứ không phải xác suất giá chạm mục tiêu. Chưa có expert-labelled accuracy benchmark, full recursive K-best parser hoặc Quant forecast-error walk-forward calibration.
 
 Tài liệu: `ELLIOTT_STRUCTURE_LAB_SPEC_V0.6_VI.md`, `ELLIOTT_STRUCTURE_CHANGELOG_V0.6_VI.md`, `ELLIOTT_STRUCTURE_TEST_REPORT_V0.6_VI.md`. Tests: `node tests/elliott-structure.test.js`, `node tests/elliott-structure-v04.test.js`, `node tests/elliott-simple-v06.test.js`; full suite: `bash tests/run-all.sh`.
+
+
+## Elliott Wave Detector v0.7
+
+- Uses five internal automatic swing scales; no public ATR / threshold controls.
+- Retains the candidate forest from every degree instead of returning only the selected primary scale.
+- Stores recursive child-leg candidate keys and builds bidirectional parent / child support links.
+- Ranks candidate counts with a structural-coherence score (hard-rule quality, cross-scale agreement, recursive child matches, parent context, recency and interval coverage). This is a heuristic ranking, not a probability or proof of predictive accuracy.
+- The default count is selected by structural coherence first and recency second; uncontextualized corrections and role-ambiguous diagonals receive explicit ranking penalties.
+- Main count is highlighted. Parent context is dashed and matched child structures are drawn softly, without adding a full set of H/L or pivot labels.
+- Adds X-axis zoom (1×–10×) centered on the selected count and a Fit All control. Manual pivot drag coordinates are mapped to the visible X window.
+- JSON export includes candidate hierarchy links and recursive leg evidence.
+
+Validation: `bash tests/run-all.sh` includes the v0.7 hierarchy tests. The suite validates logic and regression behavior; no expert-labelled Elliott dataset or live-browser device benchmark is included. See `ELLIOTT_STRUCTURE_LAB_SPEC_V0.7_VI.md`, `ELLIOTT_STRUCTURE_CHANGELOG_V0.7_VI.md`, and `ELLIOTT_STRUCTURE_TEST_REPORT_V0.7_VI.md`.
