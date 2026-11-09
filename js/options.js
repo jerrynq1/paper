@@ -1,21 +1,16 @@
 /* ================= BINANCE XAU COMMODITY OPTIONS =================
-   Public Binance market data: WebSocket streams + REST Open Interest snapshots.
-   No API key or private account data. Public OI is non-directional: Long/Short
-   are scenario assumptions only.
+   Browser-native public WebSocket market data. No REST, API key or proxy.
+   Public OI is non-directional: Long/Short are scenario assumptions only.
 */
 (function(){
   'use strict';
   const WS_BASES={market:'wss://fstream.binance.com/market/ws/',public:'wss://fstream.binance.com/public/ws/'};
   const UNDERLYING='XAUUSDT';
-  const OPTIONS_REST_BASE='https://eapi.binance.com';
-  const OI_POLL_MS=60000;
   const $o=id=>document.getElementById(id);
   const state={
     active:false, sockets:new Map(), reconnects:new Map(), reconnectDelay:new Map(),
-    rotateTimer:null, healthTimer:null, renderTimer:null, surfaceRenderTimer:null, oiPollTimer:null, expiry:null,
+    rotateTimer:null, healthTimer:null, renderTimer:null, surfaceRenderTimer:null, expiry:null,
     contracts:[], marks:new Map(), oi:new Map(), tickers:new Map(), index:null, trades:[],
-    oiPollSignature:'', oiPollGeneration:0, oiRestInFlight:new Map(), oiRestByExpiry:new Map(), oiRestStatus:'idle',
-    oiRestLastError:'', oiRestLastUpdate:0, oiRestMessages:0,
     mode:'long', exposureMetric:'gamma', surfaceMetric:'gamma', greekMetric:'delta', greekSide:'C', surfaceRenderers:{exposure:null,greek:null}, riskFreeRate:.04, lastMarkTime:0, lastIndexTime:0,
     lastOIUpdate:0, lastTradeTime:0, lastTickerUpdate:0, oiExpiryCodes:[],
     expiryManual:false, status:'idle', error:'', socketErrors:new Map(), lastPayloads:new Map(),
@@ -108,8 +103,7 @@
       const tickerKeys=[...state.sockets.keys()].filter(k=>k.startsWith('ticker:'));
       const oiOpen=oiKeys.filter(k=>state.sockets.get(k)?.readyState===WebSocket.OPEN).length;
       const tradeWs=state.sockets.get('trade');
-      const oiSource=state.oiRestStatus==='live'?'REST snapshot + WebSocket':state.oiRestStatus==='error'?'WebSocket · REST lỗi':state.oiRestStatus==='empty'?'WebSocket · REST trống':'WebSocket + REST snapshot';
-      bits.push(`<span>OI: ${state.oi.size} records · ${oiOpen}/${oiKeys.length} WS · ${oiSource} · ${state.lastOIUpdate?new Date(state.lastOIUpdate).toLocaleTimeString('vi-VN'):'waiting first payload'}</span>`);
+      bits.push(`<span>OI: ${state.oi.size} records · ${oiOpen}/${oiKeys.length} sockets · ${state.lastOIUpdate?new Date(state.lastOIUpdate).toLocaleTimeString('vi-VN'):'waiting first payload'}</span>`);
       bits.push(`<span>24h ticker: ${state.tickers.size} records · ${tickerKeys.length} expiry streams</span>`);
       bits.push(`<span>Flow: ${state.trades.length} live trades · ${socketState(tradeWs)}</span>`);
       bits.push(`<span>Updated: ${state.lastMarkTime?new Date(state.lastMarkTime).toLocaleTimeString('vi-VN'):'—'}</span>`);
@@ -124,8 +118,6 @@
     for(const key of [...state.sockets.keys()])closeSocket(key,true);
     for(const [key,t] of state.reconnects){clearTimeout(t);state.reconnects.delete(key)}
     if(state.rotateTimer){clearTimeout(state.rotateTimer);state.rotateTimer=null}
-    if(state.oiPollTimer){clearTimeout(state.oiPollTimer);state.oiPollTimer=null}
-    state.oiPollGeneration++;state.oiPollSignature='';state.oiRestInFlight.clear();state.oiRestByExpiry.clear();
   }
   function scheduleReconnect(key,stream,delay){
     if(!state.active||state.reconnects.has(key))return;
@@ -192,71 +184,10 @@
     }
     codes.forEach(code=>{
       const oiKey='oi:'+code,tickerKey='ticker:'+code;
-      if(!state.sockets.has(oiKey))connectStream(oiKey,`xauusdt@openInterest@${code}`);
-      if(!state.sockets.has(tickerKey))connectStream(tickerKey,`xauusdt@optionTicker${code}`);
+      if(!state.sockets.has(oiKey))connectStream(oiKey,`xauusdt@optionOpenInterest@${code}`);
+      if(!state.sockets.has(tickerKey))connectStream(tickerKey,`xauusdt@optionTicker@${code}`);
     });
     state.oiExpiryCodes=codes;
-    ensureOIPolling(codes);
-  }
-  // Binance's OI WebSocket is documented at ~60s cadence. Fetch the public REST
-  // snapshot immediately as a fallback so the dashboard does not wait for the
-  // first push (or stay empty if a stream is connected but silent).
-  function ensureOIPolling(codes){
-    if(typeof fetch!=='function'){
-      state.oiRestStatus='unavailable';
-      state.oiRestLastError='Trình duyệt không hỗ trợ Fetch API.';
-      return;
-    }
-    const signature=(codes||[]).join(',');
-    if(!signature||signature===state.oiPollSignature)return;
-    if(state.oiPollTimer){clearTimeout(state.oiPollTimer);state.oiPollTimer=null;}
-    state.oiPollSignature=signature;
-    state.oiRestByExpiry.clear();
-    const generation=state.oiPollGeneration;
-    state.oiRestStatus='loading';state.oiRestLastError='';
-    state.oiPollTimer=setTimeout(()=>{
-      state.oiPollTimer=null;
-      pollOpenInterest(codes.slice(),signature,generation);
-    },0);
-  }
-  async function fetchExpiryOI(code,generation){
-    if(state.oiRestInFlight.get(code)===generation)return;
-    state.oiRestInFlight.set(code,generation);
-    try{
-      const params=new URLSearchParams({underlyingAsset:UNDERLYING,expiration:code});
-      const response=await fetch(`${OPTIONS_REST_BASE}/eapi/v1/openInterest?${params.toString()}`,{method:'GET',cache:'no-store',headers:{Accept:'application/json'}});
-      if(!response||!response.ok)throw new Error(`HTTP ${response?.status??'network error'}`);
-      const payload=await response.json();
-      if(!state.active||generation!==state.oiPollGeneration)return;
-      if(payload&&typeof payload==='object'&&!Array.isArray(payload)&&payload.code!==undefined&&payload.msg){
-        throw new Error(`${payload.code}: ${payload.msg}`);
-      }
-      const items=records(payload);
-      const applied=items.length?handleOI(items,'rest'):0;
-      state.oiRestMessages++;
-      state.oiRestLastUpdate=Date.now();
-      state.oiRestByExpiry.set(code,{status:items.length?(applied?'live':'received'):'empty',updatedAt:Date.now(),error:''});
-    }catch(error){
-      if(!state.active||generation!==state.oiPollGeneration)return;
-      const message=String(error?.message||error).slice(0,240);
-      state.oiRestByExpiry.set(code,{status:'error',updatedAt:Date.now(),error:message});
-    }finally{
-      if(state.oiRestInFlight.get(code)===generation)state.oiRestInFlight.delete(code);
-    }
-  }
-  async function pollOpenInterest(codes,signature,generation){
-    await Promise.all(codes.map(code=>fetchExpiryOI(code,generation)));
-    if(!state.active||generation!==state.oiPollGeneration||signature!==state.oiPollSignature)return;
-    const results=codes.map(code=>state.oiRestByExpiry.get(code)).filter(Boolean);
-    const hasData=results.some(x=>x.status==='live'||x.status==='received');
-    const errors=results.filter(x=>x.status==='error');
-    state.oiRestStatus=hasData?'live':errors.length===codes.length?'error':errors.length?'partial-error':'empty';
-    state.oiRestLastError=errors.map(x=>x.error).filter(Boolean).join(' · ').slice(0,240);
-    statusTick();scheduleRender();
-    state.oiPollTimer=setTimeout(()=>{
-      state.oiPollTimer=null;
-      pollOpenInterest(codes,signature,generation);
-    },OI_POLL_MS);
   }
   function handleStream(key,payload){
     if(key==='mark')handleMark(payload);
@@ -310,24 +241,18 @@
     });
     statusTick();scheduleRender();
   }
-  function handleOI(payload,source='websocket'){
-    const items=records(payload);if(!items.length)return 0;
+  function handleOI(payload){
+    const items=records(payload);if(!items.length)return;
     let received=0;
     items.forEach(raw=>{
       if(!raw)return;
       const symbol=String(raw.s||raw.symbol||'').toUpperCase();if(!symbol.startsWith('XAU-'))return;
       const qty=ensureNumber(raw,['o','sumOpenInterest','openInterest','oi']);
       const usd=ensureNumber(raw,['h','sumOpenInterestUsd','openInterestUsd','oiUsd']);
-      if(qty!==null){
-        const time=ensureNumber(raw,['E','timestamp','T'])||Date.now(),previous=state.oi.get(symbol);
-        // Do not let a delayed REST snapshot overwrite a newer WebSocket update.
-        if(!previous||time>=previous.time)state.oi.set(symbol,{qty,usd,time,source});
-        received++;
-      }
+      if(qty!==null){state.oi.set(symbol,{qty,usd,time:ensureNumber(raw,['E','timestamp','T'])||Date.now()});received++;}
     });
     if(received){
-      if(source==='websocket')state.oiMessages++;
-      state.lastOIUpdate=Date.now();state.oiCount=state.oi.size;
+      state.oiMessages++;state.lastOIUpdate=Date.now();state.oiCount=state.oi.size;
       // If the initial default is today's expiry and it has no OI, select the
       // nearest expiry with a real non-zero OI snapshot until the user chooses manually.
       if(!state.expiryManual){
@@ -340,7 +265,6 @@
       }
       statusTick();scheduleRender();
     }
-    return received;
   }
   function handleTicker(payload){
     const items=records(payload);if(!items.length)return;
@@ -682,8 +606,7 @@
     const el=$o('optGreeks');if(!el)return;
     if(!a.hasOI){
       const oiWs=currentOISocket(),connected=oiWs&&oiWs.readyState===WebSocket.OPEN;
-      const restMessage=(state.oiRestStatus==='error'||state.oiRestStatus==='partial-error')?`REST snapshot lỗi: ${esc(state.oiRestLastError)}.`:state.oiRestStatus==='empty'?'REST snapshot không có OI cho expiry này.':state.oiRestStatus==='loading'?'Đang lấy REST snapshot ngay khi mở expiry…':'REST snapshot sẽ tự thử lại mỗi 60 giây.';
-      el.innerHTML=`<div class="opt-empty">${connected?'OI WebSocket đã kết nối.':'Đang chờ OI WebSocket.'} ${restMessage} Greeks từng hợp đồng vẫn có trong Option Chain.</div>`;return;
+      el.innerHTML=`<div class="opt-empty">${connected?'OI stream đã kết nối. Đang chờ bản tin OI đầu tiên (chu kỳ cập nhật khoảng 60 giây).':'Đang chờ kết nối OI stream.'} Greeks từng hợp đồng vẫn có trong Option Chain.</div>`;return;
     }
     el.innerHTML=`<div class="opt-greek-line"><span>Delta Notional</span><b>${fmt(a.delta,2)} USDT</b></div>
       <div class="opt-greek-line"><span>Gamma Exposure · 1% move</span><b>${fmt(a.gex,2)} USDT</b></div>
@@ -724,9 +647,7 @@
     const tickerOpen=tickerKeys.filter(k=>state.sockets.get(k)?.readyState===WebSocket.OPEN).length;
     const tradeWs=state.sockets.get('trade');
     const errors=[...state.socketErrors.entries()].map(([k,v])=>`${k}: ${v}`);
-    const oiRestLabel=state.oiRestStatus==='live'?'REST live':state.oiRestStatus==='received'?'REST received':state.oiRestStatus==='empty'?'REST empty':state.oiRestStatus==='error'?'REST error':state.oiRestStatus==='partial-error'?'REST partial error':state.oiRestStatus==='loading'?'REST loading':state.oiRestStatus;
-    const oiRestError=state.oiRestLastError?`<span class="opt-meta-error">OI REST: ${esc(state.oiRestLastError)}</span>`:'';
-    el.innerHTML=`<span>Expiry: ${esc(state.expiry?dateLabel(Number(state.expiry)):'—')}</span><span>${rows.length} strikes</span><span>${state.marks.size} live mark records</span><span>OI: ${state.oi.size} records · WS ${oiOpen}/${oiKeys.length} open · ${state.oiMessages} WS messages · ${oiRestLabel} (${state.oiRestMessages} REST snapshots)</span><span>24h ticker: ${state.tickers.size} records · ${tickerOpen}/${tickerKeys.length} streams open</span><span>Trade: ${state.trades.length} prints · ${socketLabel(tradeWs)} · ${state.tradeMessages} messages</span><span>Mark time: ${state.lastMarkTime?new Date(state.lastMarkTime).toLocaleTimeString('vi-VN'):'—'}</span>${oiRestError}${errors.length?`<span class="opt-meta-error">${esc(errors.join(' | '))}</span>`:''}`;
+    el.innerHTML=`<span>Expiry: ${esc(state.expiry?dateLabel(Number(state.expiry)):'—')}</span><span>${rows.length} strikes</span><span>${state.marks.size} live mark records</span><span>OI: ${state.oi.size} records · ${oiOpen}/${oiKeys.length} streams open · ${state.oiMessages} messages</span><span>24h ticker: ${state.tickers.size} records · ${tickerOpen}/${tickerKeys.length} streams open</span><span>Trade: ${state.trades.length} prints · ${socketLabel(tradeWs)} · ${state.tradeMessages} messages</span><span>Mark time: ${state.lastMarkTime?new Date(state.lastMarkTime).toLocaleTimeString('vi-VN'):'—'}</span>${errors.length?`<span class="opt-meta-error">${esc(errors.join(' | '))}</span>`:''}`;
   }
   function renderInitial(){
     const body=$o('optChainBody');if(body)body.innerHTML='<tr><td colspan="15" class="opt-empty">Đang kết nối Binance Options WebSocket…</td></tr>';
@@ -769,10 +690,10 @@
   }
   function refresh(){
     if(!state.active){activate(true);return;}
-    state.marks.clear();state.contracts=[];state.oi.clear();state.tickers.clear();state.trades=[];state.lastMarkTime=0;state.lastOIUpdate=0;state.lastTradeTime=0;state.lastTickerUpdate=0;state.expiry=null;state.oiExpiryCodes=[];state.expiryManual=false;state.oiMessages=0;state.oiRestMessages=0;state.oiRestLastUpdate=0;state.oiRestStatus='idle';state.oiRestLastError='';state.oiRestByExpiry.clear();state.tradeMessages=0;state.tickerMessages=0;state.socketErrors.clear();state.lastPayloads.clear();
+    state.marks.clear();state.contracts=[];state.oi.clear();state.tickers.clear();state.trades=[];state.lastMarkTime=0;state.lastOIUpdate=0;state.lastTradeTime=0;state.lastTickerUpdate=0;state.expiry=null;state.oiExpiryCodes=[];state.expiryManual=false;state.oiMessages=0;state.tradeMessages=0;state.tickerMessages=0;state.socketErrors.clear();state.lastPayloads.clear();
     closeAll();activate(true);
   }
-  function debug(){return {active:state.active,connections:[...state.sockets].map(([key,ws])=>({key,state:ws.readyState,stateLabel:['CONNECTING','OPEN','CLOSING','CLOSED'][ws.readyState]||'UNKNOWN',url:ws.url,error:state.socketErrors.get(key)||null,lastPayload:state.lastPayloads.get(key)||null})),contractCount:state.contracts.length,markCount:state.markCount,oiCount:state.oiCount,tickerCount:state.tickerCount,tradeCount:state.trades.length,oiMessages:state.oiMessages,oiRestMessages:state.oiRestMessages,oiRestStatus:state.oiRestStatus,oiRestLastError:state.oiRestLastError,lastOIRestUpdate:state.oiRestLastUpdate,oiRestByExpiry:[...state.oiRestByExpiry.entries()],oiSources:[...new Set([...state.oi.values()].map(x=>x.source||'unknown'))],tickerMessages:state.tickerMessages,tradeMessages:state.tradeMessages,index:state.index,expiry:state.expiry,expiryCodes:state.oiExpiryCodes,exposureMetric:state.exposureMetric,mode:state.mode,surfaceScenario:surfaceParams(),lastMarkTime:state.lastMarkTime,lastOIUpdate:state.lastOIUpdate,lastTickerUpdate:state.lastTickerUpdate,lastTradeTime:state.lastTradeTime,oiSymbols:[...state.oi.keys()].slice(0,10),tickerSymbols:[...state.tickers.keys()].slice(0,10),errors:[...state.socketErrors.entries()],error:state.error}}
+  function debug(){return {active:state.active,connections:[...state.sockets].map(([key,ws])=>({key,state:ws.readyState,stateLabel:['CONNECTING','OPEN','CLOSING','CLOSED'][ws.readyState]||'UNKNOWN',url:ws.url,error:state.socketErrors.get(key)||null,lastPayload:state.lastPayloads.get(key)||null})),contractCount:state.contracts.length,markCount:state.markCount,oiCount:state.oiCount,tickerCount:state.tickerCount,tradeCount:state.trades.length,oiMessages:state.oiMessages,tickerMessages:state.tickerMessages,tradeMessages:state.tradeMessages,index:state.index,expiry:state.expiry,expiryCodes:state.oiExpiryCodes,exposureMetric:state.exposureMetric,mode:state.mode,surfaceScenario:surfaceParams(),lastMarkTime:state.lastMarkTime,lastOIUpdate:state.lastOIUpdate,lastTickerUpdate:state.lastTickerUpdate,lastTradeTime:state.lastTradeTime,oiSymbols:[...state.oi.keys()].slice(0,10),tickerSymbols:[...state.tickers.keys()].slice(0,10),errors:[...state.socketErrors.entries()],error:state.error}}
   function init(){
     if(!$o('v-options'))return;
     const expiry=$o('optExpiry');if(expiry)expiry.addEventListener('change',()=>{state.expiry=Number(expiry.value)||null;state.expiryManual=true;scheduleRender()});
