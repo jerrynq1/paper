@@ -65,6 +65,14 @@ assert.strictEqual(mixed.sessions.at(-1).qualified,false);
 assert.strictEqual(mixed.sessions.at(-1).strong,null);
 assert.strictEqual(mixed.forecast.regimeAsOf,"2024-01-24");
 
+
+// Volume is not part of the volatility calculation: identical OHLC must produce identical results.
+const sameOHLC1=C.buildSessions([bar(utc(2024,1,8,14,30),100,110,95,108,1)],"RTH")[0];
+const sameOHLC2=C.buildSessions([bar(utc(2024,1,8,14,30),100,110,95,108,999999)],"RTH")[0];
+assert.strictEqual(sameOHLC1.range,sameOHLC2.range);
+assert.strictEqual(sameOHLC1.bodyEfficiency,sameOHLC2.bodyEfficiency);
+assert.strictEqual(Object.prototype.hasOwnProperty.call(sameOHLC1,"volume"),false);
+
 // No bars before the 09:30 ET RTH open can be counted.
 assert.strictEqual(C.sessionInfo(utc(2024,1,8,14,29),"RTH"),null);
 assert.strictEqual(C.sessionInfo(utc(2024,1,8,14,30),"RTH").elapsed,0);
