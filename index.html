@@ -360,7 +360,7 @@
 
 <section class="view" id="v-options">
   <div class="options-head">
-    <div><div class="options-eyebrow">DERIVATIVES ANALYTICS · BINANCE</div><h2>Options <span>· XAU</span></h2><p class="msg">Option Chain, Greeks, Open Interest và Exposure realtime qua Binance WebSocket; kết nối trực tiếp từ trình duyệt, không cần API key hay server trung gian.</p></div>
+    <div><div class="options-eyebrow">DERIVATIVES ANALYTICS · BINANCE</div><h2>Options <span>· XAU</span></h2><p class="msg">Option Chain và Greeks realtime qua Binance WebSocket; Open Interest đồng bộ bằng REST snapshot + WebSocket dự phòng, không cần API key.</p></div>
     <div class="opt-actions"><span id="optStatus" class="opt-status">Chưa đồng bộ</span><button class="btn sm" id="optRefresh" type="button">↻ Làm mới</button></div>
   </div>
   <div id="optErrors" class="opt-errors" hidden></div>
@@ -368,7 +368,7 @@
     <div class="opt-toolbar">
       <div class="opt-control"><label for="optExpiry">EXPIRATION</label><select id="optExpiry"><option value="">Đang tải kỳ hạn…</option></select></div>
       <div class="opt-control"><label for="optMode">EXPOSURE SCENARIO</label><select id="optMode"><option value="long">Long options · Buyer side</option><option value="short">Short options · Counterparty</option></select></div>
-      <div class="opt-source">Underlying: <b>XAUUSDT</b> · Settlement: <b>USDT</b> · Source: Binance WebSocket</div>
+      <div class="opt-source">Underlying: <b>XAUUSDT</b> · Settlement: <b>USDT</b> · Source: Binance public API</div>
     </div>
     <div id="optMetrics" class="opt-metrics"></div>
   </div>
@@ -447,7 +447,7 @@
       <p><strong>Vanna / Charm:</strong> Binance stream Mark Price hiện cung cấp Delta, Gamma, Vega và Theta, không phát Vanna/Charm. Hai giá trị này được tính ước lượng từ công thức Black-Scholes với Mark IV, Index Price, risk-free rate nếu feed có (fallback 4%) và thời gian đến expiry ước tính theo ngày lịch. Vì vậy VEX/CHEX được gắn nhãn model estimate.</p>
       <p><strong>Surface:</strong> Exposure Surface và Greek Surface chiếu Greeks theo strike × thời gian còn lại đến expiry bằng Black-Scholes-style model; OI và Mark IV được giữ cố định. Có thể thay đổi Spot (S), DTE, risk-free rate (r) và yield (q) trong Surface Scenario Parameters; nút Auto / Reset quay về Spot/expiry/rate live và q = 0. Delta/Gamma/Vega/Theta được hiệu chỉnh theo Greeks Binance ở điều kiện live trước khi chiếu sang kịch bản; Vanna/Charm không có giá trị chuẩn từ stream để hiệu chỉnh. Thời điểm settlement chính xác không được phát trong Mark Price payload nên DTE tự động là xấp xỉ theo ngày expiry. Surface là scenario visualization, không phải dự báo và không phải dữ liệu dealer positioning.</p>
       <p><strong>Giới hạn quan trọng:</strong> Open Interest cho biết số hợp đồng đang mở, không cho biết tài khoản/nhóm nào đang Long hay Short. Vì vậy nút Exposure Scenario chỉ đảo dấu cho mô hình Long-option buyer hoặc Short-option counterparty, không phải dữ liệu dealer positioning thực tế. Gamma theo strike là mô hình có điều kiện, không phải GEX chính thức của toàn thị trường.</p>
-      <p><strong>Nguồn dữ liệu:</strong> <code>@optionMarkPrice</code> cập nhật Greeks/IV/mark; <code>!index@arr</code> cập nhật Index Price; <code>@openInterest@YYMMDD</code> được mở đồng thời cho mọi kỳ hạn hiện có (mỗi 60 giây); <code>@optionTickerYYMMDD</code> bổ sung thống kê khối lượng/giao dịch 24 giờ; <code>@optionTrade</code> đẩy từng giao dịch mới. Ticker 24h là thống kê gộp, không phải tape giao dịch. Nếu stream chưa phát dữ liệu, phần tương ứng sẽ hiển thị trạng thái chờ thay vì tự tạo số.</p>
+      <p><strong>Nguồn dữ liệu:</strong> <code>@optionMarkPrice</code> cập nhật Greeks/IV/mark; <code>!index@arr</code> cập nhật Index Price; <code>@openInterest@YYMMDD</code> được mở đồng thời cho mọi kỳ hạn hiện có (mỗi 60 giây), đồng thời REST <code>/eapi/v1/openInterest</code> lấy snapshot ngay lúc tải và polling lại mỗi 60 giây; <code>@optionTickerYYMMDD</code> bổ sung thống kê khối lượng/giao dịch 24 giờ; <code>@optionTrade</code> đẩy từng giao dịch mới. Ticker 24h là thống kê gộp, không phải tape giao dịch. Nếu WebSocket chưa phát dữ liệu, REST snapshot sẽ bù OI; nếu cả hai nguồn lỗi hoặc trả rỗng, giao diện hiển thị trạng thái và lỗi thực tế thay vì tự tạo số.</p>
       <p><strong>Thị trường:</strong> XAU Commodity Options là hợp đồng European-style, thanh toán USDT, Contract Unit/Multiplier = 1; retail chỉ được mở vị thế mua quyền chọn. Mục Short trong dashboard là kịch bản đối ứng giả định, không phải vị thế short quan sát được trực tiếp.</p>
     </div>
   </div>

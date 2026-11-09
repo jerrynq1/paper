@@ -23,10 +23,17 @@ const symbols=['3950-C','3950-P','4000-C','4000-P'].map(x=>{
 const markPayload=symbols.map((symbol,i)=>({
   s:symbol,mp:'10.5',vo:'0.25',b:'0.24',a:'0.26',d:i%2?'-0.3':'0.7',g:'0.002',v:'1.2',t:'-0.5',i:'4000',E:Date.now(),e:'markPrice'
 }));
+const fetchCalls=[];
 const context={
   document:{readyState:'complete',getElementById:id=>els[id]||null,visibilityState:'visible'},
   window:{WebSocket:FakeWebSocket},WebSocket:FakeWebSocket,
-  Date,Intl,Number,Math,Map,Set,Array,String,Object,Promise,Error,console,
+  Date,Intl,Number,Math,Map,Set,Array,String,Object,Promise,Error,URLSearchParams,console,
+  fetch:async url=>{
+    fetchCalls.push(String(url));
+    return {ok:true,status:200,json:async()=>symbols.map((symbol,i)=>({
+      symbol,sumOpenInterest:String(200+i*10),sumOpenInterestUsd:String(800000+i*1000),timestamp:String(Date.now())
+    }))};
+  },
   setTimeout:setTimeoutFake,clearTimeout:clearTimeoutFake,
   setInterval:()=>1,clearInterval:()=>{}
 };
@@ -50,12 +57,20 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','options.js'),'utf
   tickerWs.open();
   const indexWs=FakeWebSocket.instances.find(ws=>ws.url.endsWith('/!index@arr'));
   indexWs.message([{e:'indexPrice',E:Date.now(),s:'XAUUSDT',i:'4000'}]);
-  oiWs.message(symbols.map((symbol,i)=>({e:'openInterest',E:Date.now(),s:symbol,o:String(100+i*10),h:'400000'})));
   tickerWs.message({e:'24hrTicker',E:Date.now(),s:symbols[0],c:'10.6',v:'150',q:'1590',n:27,P:'3.4',h:'11',l:'9',O:Date.now()-86400000,C:Date.now()});
   const tradeWs=FakeWebSocket.instances.find(ws=>ws.url.endsWith('/public/ws/xauusdt@optionTrade'));
   tradeWs.message({e:'trade',E:Date.now(),T:Date.now(),s:symbols[0],t:123,p:'10.5',q:'2',X:'MARKET',S:'BUY',m:false});
   flushRenderTimers();
+  // Allow the immediate REST OI snapshot (fetch + JSON parsing) to complete.
+  for(let i=0;i<12;i++)await Promise.resolve();
+  flushRenderTimers();
 
+  assert(fetchCalls.some(url=>url.includes('/eapi/v1/openInterest?')&&url.includes('underlyingAsset=XAUUSDT')&&url.includes('expiration=261106')),'REST OI snapshot requested for the active expiry');
+  assert.strictEqual(context.window.optionsDebug().oiRestStatus,'live','REST snapshot populates OI when the WebSocket is silent or delayed');
+  assert(context.window.optionsDebug().oiSources.includes('rest'),'REST OI source is tracked');
+  assert(els.optMetrics.innerHTML.includes('CALL OPEN INTEREST')&&els.optMetrics.innerHTML.includes('420')&&els.optMetrics.innerHTML.includes('PUT OPEN INTEREST')&&els.optMetrics.innerHTML.includes('440'),'REST-only OI snapshot populates call/put OI totals');
+  oiWs.message(symbols.map((symbol,i)=>({e:'openInterest',E:Date.now()+1000,s:symbol,o:String(100+i*10),h:'400000'})));
+  flushRenderTimers();
   assert(els.optChainBody.innerHTML.includes('3,950.00')&&els.optChainBody.innerHTML.includes('4,000.00'));
   assert.strictEqual((els.optChainBody.innerHTML.match(/<td/g)||[]).length,30,'two strikes × 15 columns');
   assert(els.optChainBody.innerHTML.includes('1.200')&&els.optChainBody.innerHTML.includes('-0.500'));
@@ -78,6 +93,7 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','options.js'),'utf
   console.log('ok  Direct Binance WebSocket mark stream builds all XAU option contracts');
   console.log('ok  Index Price stream and embedded mark index update spot');
   console.log('ok  Expiry-specific Open Interest WebSocket builds OI aggregates and Exposure');
+  console.log('ok  Immediate Binance REST Open Interest snapshot fills the chain and is tracked separately');
   console.log('ok  Trade stream populates recent Options Flow');
   console.log('ok  Chain renders all four Greeks and Mark IV for Call / Put');
 
