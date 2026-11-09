@@ -55,26 +55,26 @@
     return {key:String(idx),index:idx,startMinute,duration,label:`${pad(Math.floor(startMinute/60))}:${pad(startMinute%60)}–${pad(Math.floor(endMinute/60))}:${pad(endMinute%60)}`,expected:duration};
   }
   function bucketAdd(b, row) {
-    if(!b){return {open:row[1],high:row[2],low:row[3],close:row[4],volume:row[5]||0,bars:1,first:row[0],last:row[0]};}
+    if(!b){return {open:row[1],high:row[2],low:row[3],close:row[4],bars:1,first:row[0],last:row[0]};}
     if(row[0]<b.first){b.first=row[0];b.open=row[1];} if(row[0]>b.last){b.last=row[0];b.close=row[4];}
-    b.high=Math.max(b.high,row[2]);b.low=Math.min(b.low,row[3]);b.volume+=(row[5]||0);b.bars++;return b;
+    b.high=Math.max(b.high,row[2]);b.low=Math.min(b.low,row[3]);b.bars++;return b;
   }
   function buildSessions(rows, mode) {
     mode=mode==="ETH"?"ETH":"RTH";
     const map=new Map();
     for(const row of rows){
       if(!row||row.length<5)continue;
-      const ts=+row[0],o=+row[1],h=+row[2],l=+row[3],c=+row[4],v=+row[5]||0;
+      const ts=+row[0],o=+row[1],h=+row[2],l=+row[3],c=+row[4];
       if(!Number.isFinite(ts)||!Number.isFinite(o)||!Number.isFinite(h)||!Number.isFinite(l)||!Number.isFinite(c)||h<l)continue;
       const info=sessionInfo(ts,mode);if(!info)continue;
       let s=map.get(info.date);
-      if(!s){s={date:info.date,open:o,high:h,low:l,close:c,bars:0,volume:0,first:ts,last:ts,hours:{},windows20:{},macros:{},weekday:weekdayOfDate(info.date),expected:info.expected};map.set(info.date,s);}
-      s.high=Math.max(s.high,h);s.low=Math.min(s.low,l);s.volume+=v;s.bars++;
+      if(!s){s={date:info.date,open:o,high:h,low:l,close:c,bars:0,first:ts,last:ts,hours:{},windows20:{},macros:{},weekday:weekdayOfDate(info.date),expected:info.expected};map.set(info.date,s);}
+      s.high=Math.max(s.high,h);s.low=Math.min(s.low,l);s.bars++;
       if(ts<s.first){s.first=ts;s.open=o;} if(ts>=s.last){s.last=ts;s.close=c;}
-      const hs=slotFor(info,mode);s.hours[hs.key]=bucketAdd(s.hours[hs.key],[ts,o,h,l,c,v]);
-      const ws=slot20For(info);s.windows20[ws.key]=bucketAdd(s.windows20[ws.key],[ts,o,h,l,c,v]);
-      if(info.minute>=590&&info.minute<610)s.macros.m0950=bucketAdd(s.macros.m0950,[ts,o,h,l,c,v]);
-      if(info.minute>=650&&info.minute<670)s.macros.m1050=bucketAdd(s.macros.m1050,[ts,o,h,l,c,v]);
+      const hs=slotFor(info,mode);s.hours[hs.key]=bucketAdd(s.hours[hs.key],[ts,o,h,l,c]);
+      const ws=slot20For(info);s.windows20[ws.key]=bucketAdd(s.windows20[ws.key],[ts,o,h,l,c]);
+      if(info.minute>=590&&info.minute<610)s.macros.m0950=bucketAdd(s.macros.m0950,[ts,o,h,l,c]);
+      if(info.minute>=650&&info.minute<670)s.macros.m1050=bucketAdd(s.macros.m1050,[ts,o,h,l,c]);
     }
     return [...map.values()].sort((a,b)=>a.date.localeCompare(b.date)).map(s=>{
       const hours=Object.entries(s.hours).map(([key,b])=>{const info={elapsed:+key*60,expected:s.expected};const sl=slotFor(info,mode);return {...b,key,index:+key,label:sl.label,duration:sl.duration};}).sort((a,b)=>a.index-b.index);
