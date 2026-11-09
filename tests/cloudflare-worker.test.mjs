@@ -23,10 +23,15 @@ assert.equal(response.status, 200);
 assert.equal((await response.json()).ok, true);
 assert.equal(response.headers.get('access-control-allow-origin'), '*');
 
-response = await worker.fetch(new Request('https://worker.example/api/binance-stock-proxy/bapi/equity/v1/public/equity/option/chain-symbols?symbol=QQQ&rootSymbol=QQQ&expirationDate=2026-12-18', { headers: { Origin: origin } }), env);
+response = await worker.fetch(new Request('https://worker.example/api/binance-stock-proxy/bapi/equity/v1/public/equity/option/chain-symbols?symbol=QQQ&rootSymbol=QQQ&expirationDate=2026-12-18', { headers: { Origin: origin, 'User-Agent': 'test-browser/1.0', 'Accept-Language': 'en-US,en;q=0.9' } }), env);
 assert.equal(response.status, 200);
 assert.match(lastUpstream.url, /chain-symbols\?symbol=QQQ/);
 assert.equal(new URL(lastUpstream.url).hostname, 'www.binance.com');
+assert.ok(lastUpstream.init.headers instanceof Headers);
+assert.ok(lastUpstream.init.headers.get('bnc-uuid'));
+assert.ok(lastUpstream.init.headers.get('x-trace-id'));
+assert.equal(lastUpstream.init.headers.get('x-trace-id'), lastUpstream.init.headers.get('x-ui-request-trace'));
+assert.equal(lastUpstream.init.headers.get('User-Agent'), 'test-browser/1.0');
 
 response = await worker.fetch(new Request('https://worker.example/api/binance-stock-proxy/bapi/equity/v1/friendly/equity/option/get-option-quote', {
   method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
@@ -35,6 +40,17 @@ response = await worker.fetch(new Request('https://worker.example/api/binance-st
 assert.equal(response.status, 200);
 assert.equal(lastUpstream.init.method, 'POST');
 assert.match(lastUpstream.init.body, /QQQ/);
+
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async () => new Response('<html><title>403 Forbidden</title><h1>403 Forbidden</h1></html>', {
+  status: 403, headers: { 'content-type': 'text/html' }
+});
+response = await worker.fetch(new Request('https://worker.example/api/binance-stock-proxy/bapi/equity/v1/public/equity/option/chain-symbols?symbol=GLD&rootSymbol=GLD&expirationDate=2026-12-18', { headers: { Origin: origin } }), env);
+assert.equal(response.status, 502);
+const diagnostic = await response.json();
+assert.equal(diagnostic.upstreamStatus, 403);
+assert.match(diagnostic.hint, /Binance rejected/);
+globalThis.fetch = originalFetch;
 
 response = await worker.fetch(new Request('https://worker.example/api/binance-stock-proxy/https://evil.example/', { headers: { Origin: origin } }), env);
 assert.equal(response.status, 403);
@@ -52,4 +68,4 @@ response = await worker.fetch(new Request('https://worker.example/api/binance-st
 assert.equal(response.status, 403);
 
 await unlink(temp);
-console.log('Cloudflare Worker tests: 7 passed');
+console.log('Cloudflare Worker regression checks: passed');

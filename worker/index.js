@@ -105,12 +105,24 @@ export default {
     const referer = path.startsWith('/en/stocks/options/')
       ? `${UPSTREAM}${path}`
       : `${UPSTREAM}/en/stocks/options/EQ_${underlying}`;
+    // Binance's own browser requests (verified in the supplied HAR) include
+    // these ordinary web-client headers. Generate fresh trace IDs per request;
+    // do NOT forward cookies, Authorization, device fingerprints or fvideo tokens.
+    const traceId = crypto.randomUUID();
+    const incomingUA = request.headers.get('User-Agent') || '';
+    const incomingLanguage = request.headers.get('Accept-Language') || 'en-US,en;q=0.9';
     const upstreamHeaders = new Headers({
-      'Accept': path.startsWith('/en/stocks/options/') ? 'text/html,application/xhtml+xml' : 'application/json, */*',
+      'Accept': '*/*',
+      'Accept-Language': incomingLanguage.slice(0, 160),
+      'User-Agent': incomingUA.slice(0, 300) || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
       'Origin': UPSTREAM,
       'Referer': referer,
       'clienttype': 'web',
-      'lang': 'en'
+      'lang': 'en',
+      'bnc-uuid': crypto.randomUUID(),
+      'bnc-time-zone': 'Asia/Saigon',
+      'x-trace-id': traceId,
+      'x-ui-request-trace': traceId
     });
     if (quoteRoute) upstreamHeaders.set('Content-Type', 'application/json');
 
@@ -127,8 +139,27 @@ export default {
       return withCors(json({ error: 'Binance upstream request failed', detail: error?.message || 'Network error' }, 502), cors);
     }
 
+    const contentType = upstream.headers.get('content-type') || '';
+    // Return a useful JSON diagnostic instead of passing an opaque CloudFront
+    // HTML 403 page through to the dashboard. This distinguishes an upstream
+    // Binance block from Worker routing/CORS failures.
+    if (!upstream.ok) {
+      const raw = await upstream.text();
+      const snippet = raw.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+      return withCors(json({
+        error: 'Binance upstream rejected the request',
+        upstreamStatus: upstream.status,
+        upstreamContentType: contentType || 'unknown',
+        detail: snippet || 'The upstream server returned an empty error response.',
+        hint: upstream.status === 403
+          ? 'Binance rejected the request from the Worker egress or requires additional browser/session verification. This is not a filename or GitHub Pages CORS error.'
+          : 'Check Binance endpoint availability and request parameters.'
+      }, 502, { 'X-Upstream-Status': String(upstream.status) }), cors);
+    }
+
     const responseHeaders = new Headers();
-    const contentType = upstream.headers.get('content-type');
     if (contentType) responseHeaders.set('Content-Type', contentType);
     responseHeaders.set('Cache-Control', 'no-store');
     responseHeaders.set('X-Content-Type-Options', 'nosniff');
