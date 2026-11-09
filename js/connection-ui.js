@@ -42,10 +42,11 @@ const IC={chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 IC.ind='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-8 5-8 8-3s5 3 10-8"/><path d="M3 21h18"/></svg>';
 IC.elliott='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 8 12l4 3 8-10"/><path d="M3 5v14h18"/><circle cx="8" cy="12" r="1"/></svg>';
 IC.quant='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><path d="m7 15 3-4 3 2 5-7"/><circle cx="10" cy="11" r="1"/></svg>';
+IC.stats='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><rect x="7" y="12" width="2.5" height="5" rx=".5"/><rect x="11" y="8" width="2.5" height="9" rx=".5"/><rect x="15" y="5" width="2.5" height="12" rx=".5"/></svg>';
 IC.options='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg>';
 IC.tpo='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16M4 20h16"/><path d="M8 7h3M8 11h8M8 15h11M8 18h5"/></svg>';
 IC.cs='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 1.5-2.2-.5-1.2.3-2.3 1.6-2.3H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg>';
-const V=[["chart","Chart"],["elliott","Elliott Wave"],["quant","Quant Lab"],["options","Options"],["tpo","TPO Chart"],["ind","Indicator"],["cs","Chart Setting"],["conn","Kết nối"]];
+const V=[["chart","Chart"],["elliott","Elliott Wave"],["quant","Quant Lab"],["stats","Market Stats"],["options","Options"],["tpo","TPO Chart"],["ind","Indicator"],["cs","Chart Setting"],["conn","Kết nối"]];
 let cur="chart";
 function show(v){
   const prev=cur;cur=v;document.body.dataset.v=v;
@@ -58,7 +59,8 @@ function show(v){
   if(v==="ind"){buildInd();if(typeof dttBuildSettings==="function")dttBuildSettings()}
   if(v==="cs")buildCS();
   if(v==="conn")fillConn();
-  if(v==="quant"||v==="elliott")requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));
+  if(v==="quant"||v==="elliott"||v==="stats")requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));
+  if(v==="stats"&&typeof MarketStatistics!=="undefined")MarketStatistics.onOpen();
   document.body.classList.remove("so");
   try{history.replaceState(null,"","#"+v)}catch(e){}
 }
