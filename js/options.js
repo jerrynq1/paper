@@ -1,6 +1,7 @@
 /* ================= BINANCE XAU COMMODITY OPTIONS =================
    Browser-native public WebSocket market data. No REST, API key or proxy.
-   Public OI is non-directional: Long/Short are scenario assumptions only.
+   Public OI is non-directional. Exposure uses the standard market convention:
+   Gamma → Call +, Put −; Delta/Vega/Theta/Vanna/Charm → native Greek sign × OI.
 */
 (function(){
   'use strict';
@@ -11,7 +12,7 @@
     active:false, sockets:new Map(), reconnects:new Map(), reconnectDelay:new Map(),
     rotateTimer:null, healthTimer:null, renderTimer:null, surfaceRenderTimer:null, expiry:null,
     contracts:[], marks:new Map(), oi:new Map(), tickers:new Map(), index:null, trades:[],
-    mode:'long', exposureMetric:'gamma', surfaceMetric:'gamma', greekMetric:'delta', greekSide:'C', surfaceRenderers:{exposure:null,greek:null}, riskFreeRate:.04, lastMarkTime:0, lastIndexTime:0,
+    exposureMetric:'gamma', surfaceMetric:'gamma', greekMetric:'delta', greekSide:'C', surfaceRenderers:{exposure:null,greek:null}, riskFreeRate:.04, lastMarkTime:0, lastIndexTime:0,
     lastOIUpdate:0, lastTradeTime:0, lastTickerUpdate:0, oiExpiryCodes:[],
     expiryManual:false, status:'idle', error:'', socketErrors:new Map(), lastPayloads:new Map(),
     markCount:0, oiCount:0, tickerCount:0, oiMessages:0, tradeMessages:0, tickerMessages:0
@@ -32,6 +33,8 @@
   const expiryOf=c=>n(c&&c.expiryDate);
   const activeExpiryContracts=()=>state.contracts.filter(c=>expiryOf(c)===Number(state.expiry));
   const currentOISocket=()=>state.sockets.get('oi:'+expiryParam(Number(state.expiry)))||[...state.sockets].find(([k])=>k.startsWith('oi:'))?.[1]||null;
+  // Standard GEX convention: Call gamma is positive, Put gamma is negative. Other Greeks keep their native sign.
+  const expSign=(side,metric)=>metric==='gamma'&&(side==='put'||side==='P'||side==='PUT')?-1:1;
   const YEAR_MS=365*24*60*60*1000;
   // The stream exposes an expiry date, not a precise settlement timestamp. Use a date-based
   // estimate (at least one day) only for scenario projections; live Greeks still come from Binance.
@@ -319,17 +322,18 @@
     return [...map.values()].sort((a,b)=>a.strike-b.strike);
   }
   function aggregate(rows){
-    const sign=state.mode==='short'?-1:1,spot=state.index;
+    const spot=state.index;
     const sum={callOI:0,putOI:0,delta:0,gamma:0,gex:0,vega:0,theta:0,vanna:0,charm:0,hasOI:false};
     rows.forEach(r=>['call','put'].forEach(k=>{
       const x=r[k];if(!x||x.oi==null)return;sum.hasOI=true;
       if(k==='call')sum.callOI+=x.oi;else sum.putOI+=x.oi;
       const oi=x.oi;
-      if(x.delta!=null&&spot!=null)sum.delta+=sign*x.delta*oi*spot;
-      if(x.gamma!=null&&spot!=null){const g=sign*x.gamma*oi*spot*spot*.01;sum.gamma+=sign*x.gamma*oi;sum.gex+=g;x.gex=g}
-      if(x.vega!=null)sum.vega+=sign*x.vega*oi;
-      if(x.theta!=null)sum.theta+=sign*x.theta*oi;
-      if(x.model){sum.vanna+=sign*x.model.vanna*oi;sum.charm+=sign*x.model.charm*oi;}
+      const gs=expSign(k,'gamma');
+      if(x.delta!=null&&spot!=null)sum.delta+=x.delta*oi*spot;
+      if(x.gamma!=null&&spot!=null){const g=gs*x.gamma*oi*spot*spot*.01;sum.gamma+=gs*x.gamma*oi;sum.gex+=g;x.gex=g}
+      if(x.vega!=null)sum.vega+=x.vega*oi;
+      if(x.theta!=null)sum.theta+=x.theta*oi;
+      if(x.model){sum.vanna+=x.model.vanna*oi;sum.charm+=x.model.charm*oi;}
     }));
     sum.pc=sum.callOI>0?sum.putOI/sum.callOI:null;return sum;
   }
@@ -378,9 +382,9 @@
     return 0;
   }
   function strikeMetrics(rows,metric='gamma'){
-    const sign=state.mode==='short'?-1:1,spot=state.index;
+    const spot=state.index;
     return rows.map(r=>{
-      const call=sign*optionExposure(r.call,metric,spot),put=sign*optionExposure(r.put,metric,spot);
+      const call=expSign('call',metric)*optionExposure(r.call,metric,spot),put=expSign('put',metric)*optionExposure(r.put,metric,spot);
       return {strike:r.strike,call,put,value:call+put};
     });
   }
@@ -455,7 +459,7 @@
     const el=$o('optThetaChart');if(!el)return;
     const points=rows.filter(r=>r.call?.theta!=null||r.put?.theta!=null);
     if(!points.length){el.innerHTML='<div class="opt-empty">Đang chờ Mark Greeks từ Binance.</div>';return;}
-    const sign=state.mode==='short'?-1:1,W=Math.max(320,el.clientWidth||560),H=260,ml=48,mr=12,mt=20,mb=32,pw=W-ml-mr,ph=H-mt-mb;
+    const sign=1,W=Math.max(320,el.clientWidth||560),H=260,ml=48,mr=12,mt=20,mb=32,pw=W-ml-mr,ph=H-mt-mb;
     const values=points.flatMap(r=>[sign*(r.call?.theta||0)*(r.call?.oi||0),sign*(r.put?.theta||0)*(r.put?.oi||0)]);
     let wall={abs:0,strike:null,side:'',value:0};
     points.forEach(r=>[['call','CALL'],['put','PUT']].forEach(([key,side])=>{const value=sign*(r[key]?.theta||0)*(r[key]?.oi||0);if(Math.abs(value)>wall.abs)wall={abs:Math.abs(value),strike:r.strike,side,value};}));
@@ -569,7 +573,7 @@
           let contribution=val*r.oi;
           if(metric==='delta')contribution*=spot;
           if(metric==='gamma')contribution*=spot*spot*.01;
-          Z[j][k]+=contribution*(state.mode==='short'?-1:1);
+          Z[j][k]+=contribution*expSign(r.side,metric);
         }
       }
     });
@@ -595,7 +599,7 @@
       const metricName=metric.toUpperCase(),params=`S ${fmt(D.spot,2)} · DTE ${(D.T*365).toFixed(2)} · r ${(D.rate*100).toFixed(2)}% · q ${(D.q*100).toFixed(2)}%`;
       note.textContent=isGreek
         ?`${metricName} / ${side==='C'?'Call':'Put'} per contract · ${dd(D.ts[0])} → ${dd(D.ts[D.ts.length-1])} · ${params} · Mark IV cố định; Delta/Gamma/Vega/Theta được hiệu chỉnh theo Greeks Binance tại điều kiện live.`
-        :`Net ${metricName} by strike × time to expiry · ${dd(D.ts[0])} → ${dd(D.ts[D.ts.length-1])} · ${params} · OI và Mark IV giữ nguyên; scenario ${state.mode.toUpperCase()}. Vanna/Charm là mô hình.`;
+        :`Net ${metricName} by strike × time to expiry · ${dd(D.ts[0])} → ${dd(D.ts[D.ts.length-1])} · ${params} · OI và Mark IV giữ nguyên${metric==='gamma'?'; quy ước Call +, Put −':''}. Vanna/Charm là mô hình.`;
     }
   }
   function scheduleSurfaceRender(){
@@ -615,7 +619,7 @@
       <div class="opt-greek-line"><span>Theta · Binance native units</span><b>${fmt(a.theta,2)}</b></div>
       <div class="opt-greek-line"><span>Vanna · model estimate</span><b>${fmt(a.vanna,4)}</b></div>
       <div class="opt-greek-line"><span>Charm · model estimate</span><b>${fmt(a.charm,4)}</b></div>
-      <p class="opt-footnote">Tổng hợp Greeks × OI × contract unit. Dấu +/- là kịch bản Long/Short, không phải vị thế dealer quan sát được.</p>`;
+      <p class="opt-footnote">Tổng hợp Greeks × OI × contract unit. Gamma theo quy ước chuẩn: Call +, Put −. Các Greek khác giữ dấu gốc × OI. OI công khai không cho biết bên Long/Short thật.</p>`;
   }
   function renderChain(rows,spot){
     const body=$o('optChainBody');if(!body)return;
@@ -697,7 +701,6 @@
   function init(){
     if(!$o('v-options'))return;
     const expiry=$o('optExpiry');if(expiry)expiry.addEventListener('change',()=>{state.expiry=Number(expiry.value)||null;state.expiryManual=true;scheduleRender()});
-    const mode=$o('optMode');if(mode)mode.addEventListener('change',()=>{state.mode=mode.value==='short'?'short':'long';if(state.contracts.length)render()});
     const refreshBtn=$o('optRefresh');if(refreshBtn)refreshBtn.addEventListener('click',refresh);
     const info=$o('optExplain');if(info)info.addEventListener('click',()=>{$o('optMethod').hidden=!$o('optMethod').hidden});
     const exposure=$o('optExposureMetric');if(exposure)exposure.addEventListener('change',()=>{state.exposureMetric=['delta','gamma','vanna','vega','charm','theta'].includes(exposure.value)?exposure.value:'gamma';if(state.contracts.length)render()});

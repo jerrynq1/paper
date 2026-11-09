@@ -1,6 +1,6 @@
 /* Binance XAU Options: direct browser WebSocket streams, normalization and dashboard tests. */
 const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
-const ids=['v-options','optExpiry','optStatus','optMetrics','optExposure','optGreeks','optChainBody','optMeta','optErrors','optRefresh','optMode','optExplain','optMethod','optExposureMetric','optExposureTitle','optExposureUnits','optFlowBody','optLevels','optCopyLevels','optOIChart','optOIWall','optThetaChart','optThetaWall','optModelReset','optModelSpot','optModelDte','optModelRate','optModelYield','optSurfaceMin','optSurfaceMax','optGreekSurfaceMin','optGreekSurfaceMax','optSurface','optSurfaceNote','optSurfaceMetric','optSurfaceReset','optGreekSurface','optGreekSurfaceNote','optGreekMetric','optGreekSide','optGreekReset'];
+const ids=['v-options','optExpiry','optStatus','optMetrics','optExposure','optGreeks','optChainBody','optMeta','optErrors','optRefresh','optExplain','optMethod','optExposureMetric','optExposureTitle','optExposureUnits','optFlowBody','optLevels','optCopyLevels','optOIChart','optOIWall','optThetaChart','optThetaWall','optModelReset','optModelSpot','optModelDte','optModelRate','optModelYield','optSurfaceMin','optSurfaceMax','optGreekSurfaceMin','optGreekSurfaceMax','optSurface','optSurfaceNote','optSurfaceMetric','optSurfaceReset','optGreekSurface','optGreekSurfaceNote','optGreekMetric','optGreekSide','optGreekReset'];
 const els=Object.fromEntries(ids.map(id=>[id,{id,innerHTML:'',textContent:'',className:'',value:'',hidden:false,disabled:false,handlers:{},addEventListener(k,fn){this.handlers[k]=fn}}]));
 const fakeTimers=new Map();let timerId=0;
 function setTimeoutFake(fn,ms){const id=++timerId;fakeTimers.set(id,{fn,ms});return id}
@@ -81,9 +81,9 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','options.js'),'utf
   console.log('ok  Trade stream populates recent Options Flow');
   console.log('ok  Chain renders all four Greeks and Mark IV for Call / Put');
 
-  els.optMode.value='short';els.optMode.handlers.change();
-  assert(els.optExposure.innerHTML.includes('neg-t'));
-  console.log('ok  Long / short exposure scenario changes sign');
+  assert(els.optExposure.innerHTML.includes('neg-t'),'put gamma is negative under the standard GEX convention');
+  assert(!('optMode' in els)||!els.optMode,'scenario selector removed');
+  console.log('ok  Standard GEX convention: Call + / Put −, no scenario selector');
   els.optExposureMetric.value='vega';els.optExposureMetric.handlers.change();
   assert.strictEqual(els.optExposureTitle.textContent,'Vega Exposure by Strike');
   assert.strictEqual(els.optExposureUnits.textContent,'Binance native units');
