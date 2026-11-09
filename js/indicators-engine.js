@@ -269,11 +269,16 @@ function openSet(id){
   const o=document.createElement("div");o.className="mdl";o.setAttribute("role","dialog");o.setAttribute("aria-modal","true");o.setAttribute("aria-labelledby","dlgT");
   const vis=()=>a.vis||allTfs().map(t=>t[1]);
   const draw=()=>{
-    const sc0=(o.querySelector(".bd")||{}).scrollTop||0;const T=[["in","Thông số"],["st","Kiểu dáng"],["vi","Hiển thị"]];let b="";
-    if(tab==="in"){let g=null;
-      b=d.p.filter(sp=>pshow(sp,a.p)).map(sp=>{const x=sp[4]||{};let h="";if(x.g&&x.g!==g){g=x.g;h=`<h4>${x.g}</h4>`}
+    const sc0=(o.querySelector(".bd")||{}).scrollTop||0,advancedOpen=!!(o.querySelector(".ict-advanced-settings")&&o.querySelector(".ict-advanced-settings").open);const T=[["in","Thông số"],["st","Kiểu dáng"],["vi","Hiển thị"]];let b="";
+    if(tab==="in"){
+      const renderParams=list=>{let g=null;return list.filter(sp=>pshow(sp,a.p)).map(sp=>{const x=sp[4]||{};let h="";if(x.g&&x.g!==g){g=x.g;h=`<h4>${x.g}</h4>`}
         const q=x.hp?`<span class="lw"><label for="dp_${sp[0]}">${sp[1]}</label><button type="button" class="qh" data-help="${sp[0]}" title="${x.hp[0]}" aria-label="${x.hp[0]}">?</button></span>`:`<label for="dp_${sp[0]}">${sp[1]}</label>`;
-        return h+`<div class="f">${q}${pin(sp,a.p[sp[0]],"dp_")}${x.tt?`<small>${x.tt}</small>`:""}${x.hp?`<small class="hp" data-hp="${sp[0]}"${hpo.has(sp[0])?"":" hidden"}>${x.hp.map(z=>`<span>${z}</span>`).join("")}</small>`:""}</div>`}).join("")||`<p class="msg">Indicator này không có thông số.</p>`}
+        return h+`<div class="f">${q}${pin(sp,a.p[sp[0]],"dp_")}${x.tt?`<small>${x.tt}</small>`:""}${x.hp?`<small class="hp" data-hp="${sp[0]}"${hpo.has(sp[0])?"":" hidden"}>${x.hp.map(z=>`<span>${z}</span>`).join("")}</small>`:""}</div>`}).join("")};
+      if(a.key==="ict22"){
+        const coreKeys=new Set(["visualMode","dashboard","structure","prevLevels","eq","sweeps","fvg","blocks","range"]),core=d.p.filter(sp=>coreKeys.has(sp[0])),advanced=d.p.filter(sp=>!coreKeys.has(sp[0]));
+        b=`<div class="ict-settings"><p class="msg ict-settings-intro">Chọn cách hiển thị và các lớp cốt lõi. Mặc định Gọn để chart dễ đọc; toàn bộ thông số chuyên sâu nằm bên dưới.</p><div class="ict-core-settings">${renderParams(core)}</div><details class="ict-advanced-settings"><summary>Nâng cao · toàn bộ mô hình và thông số</summary><div class="ict-advanced-body">${renderParams(advanced)}</div></details></div>`;
+      }else b=renderParams(d.p)||`<p class="msg">Indicator này không có thông số.</p>`;
+    }
     else if(tab==="st"){
       b=d.L.map((l,j)=>`<div class="f"><label for="dc_${j}">${l}</label><input type="color" id="dc_${j}" data-c="${j}" value="${cres(a,j)}"></div>`).join("");
       if(d.L.length&&!["vd","cvd","fpr","bt","dst","kinv"].includes(a.key))b+=`<div class="f"><label for="dw">Độ dày đường</label><select id="dw" data-w="1">${[1,2,3,4].map(n=>`<option value="${n}"${(a.w||2)===n?" selected":""}>${n}px</option>`).join("")}</select></div>`;
@@ -281,7 +286,7 @@ function openSet(id){
       if(a.key==="macd")b+=`<p class="msg">Histogram luôn lấy theo màu nến tăng/giảm (đậm khi động lượng mạnh lên, nhạt khi yếu đi).</p>`}
     else b=`<p class="msg">Chỉ hiện indicator trên các khung được chọn.</p><div class="bar">${allTfs().map(([n,s])=>`<label class="chk"><input type="checkbox" data-v="${s}"${vis().includes(s)?" checked":""}>${n}</label>`).join("")}</div>`;
     o.innerHTML=`<div class="box"><header><h3 id="dlgT">${d.n}</h3><button class="ib" type="button" data-act="cancel" aria-label="Đóng" style="width:36px;height:36px">✕</button></header><div class="tabs">${T.map(([k,n])=>`<button type="button" data-tab="${k}" class="${k===tab?"on":""}">${n}</button>`).join("")}</div><div class="bd">${b}</div><footer><button class="btn ghost sm" type="button" data-act="def">Mặc định</button><span style="flex:1"></span><button class="btn ghost sm" type="button" data-act="cancel">Hủy</button><button class="btn sm" type="button" data-act="ok">OK</button></footer></div>`;
-    const bd0=o.querySelector(".bd");if(bd0)bd0.scrollTop=sc0;
+    const bd0=o.querySelector(".bd");if(bd0)bd0.scrollTop=sc0;const ad0=o.querySelector(".ict-advanced-settings");if(ad0&&advancedOpen)ad0.open=true;
   };
   const close=ok=>{
     if(!ok){for(const k of Object.keys(a))delete a[k];Object.assign(a,bak)}else remTpl(a);

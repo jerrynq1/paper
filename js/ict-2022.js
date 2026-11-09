@@ -1,5 +1,5 @@
 /*
- * ICT 2022 Mentorship — Multi-Layer Toolkit v1.1.0 (PDF-derived implementation)
+ * ICT 2022 Mentorship — Multi-Layer Toolkit v1.3.0 (PDF-derived implementation + compact UI)
  * Tích hợp cho Gexadecimal QuantLab. Không phải một indicator BUY/SELL duy nhất.
  * Engine độc lập ICT22.build() dùng OHLC + timestamp; drawICT() chỉ là lớp vẽ cho chart.
  * Lưu ý: các cấu trúc "institutional" được suy luận từ OHLC/time, không quan sát được lệnh của ngân hàng/dealer.
@@ -377,14 +377,24 @@
     const dailySwingPivots=classifyPivots(findPivots(dBars,1,1,dBars.length));
     return {empty:false,B:G,end:G.length-1,atr,pivots,structure:stc,htf:{h1:h1Struct,h4:h4Struct,d1:d1Struct,h1Bars:h1Bars.length,h4Bars:h4Bars.length},displacement,eq,sweeps,fvg:fvg.slice(-120),ifvg:ifvg.slice(-60),bpr:bpr.slice(-40),vi:vi.slice(-60),blocks:blocks.slice(-60),rb:rb.slice(-60),mb:mb.slice(-40),daily:{current:curD,previous:prevD,mid:dayMid,all:D.slice(-65),threeDay:threeDay,swings:dailySwingPivots.slice(-20)},adr,weekly:{current:curW,previous:prevW},monthly:{current:MO[MO.length-1]||null,previous:MO.length>1?MO[MO.length-2]:null},quarter:{current:curQ,previous:prevQ,shift:quarterShift},ipda,dr,ote,premium,sessions:ses.slice(-120),asia,london,london0430,nyam,nypm,cbdr,cbProj,opens,gaps:gaps.slice(-5),breakaway:bg.slice(-30),drives:drives.slice(-12),po3,judas:judas.slice(-10),silver:silver.slice(-20),entryDrill,levels,liquidity,dol,bias:{dir:biasDir,label:biasDir>0?"Bullish":biasDir<0?"Bearish":"Trung tính",bull,bear,h4Dir:h4Struct.trend,h1Dir:h1Struct.trend,d1Dir:d1Struct.trend,reason:reasons.join(" · ")||"Chưa có cụm xác nhận đồng thuận"},activeSession,lastNY:lastP,weekday:dow,weekdayContext,news,riskPlan,trend,currentStructure,counts:{FVG:fvg.length,OB:blocks.filter(z=>z.type==="OB").length,BB:blocks.filter(z=>z.type==="BB").length,RB:rb.length,MB:mb.length},tf:+Q.tf||0};
   }
-  root.ICT22={build,atrOf,findPivots,classifyPivots,structure,nyParts,dayKey,weekKey,manualEvents,version:"1.2.0"};
+  root.ICT22={build,atrOf,findPivots,classifyPivots,structure,nyParts,dayKey,weekKey,manualEvents,version:"1.3.0"};
 
   // ---------- Canvas overlay ----------
   let MODEL=null,SIG="",DASH=null,DASHHTML="";
   const COLORS={bull:"#20c997",bear:"#ff5c7a",liq:"#f6c453",open:"#9ca3af",session:"#22b8cf",fvg:"#39a7ff",ob:"#a78bfa",bb:"#fb923c",rb:"#f472b6",mb:"#c084fc",bpr:"#e9a23b",ipda:"#b0bec5",news:"#ffb020"};
   function onICT(){try{return ACT.find(x=>x.key==="ict22"&&isOn(x))||null}catch(_){return null}}
   function ictDash(){if(!DASH){DASH=document.createElement("div");DASH.id="ict22Dash";$("chart").appendChild(DASH);}return DASH;}
-  function ictStyle(){if(document.getElementById("ict22Css"))return;const s=document.createElement("style");s.id="ict22Css";s.textContent=`#ict22Dash{position:absolute;z-index:6;min-width:190px;max-width:300px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:rgba(15,20,30,.90);color:#e9eef5;box-shadow:0 4px 20px rgba(0,0,0,.18);font:11px/1.45 'Space Grotesk',sans-serif;pointer-events:none}#ict22Dash table{width:100%;border-collapse:collapse}#ict22Dash td{padding:2px 3px;border-bottom:1px solid rgba(150,160,180,.13)}#ict22Dash td:last-child{text-align:right;font-weight:700}#ict22Dash .hd{font-weight:800;letter-spacing:.4px;font-size:11px;color:#f8fafc;padding-bottom:5px}#ict22Dash .mut{color:#aab5c4;font-weight:500!important}#ict22Dash .good{color:#20c997}#ict22Dash .bad{color:#ff7187}#ict22Dash .warn{color:#f6c453}#ict22Dash .foot{color:#aab5c4;font-size:9px;padding-top:5px}`;document.head.appendChild(s);}
+  function ictStyle(){if(document.getElementById("ict22Css"))return;const s=document.createElement("style");s.id="ict22Css";s.textContent=`
+    #ict22Dash{position:absolute;z-index:6;width:min(208px,calc(100% - 14px));min-width:0;max-width:208px;padding:8px 9px;border:1px solid rgba(148,163,184,.28);border-radius:10px;background:rgba(15,20,30,.92);color:#e9eef5;box-shadow:0 5px 20px rgba(0,0,0,.20);font:10px/1.35 'Space Grotesk',sans-serif;pointer-events:none;backdrop-filter:blur(8px)}
+    #ict22Dash .top{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-bottom:7px}#ict22Dash .hd{font-weight:800;letter-spacing:.35px;font-size:11px;color:#f8fafc}#ict22Dash .mut{color:#aab5c4;font-weight:500}
+    #ict22Dash .badge{border-radius:999px;padding:2px 7px;font-size:9px;font-weight:800;letter-spacing:.25px;background:rgba(148,163,184,.14)}#ict22Dash .good{color:#20c997}#ict22Dash .bad{color:#ff7187}#ict22Dash .warn{color:#f6c453}
+    #ict22Dash .stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 9px}#ict22Dash .stat{min-width:0}#ict22Dash .stat small{display:block;color:#8794a7;font-size:8px;letter-spacing:.45px;text-transform:uppercase;margin-bottom:1px}#ict22Dash .stat b{display:block;color:#e9eef5;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+    #ict22Dash .draw{margin-top:7px;padding-top:6px;border-top:1px solid rgba(150,160,180,.16);color:#9eabba;font-size:9px}#ict22Dash .draw b{color:#f6c453;font-size:10px;margin-left:3px}#ict22Dash .foot{color:#8794a7;font-size:8px;padding-top:5px}
+    .mdl .ict-settings-intro{margin:0 0 8px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:rgba(128,145,170,.07);font-size:12px;line-height:1.45}
+    .mdl .ict-core-settings{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.mdl .ict-core-settings h4{grid-column:1/-1;margin:9px 0 3px}.mdl .ict-core-settings .f{grid-template-columns:minmax(0,1fr) auto;gap:5px 9px;padding:8px 0;font-size:12px}.mdl .ict-core-settings .f small{grid-column:1/-1}
+    .mdl .ict-advanced-settings{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}.mdl .ict-advanced-settings summary{cursor:pointer;list-style:none;font-size:12px;font-weight:700;color:var(--acc);padding:5px 0}.mdl .ict-advanced-settings summary::-webkit-details-marker{display:none}.mdl .ict-advanced-settings summary:after{content:'＋';float:right}.mdl .ict-advanced-settings[open] summary:after{content:'−'}.mdl .ict-advanced-body{padding-top:4px}
+    @media(max-width:520px){#ict22Dash{width:min(194px,calc(100% - 12px));max-width:194px;padding:7px 8px}.mdl .ict-core-settings{grid-template-columns:1fr}}
+  `;document.head.appendChild(s);}
   function drawICT(w,h){
     const a=onICT(),el=ictDash();if(!a||!agg.length){el.style.display="none";return;}ictStyle();
     const Q=Object.assign(pdef(IND.ict22),a.p),B=agg,M1=typeof m1!=="undefined"?m1:[];
@@ -395,51 +405,52 @@
     const X=i=>{const x=ts.logicalToCoordinate(i+indexOffset);return x==null||!isFinite(x)?null:x;};
     const XL=st=>{const G=M.B;let lo=0,hi=G.length;while(lo<hi){const m=(lo+hi)>>1;if(G[m].st<st)lo=m+1;else hi=m;}if(lo>=G.length)return X(G.length-1+(st-G[G.length-1].st)/(C.tf||60));if(lo===0)return X(0);const a0=G[lo-1],a1=G[lo],f=(st-a0.st)/(a1.st-a0.st||C.tf||60);return X(lo-1+f);};
     const Y=p=>{const y=cs.priceToCoordinate(p);return y==null||!isFinite(y)?null:y;};
+    const clean=Q.visualMode!=="full",rightLabelYs=[];
     const line=(x0,x1,y,c,wd=1,ds=[])=>{if(x0==null||x1==null||y==null||Math.max(x0,x1)<0||Math.min(x0,x1)>w)return;ctx.strokeStyle=c;ctx.lineWidth=wd;ctx.setLineDash(ds);ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x1,y);ctx.stroke();};
-    const label=(t,x,y,c,align="left")=>{if(x==null||y==null||y<0||y>h||x<-120||x>w+150)return;ctx.font=font(10,1);ctx.fillStyle=c;ctx.textAlign=align;ctx.textBaseline="middle";ctx.fillText(t,x,y);};
+    const label=(t,x,y,c,align="left")=>{if(x==null||y==null||y<0||y>h||x<-120||x>w+150)return;if(clean&&align==="right"){if(rightLabelYs.length>=8||rightLabelYs.some(v=>Math.abs(v-y)<13))return;rightLabelYs.push(y);}ctx.font=font(clean?9:10,1);ctx.fillStyle=c;ctx.textAlign=align;ctx.textBaseline="middle";ctx.fillText(t,x,y);};
     const rect=(st0,st1,top,bot,c,alpha=.10,txt="")=>{const x0=XL(st0),x1=XL(st1),y0=Y(top),y1=Y(bot);if(x0==null||x1==null||y0==null||y1==null||x1<0||x0>w)return;ctx.fillStyle=hexA(c,alpha);ctx.fillRect(x0,Math.min(y0,y1),Math.max(1,x1-x0),Math.max(1,Math.abs(y1-y0)));ctx.strokeStyle=hexA(c,Math.min(.9,alpha*4));ctx.lineWidth=1;ctx.strokeRect(x0,Math.min(y0,y1),Math.max(1,x1-x0),Math.max(1,Math.abs(y1-y0)));if(txt)label(txt,Math.min(w-4,x1-4),(y0+y1)/2,c,"right");};
     const lastSt=tail.st,far=lastSt+(C.tf||60)*Math.max(3,+Q.extend||25),priceFmt=p=>Number(p).toFixed(pd());
     ctx.save();ctx.font=font(10,0);
     // HTF liquidity reference levels.
-    if(Q.prevLevels){for(const z of M.levels.filter(x=>["PDH","PDL","PWH","PWL","HOD","LOD","HOW","LOW","PD3H","PD3L","PMH","PML","PQH","PQL"].includes(x.name))){const y=Y(z.price),isHigh=/(?:PDH|PWH|HOD|HOW|PD3H|PMH|PQH)$/.test(z.name),c=isHigh?COLORS.bear:COLORS.bull;line(0,w,y,hexA(c,.7),1,[5,3]);label(z.name+" "+priceFmt(z.price),w-5,y,c,"right");}}
-    if(Q.opens){for(const z of M.levels.filter(x=>["D Open","W Open","M Open","Q Open","00:00 NY","02:00 London","05:00 NY","07:00 NY","07:20 NY","08:30 NY","09:30 NY Open"].includes(x.name))){const y=Y(z.price),c=COLORS.open;line(Math.max(0,XL(z.st)||0),w,y,hexA(c,.65),1,[2,4]);label(z.name,y==null?null:w-5,y,c,"right");}}
-    if(Q.sessions){
+    if(Q.prevLevels){const refs=M.levels.filter(x=>(clean?["PDH","PDL"]:["PDH","PDL","PWH","PWL","HOD","LOD","HOW","LOW","PD3H","PD3L","PMH","PML","PQH","PQL"]).includes(x.name));for(const z of refs){const y=Y(z.price),isHigh=/(?:PDH|PWH|HOD|HOW|PD3H|PMH|PQH)$/.test(z.name),c=isHigh?COLORS.bear:COLORS.bull;line(0,w,y,hexA(c,.68),1,[5,3]);label(z.name+" "+priceFmt(z.price),w-5,y,c,"right");}}
+    if(Q.opens){for(const z of M.levels.filter(x=>["D Open","W Open","M Open","Q Open","00:00 NY","02:00 London","05:00 NY","07:00 NY","07:20 NY","08:30 NY","09:30 NY Open"].includes(x.name)&&(!clean||x.name==="D Open"))){const y=Y(z.price),c=COLORS.open;line(Math.max(0,XL(z.st)||0),w,y,hexA(c,.55),1,[2,4]);label(z.name,y==null?null:w-5,y,c,"right");}}
+    if(Q.sessions&&!clean){
       const sc={"Asia":"#64748b","London KZ":"#60a5fa","London Session":"#60a5fa","4:00–4:30 Range":"#38bdf8","NY AM":"#34d399","London Close":"#a78bfa","NY Lunch":"#94a3b8","NY PM":"#f59e0b","CBDR":COLORS.session};
       M.sessions.filter(x=>x.name!=="CBDR").slice(-24).forEach(z=>{const c=sc[z.name]||COLORS.session;rect(z.start,z.end+(C.tf||60),z.high,z.low,c,.018,z.name);});
       for(const z of M.levels.filter(x=>x.name.startsWith("Asia ")||x.name.startsWith("London ")||x.name.startsWith("04:00")||x.name.startsWith("NY AM ")||x.name.startsWith("NY PM ")||x.name.startsWith("CBDR "))){const y=Y(z.price);line(Math.max(0,XL(z.st)||0),w,y,hexA(COLORS.session,.75),1,[2,3]);label(z.name,w-5,y,COLORS.session,"right");}
     }
     // Equal highs/lows + liquidity sweeps.
-    if(Q.eq){for(const z of M.eq.slice(-25)){const y=Y(z.price);line(Math.max(0,XL(z.st)||0),w,y,hexA(COLORS.liq,.8),1,[3,3]);label(z.type+" ×"+z.count,w-5,y,COLORS.liq,"right");}}
-    if(Q.sweeps){for(const z of M.sweeps.slice(-14)){const x=X(z.i),y=Y(z.level);if(x==null||y==null)continue;ctx.fillStyle=z.dir>0?COLORS.bull:COLORS.bear;ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();label(z.type,x+5,y-8,z.dir>0?COLORS.bull:COLORS.bear);}}
+    if(Q.eq){for(const z of M.eq.slice(clean?-1:-25)){const y=Y(z.price);line(Math.max(0,XL(z.st)||0),w,y,hexA(COLORS.liq,.8),1,[3,3]);label(z.type+" ×"+z.count,w-5,y,COLORS.liq,"right");}}
+    if(Q.sweeps){for(const z of M.sweeps.slice(clean?-2:-14)){const x=X(z.i),y=Y(z.level);if(x==null||y==null)continue;ctx.fillStyle=z.dir>0?COLORS.bull:COLORS.bear;ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();label(z.type,x+5,y-8,z.dir>0?COLORS.bull:COLORS.bear);}}
     // FVG, IFVG, BPR, liquidity void, order block families.
-    if(Q.fvg){for(const z of M.fvg.slice(-Math.max(8,+Q.maxZones||32))){if(z.filled&&!Q.showFilled)continue;rect(z.st,far,z.top,z.bot,z.type==="LV"?COLORS.session:COLORS.fvg,z.invalid?.04:z.filled?.025:.09,z.type+" "+(z.imbalance||"")+(z.dir>0?" ↑":" ↓")+(z.filled?" ✓":""));line(XL(z.st),w,Y(z.ce),hexA(COLORS.fvg,.7),1,[2,3]);}}
-    if(Q.ifvg){for(const z of M.ifvg.slice(-10))rect(z.st,far,z.top,z.bot,COLORS.bb,.08,"IFVG");}
-    if(Q.bpr){for(const z of M.bpr.slice(-10))rect(z.st,far,z.top,z.bot,COLORS.bpr,.11,"BPR");}
-    if(Q.gaps){for(const z of M.gaps.slice(-5))rect(z.st,far,z.top,z.bot,z.type==="NWOG"?COLORS.ob:COLORS.fvg,.07,z.type);}
-    if(Q.models){for(const z of M.breakaway.slice(-8))rect(z.st,far,z.top,z.bot,COLORS.session,.06,"Breakaway Gap");}
-    if(Q.blocks){for(const z of M.blocks.slice(-Math.max(5,+Q.maxZones||32))){if(z.filled&&!Q.showFilled)continue;const c=z.type==="BB"?COLORS.bb:z.dir>0?COLORS.bull:COLORS.bear;rect(z.st,far,z.top,z.bot,c,z.invalid?.035:z.filled?.04:.12,z.type+(z.dir>0?" ↑":" ↓"));}}
-    if(Q.rb){for(const z of M.rb.slice(-15))rect(z.st,far,z.top,z.bot,COLORS.rb,.075,"RB");}
-    if(Q.mb){for(const z of M.mb.slice(-12))rect(z.st,far,z.top,z.bot,COLORS.mb,.07,"MB*");}
-    if(Q.vi){for(const z of M.vi.slice(-18))rect(z.st,lastSt+(C.tf||60)*3,z.top,z.bot,COLORS.open,.07,"VI");}
+    if(Q.fvg){let zones=M.fvg.filter(z=>!(z.filled&&!Q.showFilled));if(clean){zones=zones.filter(z=>{const y0=Y(z.top),y1=Y(z.bot);return y0!=null&&y1!=null&&Math.max(y0,y1)>=0&&Math.min(y0,y1)<=h;}).sort((a,b)=>Math.abs((a.top+a.bot)/2-tail.close)-Math.abs((b.top+b.bot)/2-tail.close)).slice(0,2);}else zones=zones.slice(-Math.max(8,+Q.maxZones||32));for(const z of zones){rect(z.st,far,z.top,z.bot,z.type==="LV"?COLORS.session:COLORS.fvg,z.invalid?.04:z.filled?.025:(clean?.07:.09),clean?(z.type+ (z.dir>0?" ↑":" ↓")):z.type+" "+(z.imbalance||"")+(z.dir>0?" ↑":" ↓")+(z.filled?" ✓":""));if(!clean)line(XL(z.st),w,Y(z.ce),hexA(COLORS.fvg,.7),1,[2,3]);}}
+    if(Q.ifvg&&!clean){for(const z of M.ifvg.slice(-10))rect(z.st,far,z.top,z.bot,COLORS.bb,.08,"IFVG");}
+    if(Q.bpr&&!clean){for(const z of M.bpr.slice(-10))rect(z.st,far,z.top,z.bot,COLORS.bpr,.11,"BPR");}
+    if(Q.gaps&&!clean){for(const z of M.gaps.slice(-5))rect(z.st,far,z.top,z.bot,z.type==="NWOG"?COLORS.ob:COLORS.fvg,.07,z.type);}
+    if(Q.models&&!clean){for(const z of M.breakaway.slice(-8))rect(z.st,far,z.top,z.bot,COLORS.session,.06,"Breakaway Gap");}
+    if(Q.blocks){let zones=M.blocks.filter(z=>!(z.filled&&!Q.showFilled));if(clean){zones=zones.filter(z=>{const y0=Y(z.top),y1=Y(z.bot);return y0!=null&&y1!=null&&Math.max(y0,y1)>=0&&Math.min(y0,y1)<=h;}).sort((a,b)=>Math.abs((a.top+a.bot)/2-tail.close)-Math.abs((b.top+b.bot)/2-tail.close)).slice(0,1);}else zones=zones.slice(-Math.max(5,+Q.maxZones||32));for(const z of zones){const c=z.type==="BB"?COLORS.bb:z.dir>0?COLORS.bull:COLORS.bear;rect(z.st,far,z.top,z.bot,c,z.invalid?.035:z.filled?.04:(clean?.10:.12),clean?z.type:z.type+(z.dir>0?" ↑":" ↓"));}}
+    if(Q.rb&&!clean){for(const z of M.rb.slice(-15))rect(z.st,far,z.top,z.bot,COLORS.rb,.075,"RB");}
+    if(Q.mb&&!clean){for(const z of M.mb.slice(-12))rect(z.st,far,z.top,z.bot,COLORS.mb,.07,"MB*");}
+    if(Q.vi&&!clean){for(const z of M.vi.slice(-18))rect(z.st,lastSt+(C.tf||60)*3,z.top,z.bot,COLORS.open,.07,"VI");}
     // Premium / discount dealing range, equilibrium and OTE.
     if(Q.range&&M.dr){const y=Y(M.dr.eq);line(0,w,y,"#e5e7eb",1,[4,4]);label("EQ 50% · "+(M.premium?"Premium":"Discount"),w-5,y,"#e5e7eb","right");}
-    if(Q.range&&M.daily.mid!=null){const y=Y(M.daily.mid);line(0,w,y,hexA(COLORS.open,.55),1,[1,5]);label("Previous Day EQ",w-5,y,COLORS.open,"right");}
-    if(Q.ote&&M.ote){const bull=M.ote.bull,bear=M.ote.bear;rect(tail.st,far,bull.a,bull.b,COLORS.bull,.055,"OTE 62–79% BUY");rect(tail.st,far,bear.a,bear.b,COLORS.bear,.055,"OTE 62–79% SELL");}
+    if(Q.range&&M.daily.mid!=null&&!clean){const y=Y(M.daily.mid);line(0,w,y,hexA(COLORS.open,.55),1,[1,5]);label("Previous Day EQ",w-5,y,COLORS.open,"right");}
+    if(Q.ote&&M.ote&&!clean){const bull=M.ote.bull,bear=M.ote.bear;rect(tail.st,far,bull.a,bull.b,COLORS.bull,.055,"OTE 62–79% BUY");rect(tail.st,far,bear.a,bear.b,COLORS.bear,.055,"OTE 62–79% SELL");}
     // CBDR deviations measured from the actual range edges; IPDA 20/40/60 completed trading-day high/low.
-    if(Q.cbdr&&M.cbProj){const my=Y(M.cbProj.mid);line(XL(M.cbdr.start),w,my,hexA(COLORS.session,.8),1,[5,3]);label("CBDR 50%",w-5,my,COLORS.session,"right");for(const [nm,p] of [["CBDR +1σ",M.cbProj.up1],["CBDR -1σ",M.cbProj.dn1],["CBDR +2σ",M.cbProj.up2],["CBDR -2σ",M.cbProj.dn2],["CBDR +3σ",M.cbProj.up3],["CBDR -3σ",M.cbProj.dn3],["CBDR +4σ",M.cbProj.up4],["CBDR -4σ",M.cbProj.dn4]]){const y=Y(p);line(XL(M.cbdr.start),w,y,hexA(COLORS.session,.45),1,[2,5]);label(nm,w-5,y,COLORS.session,"right");}}
-    if(Q.adr&&M.adr.d5&&M.daily.current){const op=M.daily.current.open,unit=M.adr.d5*.5;for(const [nm,p] of [["50% ADR5 ↑",op+unit],["50% ADR5 ↓",op-unit]]){const y=Y(p);line(XL(M.daily.current.start),w,y,hexA(COLORS.open,.65),1,[4,4]);label(nm,w-5,y,COLORS.open,"right");}}
-    if(Q.entryDrill&&M.entryDrill&&M.entryDrill.tf){const z=M.entryDrill,clr=z.dir>0?COLORS.bull:COLORS.bear;rect(z.st,lastSt+(C.tf||60)*Math.max(3,+Q.extend||25),z.top,z.bot,clr,.16,"Entry Drill · "+z.tf+"m FVG");}
-    if(Q.ipda){for(const k of [20,40,60]){const z=M.ipda[k];if(!z)continue;for(const [s,p] of [["IPDA "+k+"D H",z.high],["IPDA "+k+"D L",z.low]]){const y=Y(p);line(0,w,y,hexA(COLORS.ipda,k===20?.65:.35),1,[1,5]);label(s,w-5,y,COLORS.ipda,"right");}}}
-    if(Q.quarter&&M.quarter.current){const y=Y(M.quarter.current.open);line(0,w,y,hexA(COLORS.open,.7),1,[7,3]);label("Quarter Open",w-5,y,COLORS.open,"right");}
+    if(Q.cbdr&&M.cbProj&&!clean){const my=Y(M.cbProj.mid);line(XL(M.cbdr.start),w,my,hexA(COLORS.session,.8),1,[5,3]);label("CBDR 50%",w-5,my,COLORS.session,"right");for(const [nm,p] of [["CBDR +1σ",M.cbProj.up1],["CBDR -1σ",M.cbProj.dn1],["CBDR +2σ",M.cbProj.up2],["CBDR -2σ",M.cbProj.dn2],["CBDR +3σ",M.cbProj.up3],["CBDR -3σ",M.cbProj.dn3],["CBDR +4σ",M.cbProj.up4],["CBDR -4σ",M.cbProj.dn4]]){const y=Y(p);line(XL(M.cbdr.start),w,y,hexA(COLORS.session,.45),1,[2,5]);label(nm,w-5,y,COLORS.session,"right");}}
+    if(Q.adr&&M.adr.d5&&M.daily.current&&!clean){const op=M.daily.current.open,unit=M.adr.d5*.5;for(const [nm,p] of [["50% ADR5 ↑",op+unit],["50% ADR5 ↓",op-unit]]){const y=Y(p);line(XL(M.daily.current.start),w,y,hexA(COLORS.open,.65),1,[4,4]);label(nm,w-5,y,COLORS.open,"right");}}
+    if(Q.entryDrill&&M.entryDrill&&M.entryDrill.tf&&!clean){const z=M.entryDrill,clr=z.dir>0?COLORS.bull:COLORS.bear;rect(z.st,lastSt+(C.tf||60)*Math.max(3,+Q.extend||25),z.top,z.bot,clr,.16,"Entry Drill · "+z.tf+"m FVG");}
+    if(Q.ipda&&!clean){for(const k of [20,40,60]){const z=M.ipda[k];if(!z)continue;for(const [s,p] of [["IPDA "+k+"D H",z.high],["IPDA "+k+"D L",z.low]]){const y=Y(p);line(0,w,y,hexA(COLORS.ipda,k===20?.65:.35),1,[1,5]);label(s,w-5,y,COLORS.ipda,"right");}}}
+    if(Q.quarter&&M.quarter.current&&!clean){const y=Y(M.quarter.current.open);line(0,w,y,hexA(COLORS.open,.7),1,[7,3]);label("Quarter Open",w-5,y,COLORS.open,"right");}
     // User-entered trade plan levels; BE trigger is a reference, not an auto stop modification.
     if(Q.planOn&&M.riskPlan&&M.riskPlan.valid){const p=M.riskPlan;for(const [nm,v,c,dash] of [["ENTRY",p.entry,COLORS.open,[6,2]],["SL",p.stop,COLORS.bear,[4,3]],["TP",p.target,COLORS.bull,[4,3]],["BE @ "+p.beAtR+"R",p.beTrigger,COLORS.liq,[2,4]]]){const y=Y(v);line(0,w,y,hexA(c,.85),1.2,dash);label(nm+" "+priceFmt(v),w-5,y,c,"right");}}
     // Structure BOS/MSS + confirmed short/intermediate/long pivots.
-    if(Q.structure){for(const e of M.structure.events.slice(-24)){const y=Y(e.level),x=X(e.i),c=e.dir>0?COLORS.bull:COLORS.bear;line(x,w,y,c,1.3,[6,3]);label(e.type+(e.dir>0?" ↑":" ↓"),x==null?null:x+4,y,c);}
-      for(const d of M.displacement.slice(-12)){const x=X(d.i),y=Y(d.dir>0?M.B[d.i].low:M.B[d.i].high);label("DISP",x,y,d.dir>0?COLORS.bull:COLORS.bear);}}
-    if(Q.dailySwings){for(const p of M.daily.swings.slice(-8)){const x=XL(p.st),y=Y(p.price),c=p.type==="H"?COLORS.bear:COLORS.bull;label(p.type==="H"?"D1 Swing High":"D1 Swing Low",x,y,c);}}
-    if(Q.pivots){for(const p of M.pivots.slice(-70)){const x=X(p.i),y=Y(p.price);if(x==null||y==null)continue;const c=p.type==="H"?COLORS.bear:COLORS.bull;const s=p.swing?(p.swing+" · "):"";if(x>=-10&&x<=w+10)label(s+(p.tier||(p.type==="H"?"STH":"STL")),x,y+(p.type==="H"?-9:9),hexA(c,.8));}}
+    if(Q.structure){for(const e of M.structure.events.slice(clean?-2:-24)){const y=Y(e.level),x=X(e.i),c=e.dir>0?COLORS.bull:COLORS.bear;line(x,w,y,c,1.3,[6,3]);label(e.type+(e.dir>0?" ↑":" ↓"),x==null?null:x+4,y,c);}
+      if(!clean)for(const d of M.displacement.slice(-12)){const x=X(d.i),y=Y(d.dir>0?M.B[d.i].low:M.B[d.i].high);label("DISP",x,y,d.dir>0?COLORS.bull:COLORS.bear);}}
+    if(Q.dailySwings&&!clean){for(const p of M.daily.swings.slice(-8)){const x=XL(p.st),y=Y(p.price),c=p.type==="H"?COLORS.bear:COLORS.bull;label(p.type==="H"?"D1 Swing High":"D1 Swing Low",x,y,c);}}
+    if(Q.pivots&&!clean){for(const p of M.pivots.slice(-70)){const x=X(p.i),y=Y(p.price);if(x==null||y==null)continue;const c=p.type==="H"?COLORS.bear:COLORS.bull;const s=p.swing?(p.swing+" · "):"";if(x>=-10&&x<=w+10)label(s+(p.tier||(p.type==="H"?"STH":"STL")),x,y+(p.type==="H"?-9:9),hexA(c,.8));}}
     // Three Drives, Judas, Silver Bullet, PO3 markers.
-    if(Q.models){for(const z of M.drives.slice(-4)){const x=X(z.i),y=Y(z.price);label("3 Drives "+(z.dir>0?"↑":"↓"),x,y,z.dir>0?COLORS.bull:COLORS.bear);}
+    if(Q.models&&!clean){for(const z of M.drives.slice(-4)){const x=X(z.i),y=Y(z.price);label("3 Drives "+(z.dir>0?"↑":"↓"),x,y,z.dir>0?COLORS.bull:COLORS.bear);}
       for(const z of M.judas.slice(-6)){const x=X(z.i),y=Y(z.level);label("Judas "+z.source,x,y,z.dir>0?COLORS.bull:COLORS.bear);}
       for(const z of M.silver.slice(-8)){const x=X(z.i);if(x!=null)label("Silver Bullet",x,16,COLORS.liq);}}
     // Manually supplied news calendar markers; never auto-invent events.
@@ -449,12 +460,11 @@
     if(!Q.dashboard){el.style.display="none";return;}
     const pos=Q.dashPos||"tr",cw=$("chart").getBoundingClientRect(),s=el.style;s.display="block";s.top=s.bottom=s.left=s.right="auto";s.transform="";
     if(pos[0]==="t")s.top="8px";else s.bottom=(cw.height-h+8)+"px";if(pos[1]==="l")s.left="56px";else s.right=(cw.width-w+8)+"px";
-    const cls=M.bias.dir>0?"good":M.bias.dir<0?"bad":"warn",str=M.currentStructure?M.currentStructure.type+(M.currentStructure.dir>0?" ↑":" ↓"):"Chưa có BOS/MSS";
-    const h4=M.bias.h4Dir>0?"Bullish":M.bias.h4Dir<0?"Bearish":"Chưa có cấu trúc",h1=M.bias.h1Dir>0?"Bullish":M.bias.h1Dir<0?"Bearish":"Chưa có cấu trúc";
-    const pdTxt=M.premium==null?"N/A":M.premium?"Premium":"Discount",dol=M.dol?M.dol.name+" · "+priceFmt(M.dol.price):"Chưa xác định";
-    const fmtRange=x=>x?priceFmt(x.low)+" – "+priceFmt(x.high):"N/A";
-    const row=(k,v,c="")=>`<tr><td class="mut">${k}</td><td class="${c}">${v}</td></tr>`;
-    const html=`<div class="hd">ICT 2022 · FULL TOOLKIT <span class="mut">v${root.ICT22.version}</span></div><table>${row("Daily Bias",M.bias.label,cls)}${row("4H / 1H",h4+" / "+h1)}${row("Cấu trúc chart",str)}${row("Dealing Range",M.dr?fmtRange({low:M.dr.low,high:M.dr.high}):"N/A")}${row("Vị trí giá",pdTxt)}${row("Draw on Liquidity",dol)}${row("Ngày / Phiên",M.weekday+" · "+M.activeSession)}${row("Bối cảnh ngày",M.weekdayContext)}${row("ADR 5D / 20D",M.adr.d5?priceFmt(M.adr.d5)+" / "+(M.adr.d20?priceFmt(M.adr.d20):"N/A"):"Cần đủ 5 ngày")}${row("Range ngày / ADR5",M.adr.progressPct==null?"N/A":priceFmt(M.adr.current)+" · "+M.adr.progressPct.toFixed(0)+"%")}${row("3-day H/L",M.daily.threeDay?priceFmt(M.daily.threeDay.high)+" / "+priceFmt(M.daily.threeDay.low):"Cần 3 ngày")}${row("London H/L",M.london?priceFmt(M.london.high)+" / "+priceFmt(M.london.low):"N/A")}${row("Asia H/L",M.asia?priceFmt(M.asia.high)+" / "+priceFmt(M.asia.low):"N/A")}${row("PO3 / AMD",M.po3.phase,M.po3.dir>0?"good":M.po3.dir<0?"bad":"warn")}${row("LTF Entry Drill",M.entryDrill.label,M.entryDrill.tf?(M.entryDrill.dir>0?"good":"bad"):"warn")}${row("PD Arrays",`FVG ${M.counts.FVG} · OB ${M.counts.OB} · BB ${M.counts.BB} · RB ${M.counts.RB}`)}${row("Trade Plan · RR",M.riskPlan.enabled?(M.riskPlan.valid?M.riskPlan.label:"Thiếu hoặc sai Entry / SL / TP"):"Chưa bật",M.riskPlan.valid?"good":"warn")}${row("CBDR ±1/2",M.cbProj?priceFmt(M.cbProj.unit)+" range unit":"Chưa có")}${row("CBDR TP theo PDF",M.cbProj?"2σ lý tưởng · có thể đến 3σ":"Chưa có")}${row("IPDA",[20,40,60].map(k=>M.ipda[k]?k+"D":"-").join(" / "))}${row("Quarter Shift",M.quarter.shift)}${row("SMT","Cần dữ liệu mã thứ hai","warn")}</table><div class="foot">OHLC/time proxy · News nhập thủ công · Không phải lệnh tự động</div>`;
+    const cls=M.bias.dir>0?"good":M.bias.dir<0?"bad":"warn",str=M.currentStructure?M.currentStructure.type+(M.currentStructure.dir>0?" ↑":" ↓"):"Chưa có MSS/BOS";
+    const h4=M.bias.h4Dir>0?"Bullish":M.bias.h4Dir<0?"Bearish":"—",h1=M.bias.h1Dir>0?"Bullish":M.bias.h1Dir<0?"Bearish":"—";
+    const pdTxt=M.premium==null?"—":M.premium?"Premium":"Discount",dol=M.dol?M.dol.name+" · "+priceFmt(M.dol.price):"Chưa rõ";
+    const badge=M.bias.dir>0?"BULLISH":M.bias.dir<0?"BEARISH":"NEUTRAL";
+    const html=`<div class="top"><div class="hd">ICT 2022 <span class="mut">v${root.ICT22.version}</span></div><span class="badge ${cls}">${badge}</span></div><div class="stats"><div class="stat"><small>HTF · 4H / 1H</small><b>${h4} / ${h1}</b></div><div class="stat"><small>Cấu trúc</small><b>${str}</b></div><div class="stat"><small>Vị trí giá</small><b>${pdTxt}</b></div><div class="stat"><small>Phiên</small><b>${M.activeSession||"—"}</b></div></div><div class="draw">MỤC TIÊU THANH KHOẢN <b>${dol}</b></div><div class="foot">OHLC &amp; time model · Không phải lệnh tự động</div>`;
     if(html!==DASHHTML){el.innerHTML=html;DASHHTML=html;}
   }
   root.drawICT=drawICT;
