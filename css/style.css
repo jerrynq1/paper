@@ -285,6 +285,11 @@ a.sb{text-decoration:none}
 #kzTbl table{border-collapse:collapse}
 #kzTbl td{padding:2px 7px;text-align:center;border:1px solid var(--line);white-space:nowrap;line-height:1.25}
 @media (max-width:700px){#kzTbl{max-width:92%;overflow-x:auto}}
+/* Bảng thông tin CRT (js/crt.js) */
+#crtTbl{position:absolute;z-index:4;display:none;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:11px;font-variant-numeric:tabular-nums;color:var(--ink);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);pointer-events:none}
+#crtTbl table{border-collapse:collapse}
+#crtTbl td{padding:2px 8px;border:1px solid var(--line);white-space:nowrap;line-height:1.25}
+@media (max-width:700px){#crtTbl{max-width:92%}}
 
 /* ===== Paper Trading (mô phỏng cục bộ, không gửi lệnh tới cTrader) ===== */
 #paperPanel{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);position:relative;z-index:5;font-family:'Space Grotesk',sans-serif;box-shadow:0 12px 40px rgba(0,0,10,.3)}
