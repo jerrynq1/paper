@@ -6,7 +6,8 @@ This build keeps the website static on **GitHub Pages**. It does not require you
 
 - Existing XAUUSDT Options workspace is kept.
 - Independent QQQ Options and GLD Options workspaces remain in the sidebar.
-- Stock Option Chain uses Binance `chain-symbols` and `get-option-quote` through the Worker.
+- Expiry and OCC contract discovery (`chain-symbols`) are requested directly from GitHub Pages to Binance; the supplied HAR shows this endpoint allows wildcard CORS.
+- Quote POST (`get-option-quote`) still uses the Cloudflare Worker because the supplied HAR shows its CORS response only allows `https://www.binance.com`.
 - OI, IV, Bid/Ask, Volume, multiplier and Greeks are read from Binance responses. Missing `oi: null` remains missing and is not converted to zero.
 - Underlying prices and live candles use Binance Equity WebSocket directly from the browser; no Worker WebSocket proxy is needed.
 - Worker only allows the QQQ/GLD public options page, chain/config endpoints and quote endpoint. It cannot proxy arbitrary URLs.

@@ -1,12 +1,13 @@
 # QQQ / GLD Binance Stock Options — GitHub Pages + Cloudflare Workers
 
-This build keeps the website static on **GitHub Pages**. It does not require you to run Node.js or keep a computer/server online. A small Cloudflare Worker is used only as a CORS bridge for Binance's Stock Options REST endpoints.
+This build keeps the website static on **GitHub Pages**. It first tries Binance `chain-symbols` directly from the browser (the supplied HAR shows wildcard CORS for this public GET). Cloudflare Worker remains the quote POST bridge because Binance restricts that endpoint CORS origin to `www.binance.com`.
 
 ## What is included
 
 - Existing XAUUSDT Options workspace is kept.
 - Independent QQQ Options and GLD Options workspaces remain in the sidebar.
-- Stock Option Chain uses Binance `chain-symbols` and `get-option-quote` through the Worker.
+- Expiry/OCC discovery (`chain-symbols`) is fetched directly from Binance in the browser.
+- Option quote POST (`get-option-quote`) still passes through Cloudflare Worker.
 - OI, IV, Bid/Ask, Volume, multiplier and Greeks are read from Binance responses. Missing `oi: null` remains missing and is not converted to zero.
 - Underlying prices and live candles use Binance Equity WebSocket directly from the browser; no Worker WebSocket proxy is needed.
 - Worker only allows the QQQ/GLD public options page, chain/config endpoints and quote endpoint. It cannot proxy arbitrary URLs.
@@ -57,13 +58,15 @@ Then set the `ALLOWED_ORIGINS` variable in the Cloudflare Dashboard as described
    Use only the base URL. Do not add `/api/health` or `/api/binance-stock-proxy`.
 3. Commit and push the project files to the GitHub repository used by GitHub Pages.
 4. Wait for GitHub Pages to publish, then reload the website (hard refresh if the old JS is cached).
-5. Open **QQQ Options** or **GLD Options**. The expiry list and quote table should load through the Worker.
+5. Open **QQQ Options** or **GLD Options**. The expiry list should load directly from Binance; the quote table is then requested through the Worker.
 
 ## Quick troubleshooting
 
 - **`/api/health` does not return `ok:true`:** check that the Worker is deployed and that you copied its exact `workers.dev` URL.
 - **Browser reports CORS / Origin not allowed:** set `ALLOWED_ORIGINS` to `*` temporarily, or set it to the exact GitHub Pages origin, such as `https://YOUR-USERNAME.github.io`.
-- **Worker HTTP 403:** the requested path/symbol is not in the Worker allow-list, or the origin is not allowed.
+- **Worker HTTP 403 with JSON body:** the requested path/symbol is not in the Worker allow-list, or the origin is not allowed.
+- **Expiry list loads but quote POST fails with upstream 403:** direct browser access to `chain-symbols` is working, but Binance blocks the Worker quote request. The next fallback is the local Node.js proxy (provided in the next fallback build). Do not copy cookies, `fvideo-token`, or other session tokens from the HAR into source code.
+- **Expiry list fails with browser CORS:** Binance has changed its CORS behavior or your region/network blocks direct access; use the Node.js proxy fallback.
 - **Binance upstream error / HTTP 4xx:** Binance may have changed or regionally restricted its endpoint, or the endpoint may require an entitlement. The Worker does not bypass Binance account/data entitlements.
 - **QQQ/GLD chart has no old candles:** Binance's public stream provides live Kline updates; this integration does not fabricate historical candles. The chart begins filling when live candle updates arrive.
 - **Some OI cells are blank:** Binance can return a null OI for individual contracts; those rows are excluded from OI exposure calculations rather than treated as zero.
