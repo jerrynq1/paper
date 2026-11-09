@@ -9,6 +9,11 @@
 
   const API_BASE = String(window.BINANCE_STOCK_PROXY || '').replace(/\/+$/, '');
   const API_PREFIX = API_BASE + '/api/binance-stock-proxy';
+  // Binance HAR confirms chain-symbols replies with Access-Control-Allow-Origin: *.
+  // Try this public GET directly from GitHub Pages; only quote POST stays on Worker
+  // because Binance restricts that endpoint's CORS origin to www.binance.com.
+  const BINANCE_PUBLIC_BASE = 'https://www.binance.com';
+  const DIRECT_PUBLIC_PATHS = ['/bapi/equity/v1/public/equity/option/chain-symbols', '/bapi/equity/v1/public/equity/option/get-config', '/bapi/equity/v1/public/equity/option/get-exchange-info'];
   function ensureProxyConfigured(){
     if(!API_BASE) throw new Error('Chưa cấu hình Cloudflare Worker. Hãy deploy worker/ rồi dán URL workers.dev vào js/stock-options-config.js.');
   }
@@ -137,26 +142,24 @@
     }
   }
 
-  async function requestText(path){
-    ensureProxyConfigured();
-    let response;
-    try{response=await fetch(API_PREFIX+path,{headers:{'Accept':'text/html'}});}
-    catch(e){throw new Error('Không kết nối được Binance proxy. Kiểm tra URL Cloudflare Worker trong js/stock-options-config.js và thử mở Worker /api/health. '+(e.message||e));}
-    const text=await response.text();
-    if(!response.ok)throw new Error(`Binance page HTTP ${response.status}: ${text.slice(0,160)}`);
-    return text;
-  }
-
   async function request(path, method='GET', body){
-    ensureProxyConfigured();
+    const isDirectPublic = method === 'GET' && DIRECT_PUBLIC_PATHS.some(prefix => path.startsWith(prefix));
     const options={method,headers:{'Accept':'application/json'}};
     if(body!==undefined){options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}
-    const url=API_PREFIX+path;
+    const url = isDirectPublic ? (BINANCE_PUBLIC_BASE + path) : (ensureProxyConfigured(), API_PREFIX + path);
     let response;
-    try{ response=await fetch(url,options); }
-    catch(e){ throw new Error('Không gọi được Binance proxy. Kiểm tra URL Cloudflare Worker trong js/stock-options-config.js và cấu hình CORS. Chi tiết: '+(e.message||e)); }
+    try{
+      response=await fetch(url,options);
+    }catch(e){
+      if(isDirectPublic) throw new Error('Binance không cho trình duyệt truy cập trực tiếp chain-symbols (CORS hoặc network). Đây là bước thử A; nếu tiếp tục lỗi sẽ chuyển sang Node.js proxy. Chi tiết: '+(e.message||e));
+      throw new Error('Không gọi được Binance proxy. Kiểm tra URL Cloudflare Worker trong js/stock-options-config.js. Chi tiết: '+(e.message||e));
+    }
     const text=await response.text();
-    if(!response.ok) throw new Error(`Binance Worker HTTP ${response.status}: ${text.slice(0,180)}`);
+    if(!response.ok){
+      const message=`HTTP ${response.status}: ${text.slice(0,180)}`;
+      if(isDirectPublic) throw new Error('Binance direct chain-symbols bị từ chối: '+message);
+      throw new Error(`Binance Worker ${message}`);
+    }
     let json;
     try{json=JSON.parse(text)}catch{throw new Error('Binance trả response không phải JSON: '+text.slice(0,120));}
     if(json && json.code && json.code!=='000000' && json.code!=='0') throw new Error(json.message||json.msg||`Binance error ${json.code}`);
@@ -171,23 +174,6 @@
   function showError(s,msg){const el=$(`so-${s.cfg.key}-error`);if(el){el.hidden=false;el.textContent=msg;}}
   function clearError(s){const el=$(`so-${s.cfg.key}-error`);if(el){el.hidden=true;el.textContent='';}}
 
-  function parseOverview(html){
-    const match=html.match(/<script[^>]+id=["']__APP_DATA["'][^>]*>([\s\S]*?)<\/script>/i);
-    if(!match) return null;
-    const app=JSON.parse(match[1]);
-    let found=null;
-    const walk=o=>{
-      if(found||!o)return;
-      if(Array.isArray(o)) { for(const v of o) walk(v); return; }
-      if(typeof o!=='object') return;
-      if(Array.isArray(o.queryKey)&&o.queryKey[0]==='OPTION_OVERVIEW' && o.state && o.state.data){found=o.state.data;return;}
-      for(const v of Object.values(o))walk(v);
-    };
-    walk(app);
-    if(found && Array.isArray(found.expirations)) return found.expirations.map(x=>({date:x.expirationDate,root:x.rootSymbol||sRoot(found.symbol)})).filter(x=>x.date);
-    return null;
-  }
-  function sRoot(symbol){return symbol;}
 
   function candidateDates(limit=18){
     const out=[]; const base=new Date(isoTodayNY()+'T12:00:00Z');
@@ -200,26 +186,19 @@
   }
 
   async function loadExpirations(s){
-    ensureProxyConfigured();
     const cfg=s.cfg;
-    setStatus(s,'Đang tải kỳ hạn…','loading');
-    const htmlPath=`/en/stocks/options/${cfg.assetCode}`;
-    try{
-      const html=await requestText(htmlPath);
-      const exps=parseOverview(html);
-      if(exps && exps.length){s.expirations=exps;return exps;}
-    }catch(e){ /* fallback below: overview HTML may be unavailable on some Binance regions */ }
-    const dates=candidateDates();
-    const found=[]; let fallbackError='';
+    setStatus(s,'Đang lấy expiry trực tiếp từ Binance…','loading');
+    const dates=candidateDates(24);
+    const found=[]; let firstError='';
     let next=0;
     async function worker(){while(next<dates.length){const d=dates[next++];try{
       const data=await request(`/bapi/equity/v1/public/equity/option/chain-symbols?${new URLSearchParams({symbol:cfg.symbol,rootSymbol:cfg.root,expirationDate:d})}`);
       const list=data.data?.l||[];if(list.length)found.push({date:d,root:cfg.root});
-    }catch(e){if(!fallbackError)fallbackError=e.message||String(e);} }}
-    await Promise.all(Array.from({length:5},worker));
+    }catch(e){if(!firstError)firstError=e.message||String(e);} }}
+    await Promise.all(Array.from({length:4},worker));
     found.sort((a,b)=>a.date.localeCompare(b.date));
     s.expirations=found;
-    if(!found.length)throw new Error(`Không lấy được danh sách expiry cho ${cfg.symbol}. ${fallbackError||'Binance không trả Option Chain cho các ngày được kiểm tra.'}`);
+    if(!found.length)throw new Error(`Không lấy được expiry ${cfg.symbol} trực tiếp từ Binance. ${firstError||'Không có contract trong các ngày đã kiểm tra.'}`);
     return found;
   }
 
