@@ -19,8 +19,8 @@ const barsFromCloses=closes=>closes.map((close,i)=>{const prev=i?closes[i-1]:clo
   const atr=E.atrWilder(E.normalizeBars(b),14);assert.ok(atr.seeded);assert.ok(atr.values.slice(13).every(x=>Number.isFinite(x)&&x>0));
   const dc=E.directionalChangePivots(E.normalizeBars(b),{atrPeriod:14,thresholdMultiplier:1.25});
   assert.ok(dc.pivots.length>=2);assert.ok(dc.pivots.every((p,i)=>p.confirmed&&p.confirmationIndex>=p.index&&(i===0||p.index>dc.pivots[i-1].index)));
-  assert.ok(dc.pivots.every(p=>p.price===E.normalizeBars(b)[p.index][p.kind]));
-  ok('Wilder ATR and causal close-confirmed OHLC-extreme directional-change pivots');
+  assert.ok(dc.pivots.every(p=>p.price===E.normalizeBars(b)[p.index].close));
+  ok('Wilder ATR and causal close-confirmed directional-change pivots');
 }
 {
   const b=barsFromCloses(Array.from({length:160},(_,i)=>100+Math.sin(i/7)*4+Math.sin(i/2)*.2));

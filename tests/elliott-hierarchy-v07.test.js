@@ -31,9 +31,9 @@ function c(id,degreeIndex,pattern='impulse'){
   assert.ok(new Set(result.candidateForest.map(x=>x.degreeIndex)).size>=3,'candidates from several scales must be retained');
   assert.ok(result.candidateForest.every(x=>Number.isFinite(x.hierarchyScore)));
   assert.ok(result.candidateForest.every(x=>Array.isArray(x.recursiveGrammar?.legs)||!x.recursiveGrammar),'recursive wave legs must be inspectable');
-  assert.ok(result.candidateForest.every(x=>x.contextDiagnostics&&typeof x.contextDiagnostics.role==='string'),'every retained count must carry a contextual role audit');
-  assert.ok(result.diagnostics.contextRejectedCount>=0,'context-rejected pattern hypotheses must be counted explicitly');
-  ok('End-to-end candidate forest retains multiple degrees and exposes context-first role audits');
+  assert.ok(result.candidateForest.some(x=>x.parentSupport>0),'at least one child hypothesis should be linked upward');
+  assert.ok(result.candidateForest.some(x=>x.childSupport>0),'at least one parent hypothesis should use lower-degree evidence');
+  ok('End-to-end candidate forest retains all degrees and uses parent and child evidence in both directions');
 }
 {
   const fs=require('fs'),path=require('path');
@@ -44,4 +44,4 @@ function c(id,degreeIndex,pattern='impulse'){
   assert.ok(/parentCounts/.test(ui)&&/childCounts/.test(ui));
   ok('X-axis zoom, viewport-aware drag mapping, and parent/child context overlays are wired into the isolated Elliott view');
 }
-console.log(`\n${passed} nhóm kiểm thử Elliott hierarchy regression đạt`);
+console.log(`\n${passed} nhóm kiểm thử Elliott hierarchy v0.7 đạt`);

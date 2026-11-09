@@ -4,8 +4,8 @@ let passed=0;const ok=s=>{console.log('ok  ',s);passed++};
 const pivots=(prices,startIndex=0,step=10)=>prices.map((price,i)=>({index:startIndex+i*step,time:(startIndex+i*step)*60,price,kind:i%2===0?'low':'high',confirmed:true,confirmationIndex:startIndex+i*step+1,confirmationTime:(startIndex+i*step+1)*60,confirmationDelayBars:1}));
 const barsFromCloses=closes=>closes.map((close,i)=>{const open=i?closes[i-1]:close;return{time:i*60,open,high:Math.max(open,close)+.1,low:Math.min(open,close)-.1,close,volume:10};});
 
-assert.strictEqual(E.VERSION,'0.8.0');
-ok('v0.8 engine version is exported');
+assert.strictEqual(E.VERSION,'0.7.0');
+ok('v0.7 engine version is exported');
 
 {
   // Exact touches at the Wave-1 origin and Wave-1 end are boundaries, not price overlap/crossing.
@@ -52,9 +52,9 @@ ok('v0.8 engine version is exported');
   const report=E.auditManualSequence(pivots([120,100,112]),['A','B','C']);
   assert.strictEqual(report.status,'REVIEW');
   assert.ok(report.rules.some(x=>x.id==='EW-MAN-ABC-ORIGIN'&&x.status==='unverified'));
-  const full=E.auditManualSequence(pivots([120,100,112,85]),['0','A','B','C'],{contextDirection:1});
+  const full=E.auditManualSequence(pivots([120,100,112,85]),['0','A','B','C']);
   assert.ok(full.rules.some(x=>x.id==='EW-ZZ-01'));
-  ok('Manual ABC audit requires origin and countertrend parent context before testing B-wave invalidation');
+  ok('Manual ABC audit requires origin pivot before testing B-wave invalidation');
 }
 
 {
