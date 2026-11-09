@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/options.css">
 <link rel="stylesheet" href="css/elliott-structure.css">
+<link rel="stylesheet" href="css/market-statistics.css">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -286,6 +287,34 @@
   <div class="ql-footnote"><b>Phạm vi bản cập nhật:</b> Phase 1–4 gồm thống kê, returns, rolling/realized volatility, OLS, ACF/PACF, ADF/PP, AR/MA/ARMA/ARIMA, walk-forward và ARCH/GARCH-family conditional volatility. Phase 4 sử dụng constant-mean conditional likelihood với Gaussian QMLE hoặc standardized Student-t và Nelder–Mead; cần benchmark độc lập trước ứng dụng giao dịch. Chưa có VAR/VECM, Cointegration, Granger hoặc backend/database. TickVolume cTrader là tick-volume/quote proxy, không phải khối lượng Futures tập trung.</div>
 </section>
 
+<section class="view" id="v-stats">
+  <div class="ms-page-head">
+    <div><div class="ms-eyebrow">QUANTLAB · MARKET SEASONALITY & VOLATILITY</div><h2>Market Statistics <span>· NQ / NAS100</span></h2><p class="msg">Phân rã biến động M1 theo năm, tháng, tuần, ngày, giờ New York và ICT Macro. Thống kê chỉ dùng phiên đã chọn; RTH mặc định loại toàn bộ Asia / London.</p></div>
+    <span class="ms-local-badge">LOCAL M1 DATABASE</span>
+  </div>
+  <div class="card ms-source-card">
+    <div class="ms-source-grid">
+      <label>SYMBOL BROKER<select id="msSymbol"><option value="">Đang tìm NQ / NAS100…</option></select><small>Ưu tiên NAS100; tự chọn tên thực tế do broker cTrader cung cấp.</small></label>
+      <label>SESSION<select id="msMode"><option value="RTH">RTH · 09:30–16:00 New York</option><option value="ETH">ETH · 18:00–17:00 New York</option></select><small>ETH dùng khung Globex tham chiếu, có nghỉ 17:00–18:00 ET.</small></label>
+      <label>ĐỘ PHỦ TỐI THIỂU<select id="msCoverage"><option value="0.4">40% · dữ liệu rộng</option><option value="0.5">50%</option><option value="0.55" selected>55% · mặc định</option><option value="0.65">65%</option><option value="0.75">75% · chặt</option><option value="0.85">85%</option></select><small>Phiên thiếu nến được loại khỏi thống kê chính.</small></label>
+      <div class="ms-actions"><button class="btn" id="msLoad" type="button">↓ Tải / tiếp tục lịch sử M1</button><button class="btn ghost" id="msStop" type="button" hidden>Dừng tải</button><button class="btn ghost" id="msExport" type="button">Xuất CSV</button><button class="btn ghost" id="msDelete" type="button">Xóa cache</button></div>
+    </div>
+    <div class="ms-progress"><div class="ms-progress-track"><span id="msProgressBar"></span></div><small id="msProgressText">Chưa có tiến trình tải.</small></div>
+    <div id="msStatus" class="ms-status" data-kind="info">Đang chờ kết nối cTrader…</div>
+    <div class="ms-source-note"><b>Nguồn & phạm vi:</b> dữ liệu M1 lấy trực tiếp từ broker cTrader của bạn và lưu trên thiết bị bằng IndexedDB. Nếu broker cấp NAS100 CFD thì đây là feed CFD của broker, không phải dữ liệu tập trung CME NQ. Volume của CFD có thể là tick-volume; thống kê biến động bên dưới dùng OHLC range, không dựa volume.</div>
+  </div>
+  <div id="msOverview" class="ms-overview"></div>
+  <div id="msForecast" class="card ms-forecast-card"></div>
+  <div id="msWeekday" class="card ms-weekday-card"></div>
+  <div class="card ms-detail-card">
+    <div class="ms-detail-top"><div><div class="ms-eyebrow">DRILL-DOWN · YEAR → MONTH → WEEK → DAY → HOUR → MACRO</div><h3>Phân tích phân cấp</h3><p class="msg">Chọn cấp thống kê và bộ lọc để đi sâu từ biến động dài hạn xuống đúng ngày/giờ giao dịch.</p></div>
+      <label class="ms-level-select">CẤP PHÂN TÍCH<select id="msLevel"><option value="year">Năm</option><option value="month" selected>Tháng</option><option value="week">Tuần</option><option value="day">Ngày</option><option value="hour">Giờ ET</option><option value="macro">ICT Macro · 20 phút</option></select></label>
+    </div>
+    <div id="msDetail"><div class="ms-empty">Kết nối cTrader, chọn mã NAS100/NQ và tải M1 để bắt đầu.</div></div>
+  </div>
+  <div class="ms-method-note"><b>Phương pháp thống kê:</b> Range = High − Low của phiên / khung thời gian. “Mạnh” và “Nhẹ” là phân vị 75% / 25% của mẫu lịch sử tương ứng; ADR20 là trung bình range của tối đa 20 phiên trước đó (không nhìn trước dữ liệu). Body/Range đo độ dịch chuyển đóng cửa so với toàn biên. Forecast là xác suất thực nghiệm theo giờ và volatility regime, co rút mẫu nhỏ về mức nền 25%; không phải tín hiệu chắc chắn. Lịch nghỉ, tin tức và thay đổi hợp đồng/điều kiện broker chưa được tự động điều chỉnh.</div>
+</section>
+
 <section class="view" id="v-elliott">
   <div class="ql-head"><div><div class="ql-eyebrow">INDEPENDENT WORKSPACE · ELLIOTT WAVE</div><h2>Elliott <span>· Wave Detector</span></h2><p class="msg">Tự nhận diện cấu trúc sóng trên chart. Không cần cấu hình ATR, threshold hay degree; hệ thống tự điều chỉnh độ nhạy và chỉ hiển thị nhãn sóng.</p></div><span class="ql-local-badge">AUTO STRUCTURE</span></div>
   <section class="card e-structure-card" id="eStructureLab" aria-label="Elliott Wave Detector">
@@ -462,6 +491,7 @@
 <script src="js/symbols.js"></script>
 <script src="js/timezone.js"></script>
 <script src="js/ctrader.js"></script>
+<script src="js/market-statistics-core.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/price-variation.js"></script>
 <script src="js/candle-style.js"></script>
@@ -470,6 +500,7 @@
 <script src="js/indicators-custom.js"></script>
 <script src="js/indicators-engine.js"></script>
 <script src="js/connection-ui.js"></script>
+<script src="js/market-statistics.js"></script>
 <script src="js/options.js"></script>
 <script src="js/quant-stats.js"></script>
 <script src="js/quant-regression.js"></script>

@@ -133,6 +133,20 @@ Thêm ở mục **Indicator** → **Killzones & Pivots** (nhóm Orderflow). Port
 
 Khác bản Pine: tooltip trên nhãn trên chart được thay bằng tooltip của bảng; không có `alert()` của TradingView nên cảnh báo hiện ở thanh trạng thái kèm tiếng bíp. Khi replay, indicator chỉ thấy dữ liệu tới điểm đang xem. Hộp thoại cài đặt có thêm ô nhập chữ (`t`) và nhiều dòng (`ta`) cho các thông số dạng văn bản.
 
+## ICT 2022 · Full Toolkit
+
+Bộ indicator tổng hợp theo PDF *ICT 2022 Mentorship* tiếng Việt (435 trang, 33 chương), được tích hợp trực tiếp vào **Indicator → Kho indicator → ICT 2022 · Full Toolkit**. Bản v1.3.0 mặc định dùng giao diện **Gọn**: chart ưu tiên PDH/PDL, EQH/EQL gần nhất, tối đa 2 FVG và 1 OB/BB gần giá, cùng 2 sự kiện cấu trúc mới nhất; dashboard rút còn Bias, HTF 4H/1H, cấu trúc, vị trí giá, phiên và Draw on Liquidity. Chọn **Đầy đủ · chuyên sâu** để xem thêm các lớp đã bật.
+
+- **Structure & Liquidity**: HH/HL/LH/LL, STH/STL–ITH/ITL–LTH/LTL, BOS/MSS, displacement, EQH/EQL, BSL/SSL sweep, PDH/PDL, PWH/PWL và các mức mở cửa.
+- **PD Arrays**: FVG/CE, IFVG, BPR, LV, OB/BB, RB, MB* và VI proxy; Dealing Range, Premium/Discount và OTE 62%/70.5%/79%.
+- **Time & Models**: Asia, London, NY AM/PM, London Close, NY Lunch, CBDR, Midnight/08:30 Open, PO3/AMD, Judas Swing, Three Drives và Silver Bullet. Múi giờ `America/New_York` tự xử lý EST/EDT.
+- **Long-term Context**: NDOG/NWOG khi có gap thực, CBDR ±1σ/±2σ, IPDA 20/40/60 ngày giao dịch, Quarter Open và previous-quarter range.
+- **News**: có thể nhập thủ công lịch tin theo giờ New York; ứng dụng không tự kết nối lịch kinh tế.
+
+**Tài liệu kèm theo**: `ICT_2022_INDICATOR_README_VI.md` (hướng dẫn sử dụng) và `ICT_2022_COVERAGE_VI.md` (ma trận đối chiếu từng chương trong PDF). Những phần cần mã thứ hai như SMT, lịch kinh tế, RDRB hoặc cần phán đoán ngữ cảnh được đánh dấu rõ là thiếu dữ liệu / cần xác nhận thủ công; indicator không giả lập order book hay ý định của tổ chức.
+
+Cài đặt ICT có phần **Hiển thị nhanh** và nhóm **Nâng cao** thu gọn; không xóa thuật toán hay dữ liệu phân tích. Các indicator ICT đã lưu tự nhận chế độ Gọn khi nâng cấp. Kiểm thử ICT: `node tests/ict-2022.test.js` và `node tests/ict-2022-render.test.js`; toàn bộ dự án: `bash tests/run-all.sh`.
+
 ## Goldbach Levels (Trifecta)
 
 Thêm ở mục **Indicator** → **Goldbach Levels (Trifecta)** (nhóm Orderflow). Port từ Pine Script "Goldbach Trifecta Style" (MPL-2.0) sang JS cho chart này, vẽ lên canvas cùng lớp với Killzones.
@@ -252,6 +266,16 @@ Open Interest không xác định bên Long/Short hay vị thế dealer. Exposur
 ### Vận hành
 
 WebSocket tự reconnect khi socket đóng bất thường. Các raw stream được mở riêng theo market/public endpoints; module tự đóng socket khi rời trang Options. Trade prints là event-driven; 24h ticker là snapshot thống kê gộp được đẩy khi dữ liệu thay đổi. Dữ liệu phải được kiểm tra live trên trình duyệt người dùng; test mô phỏng payload chỉ xác nhận parser/render logic, không thay thế xác nhận từ Binance.
+
+## Market Statistics · NQ / NAS100 M1 Seasonality & Volatility
+
+Sidebar **Market Stats** downloads M1 history from the user's connected cTrader broker and stores it locally in IndexedDB. The module can resume a stopped download and reuse a completed cache. The user selects the broker symbol and either RTH (09:30–16:00 ET, default; Asia/London excluded) or ETH (Globex-style 18:00–17:00 ET with the 17:00–18:00 maintenance break).
+
+The drill-down covers year, calendar month / month-of-year seasonality, ISO week, day, session-relative hour and the ICT 09:50–10:10 / 10:50–11:10 ET macro windows. It reports High–Low range in symbol points, mean/median/P75, counts and percentages of strong/light observations, ADR20, Body/Range and sample coverage. Full-session seasonality rankings require ≥95% minute coverage when at least ten complete sessions exist; otherwise the user-selected coverage threshold is used with an explicit fallback note. Hour windows require ≥95% of their minutes; ICT macro windows require 19/20 M1 bars.
+
+Forecast is an empirical probability that a future hour/macro window reaches its own historical Q75 range threshold, conditioned on the latest completed-session volatility regime (LOW/NORMAL/HIGH) and shrunk toward a 25% prior for small samples. It does not incorporate event calendars, exchange holidays, contract rolls or news, and is not a price-direction forecast. `NAS100` from a broker is a CFD feed, not automatically CME E-mini Nasdaq-100 futures data.
+
+See `MARKET_STATS_NQ_GUIDE_VI.md` for data scope, definitions, session mapping, assumptions and operating steps. Core test: `node tests/market-statistics.test.js`; included in `bash tests/run-all.sh`.
 
 ## Quant Lab · Statistical Data Explorer (MVP Phase 1)
 
