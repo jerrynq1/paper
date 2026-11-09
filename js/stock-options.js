@@ -202,6 +202,11 @@
     return found;
   }
 
+  // OCC symbol e.g. QQQ261110C00369000 -> strike 369.000
+  function occStrike(sym){
+    const m=String(sym||'').match(/[CP](\d{8})$/i);
+    return m?Number(m[1])/1000:null;
+  }
   function normaliseQuote(q){
     const optionSymbol=q.os??q.optionSymbol??'';
     const rawSide=String(q.t??q.contractType??q.side??'').toLowerCase();
@@ -210,7 +215,7 @@
     const oi=q.oi!==undefined?q.oi:q.openInterest;
     return {
       optionSymbol, name:q.n??q.name??optionSymbol, side,
-      expiration:num(q.e??q.expiration), strike:num(q.sp??q.strikePrice??q.strike), multiplier:num(q.m??q.multiplier),
+      expiration:num(q.e??q.expiration), strike:num(q.sp??q.strikePrice??q.strike)??occStrike(optionSymbol), multiplier:num(q.m??q.multiplier),
       last:num(q.p??q.l??q.lastPrice??q.last), bid:num(q.bp??q.bid), ask:num(q.ap??q.ask), mid:num(q.mp??q.mid),
       volume:num(q.v??q.volume), openInterest:oi===null||oi===undefined?null:num(oi),
       iv:num(q.iv??q.impliedVolatility), delta:num(q.de??q.delta), gamma:num(q.ga??q.gamma), theta:num(q.th??q.theta), vega:num(q.ve??q.vega),
@@ -254,7 +259,7 @@
       if(!item || !(item.os||item.optionSymbol))continue;
       const q=normaliseQuote(item);
       if(s.contractSymbols?.size && !s.contractSymbols.has(q.optionSymbol))continue;
-      const old=s.quotes.get(q.optionSymbol)||{};
+      const old=s.quotes.get(q.optionSymbol)||{...q,openInterest:null,volume:null,iv:null,delta:null,gamma:null,theta:null,vega:null,bid:null,ask:null,mid:null,last:null,multiplier:null,bidSize:null,askSize:null};
       const next={...old,optionSymbol:q.optionSymbol};
       for(const [field,keys] of Object.entries(sourceKeys)){
         if(keys.some(k=>Object.prototype.hasOwnProperty.call(item,k)))next[field]=q[field];
@@ -282,19 +287,19 @@
     let callOI=0,putOI=0,oiKnown=0,oiMissing=0,multiplierMissing=0,callVol=0,putVol=0;
     const per=new Map();let delta=spot!==null?0:null,gamma=spot!==null?0:null,vega=0,theta=0;
     for(const q of rows){
-      if(q.volume!==null){if(q.side==='C')callVol+=q.volume;else putVol+=q.volume;}
-      if(q.openInterest===null){oiMissing++;continue;}
+      if(q.volume!=null){if(q.side==='C')callVol+=q.volume;else putVol+=q.volume;}
+      if(q.openInterest==null){oiMissing++;continue;}
       const oi=q.openInterest, m=q.multiplier, side=q.side;
       oiKnown++;
       if(side==='C')callOI+=oi;else putOI+=oi;
       const p=per.get(strikeKey(q.strike))||{strike:q.strike,gex:0,dex:0,vgex:0,thex:0,callOI:0,putOI:0};
       if(side==='C')p.callOI+=oi;else p.putOI+=oi;
       per.set(strikeKey(q.strike),p);
-      if(m===null||!Number.isFinite(m)||m<=0){multiplierMissing++;continue;}
-      if(spot!==null && q.gamma!==null){const v=q.gamma*oi*m*spot*spot*.01*(side==='P'?-1:1);p.gex+=v;gamma+=v;}
-      if(spot!==null && q.delta!==null){const v=q.delta*oi*m*spot;p.dex+=v;delta+=v;}
-      if(q.vega!==null){const v=q.vega*oi*m;p.vgex+=v;vega+=v;}
-      if(q.theta!==null){const v=q.theta*oi*m;p.thex+=v;theta+=v;}
+      if(m==null||!Number.isFinite(m)||m<=0){multiplierMissing++;continue;}
+      if(spot!==null && q.gamma!=null){const v=q.gamma*oi*m*spot*spot*.01*(side==='P'?-1:1);p.gex+=v;gamma+=v;}
+      if(spot!==null && q.delta!=null){const v=q.delta*oi*m*spot;p.dex+=v;delta+=v;}
+      if(q.vega!=null){const v=q.vega*oi*m;p.vgex+=v;vega+=v;}
+      if(q.theta!=null){const v=q.theta*oi*m;p.thex+=v;theta+=v;}
     }
     const dist=[...per.values()].sort((a,b)=>a.strike-b.strike);
     const calls=dist.filter(x=>x.callOI>0).sort((a,b)=>b.callOI-a.callOI);
@@ -328,8 +333,8 @@
     k.innerHTML=[
       metric(fmt(spot,2),'LAST PRICE',s.cfg.symbol+' · USD'),
       metric(change===null?'—':`${change>=0?'+':''}${fmt(change,2)} (${changePct===null?'—':(changePct*100).toFixed(2)+'%'})`,'CHANGE','So với previous close',change===null?'':change>=0?'pos-t':'neg-t'),
-      metric(compact(c.callOI),'CALL OI',`${c.rows.filter(x=>x.side==='C'&&x.openInterest!==null).length} contracts có OI`),
-      metric(compact(c.putOI),'PUT OI',`${c.rows.filter(x=>x.side==='P'&&x.openInterest!==null).length} contracts có OI`),
+      metric(compact(c.callOI),'CALL OI',`${c.rows.filter(x=>x.side==='C'&&x.openInterest!=null).length} contracts có OI`),
+      metric(compact(c.putOI),'PUT OI',`${c.rows.filter(x=>x.side==='P'&&x.openInterest!=null).length} contracts có OI`),
       metric(compact(c.volume),'TOTAL VOLUME',`Call ${compact(c.callVol)} · Put ${compact(c.putVol)}`),
       metric((c.coverage*100).toFixed(1)+'%','OI COVERAGE',`${c.oiKnown}/${c.totalContracts} contracts có OI`,c.oiMissing?'neg-t':'')
     ].join('');
@@ -382,11 +387,11 @@
   function quoteCell(q,field,format){
     if(!q)return '<td>—</td>';
     const v=q[field];
-    if(field==='openInterest'&&v===null)return '<td title="Binance trả OI = null">—</td>';
-    return `<td>${format?format(v):v===null?'—':esc(v)}</td>`;
+    if(field==='openInterest'&&v==null)return '<td title="Binance trả OI = null">—</td>';
+    return `<td>${v==null?'—':format?format(v):esc(v)}</td>`;
   }
   function quoteSizeCell(q,field){
-    if(!q||q[field]===null)return '<td>—</td>';
+    if(!q||q[field]==null)return '<td>—</td>';
     const size=q[field+'Size'];
     return `<td>${fmt(q[field],2)} <small>× ${size===null?'—':compact(size)}</small></td>`;
   }
