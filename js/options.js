@@ -360,7 +360,7 @@
       metric('PUT / CALL',a.pc==null?'—':fmt(a.pc,3),'OI ratio'),
       metric('MAX PAIN',pain?'$'+fmt(pain.strike,2):'—','OI-weighted expiry estimate')
     ].join('');
-    renderLevels(rows,a);renderExposure(rows,a);renderGreeks(a);renderOIChart(rows);renderThetaChart(rows);renderChain(rows,spot);renderFlow();renderMeta(rows,a);scheduleSurfaceRender();
+    renderLevels(rows,a);renderExposure(rows,a);renderGreeks(a);renderOIChart(rows);renderChain(rows,spot);renderFlow();renderMeta(rows,a);scheduleSurfaceRender();
   }
   const METRIC_INFO={
     gamma:{short:'GEX',title:'Gamma Exposure by Strike',unit:'USDT / 1% XAU move',wall:'Gamma Wall'},
@@ -455,36 +455,39 @@
     });
     el.innerHTML=svgChartFrame(W,H,g);
   }
-  function renderThetaChart(rows){
-    const el=$o('optThetaChart');if(!el)return;
-    const points=rows.filter(r=>r.call?.theta!=null||r.put?.theta!=null);
-    if(!points.length){el.innerHTML='<div class="opt-empty">Đang chờ Mark Greeks từ Binance.</div>';return;}
-    const sign=1,W=Math.max(320,el.clientWidth||560),H=260,ml=48,mr=12,mt=20,mb=32,pw=W-ml-mr,ph=H-mt-mb;
-    const values=points.flatMap(r=>[sign*(r.call?.theta||0)*(r.call?.oi||0),sign*(r.put?.theta||0)*(r.put?.oi||0)]);
-    let wall={abs:0,strike:null,side:'',value:0};
-    points.forEach(r=>[['call','CALL'],['put','PUT']].forEach(([key,side])=>{const value=sign*(r[key]?.theta||0)*(r[key]?.oi||0);if(Math.abs(value)>wall.abs)wall={abs:Math.abs(value),strike:r.strike,side,value};}));
-    const wallEl=$o('optThetaWall');if(wallEl)wallEl.textContent=wall.strike==null?'Max |Theta|: —':`Max |Theta|: $${fmt(wall.strike,2)} · ${wall.side} ${compact(wall.value)}`;
-    let lo=Math.min(0,...values),hi=Math.max(0,...values);if(lo===hi){lo=-1;hi=1;}
-    const pad=(hi-lo)*.08;lo-=pad;hi+=pad;
-    const Y=v=>mt+(hi-v)/(hi-lo)*ph,Y0=Y(0),xStep=pw/Math.max(1,points.length),barW=Math.max(2,Math.min(16,xStep*.34));
-    let g='';
-    for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4,y=Y(v);g+=`<line x1="${ml}" x2="${W-mr}" y1="${y}" y2="${y}" class="opt-svg-grid"/><text x="${ml-7}" y="${y+3}" text-anchor="end">${esc(compact(v))}</text>`;}
-    const stride=Math.max(1,Math.ceil(points.length/9));
-    points.forEach((r,i)=>{
-      const x=ml+(i+.5)*xStep,c=sign*(r.call?.theta||0)*(r.call?.oi||0),p=sign*(r.put?.theta||0)*(r.put?.oi||0);
-      const callWall=wall.strike===r.strike&&wall.side==='CALL',putWall=wall.strike===r.strike&&wall.side==='PUT';
-      g+=`<rect x="${x-barW-1}" y="${Math.min(Y(c),Y0)}" width="${barW}" height="${Math.max(1,Math.abs(Y(c)-Y0))}" rx="2" class="opt-svg-call"${callWall?' stroke="currentColor" stroke-width="1.5"':''}><title>${fmt(r.strike,2)} · Call Theta × OI ${fmt(c,5)}</title></rect>`;
-      g+=`<rect x="${x+1}" y="${Math.min(Y(p),Y0)}" width="${barW}" height="${Math.max(1,Math.abs(Y(p)-Y0))}" rx="2" class="opt-svg-put"${putWall?' stroke="currentColor" stroke-width="1.5"':''}><title>${fmt(r.strike,2)} · Put Theta × OI ${fmt(p,5)}</title></rect>`;
-      if(i%stride===0||i===points.length-1)g+=`<text x="${x}" y="${H-9}" text-anchor="middle">${fmt(r.strike,0)}</text>`;
-    });
-    g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y0}" y2="${Y0}" class="opt-svg-zero"/>`;
-    el.innerHTML=svgChartFrame(W,H,g);
+  /* ---------- 3D surface: axes, labels, statistics ---------- */
+  const SURF={X0:-1.55,X1:1.55,Z0:-1,Z1:1,Y0:-.85,Y1:.85,FLOOR:-.86};
+  const sfmt=v=>v==null||!Number.isFinite(v)?'—':v===0?'0':Math.abs(v)>=1000?compact(v):Math.abs(v)>=1?fmt(v,2):Math.abs(v)>=1e-3?fmt(v,4):v.toExponential(2);
+  const tLabel=t=>{const d=t*365;return d>=1?d.toFixed(2)+'d':(d*24).toFixed(1)+'h'};
+  const kLabel=k=>fmt(k,Number.isInteger(k)?0:2);
+  function niceTicks(lo,hi,count=5){
+    const span=hi-lo;if(!(span>0))return [lo];
+    const raw=span/count,p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p,step=(m<1.5?1:m<3.5?2:m<7.5?5:10)*p,out=[];
+    for(let v=Math.ceil(lo/step-1e-9)*step;v<=hi+step*1e-9;v+=step)out.push(Math.abs(v)<step*1e-9?0:+v.toPrecision(12));
+    return out;
   }
-  // Interactive 3D projections adapted to the data available in Binance's live option stream.
+  function surfaceColor(v,maxAbs){
+    const t=Math.min(1,Math.abs(v)/maxAbs),base=v>=0?[.18,.79,.64]:[.92,.39,.44];
+    return [.10+base[0]*t,.12+base[1]*t,.17+base[2]*t];
+  }
+  // Legend gradient samples the exact same colour function as the mesh, so the scale is never misleading.
+  function surfaceLegend(lo,hi){
+    const maxAbs=Math.max(Math.abs(lo),Math.abs(hi),1e-12),stops=[];
+    for(let i=0;i<=8;i++){const c=surfaceColor(lo+(hi-lo)*i/8,maxAbs).map(x=>Math.round(x*255));stops.push(`rgb(${c[0]},${c[1]},${c[2]}) ${i*12.5}%`);}
+    return `linear-gradient(90deg,${stops.join(',')})`;
+  }
+  function makeLabel(text,{color='#aab4c3',size=26,bold=false,h=.17}={}){
+    const cv=document.createElement('canvas'),ctx=cv.getContext('2d'),font=`${bold?'700':'500'} ${size}px system-ui,-apple-system,Segoe UI,sans-serif`;
+    ctx.font=font;const w=Math.ceil(ctx.measureText(text).width)+14,ht=size+16;cv.width=w;cv.height=ht;
+    ctx.font=font;ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,w/2,ht/2+1);
+    const tex=new THREE.CanvasTexture(cv);tex.minFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false,depthWrite:false}));
+    sp.scale.set(h*w/ht,h,1);sp.renderOrder=10;return sp;
+  }
   function makeSurfaceRenderer(containerId,resetId){
     const root=$o(containerId),reset=$o(resetId);
     if(!root||typeof THREE==='undefined'||!window.WebGLRenderingContext)return null;
-    let renderer,scene,camera,mesh=null,grid=null;
+    let renderer,scene,camera,world=null,groups=[];
     try{
       root.innerHTML='';renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
       renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));renderer.setClearColor(0x101722);
@@ -492,47 +495,141 @@
       scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(42,1,.1,100);
       scene.add(new THREE.AmbientLight(0xffffff,.72));const light=new THREE.DirectionalLight(0xffffff,.72);light.position.set(-2,4,3);scene.add(light);
     }catch(err){root.innerHTML='<div class="opt-empty">Không khởi tạo được WebGL trên trình duyệt này.</div>';return null;}
-    const view={az:.62,el:.55,r:4.8,w:0,h:0,points:new Map(),drag:null,pinch:0};
+    const view={az:.62,el:.55,r:5.6,w:0,h:0,points:new Map(),drag:null,pinch:0};
+    const sgn=v=>v>=0?1:-1;
     const draw=()=>{
       const w=root.clientWidth||480,h=root.clientHeight||300;if(!w||!h)return;
       if(view.w!==w||view.h!==h){view.w=w;view.h=h;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
-      camera.position.set(view.r*Math.sin(view.az)*Math.cos(view.el),view.r*Math.sin(view.el)+.08,view.r*Math.cos(view.az)*Math.cos(view.el));camera.lookAt(0,.05,0);renderer.render(scene,camera);
+      const px=view.r*Math.sin(view.az)*Math.cos(view.el),pz=view.r*Math.cos(view.az)*Math.cos(view.el);
+      camera.position.set(px,view.r*Math.sin(view.el)+.08,pz);camera.lookAt(0,.05,0);
+      // Walls and labels follow the camera: walls sit behind the surface, labels on the near edges.
+      groups.forEach(g=>{g.obj.visible=g.show(sgn(px),sgn(pz));});
+      renderer.render(scene,camera);
     };
-    const clear=()=>{if(mesh){scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();mesh=null;}if(grid){scene.remove(grid);grid.geometry.dispose();grid.material.dispose();grid=null;}};
+    const clear=()=>{
+      if(world){scene.remove(world);world.traverse(o=>{if(o.geometry)o.geometry.dispose();const m=o.material;if(m){if(m.map)m.map.dispose();m.dispose();}});world=null;}
+      groups=[];
+    };
     const set=(D,range)=>{
       clear();if(!D||D.ks.length<2||D.ts.length<2)return;
-      const nx=D.ks.length,nz=D.ts.length,lo=range.lo,hi=range.hi,span=(hi-lo)||1;
-      const pos=new Float32Array(nx*nz*3),colors=new Float32Array(nx*nz*3),indices=[];
-      const maxAbs=Math.max(Math.abs(lo),Math.abs(hi),1e-12);
-      const colorFor=v=>{
-        const t=Math.min(1,Math.abs(v)/maxAbs),base=v>=0?[.18,.79,.64]:[.92,.39,.44];
-        return [.10+base[0]*t,.12+base[1]*t,.17+base[2]*t];
-      };
+      const {X0,X1,Z0,Z1,Y0,Y1,FLOOR}=SURF,nx=D.ks.length,nz=D.ts.length,lo=range.lo,hi=range.hi,span=(hi-lo)||1;
+      const k0=D.ks[0],k1=D.ks[nx-1],kspan=(k1-k0)||1,maxAbs=Math.max(Math.abs(lo),Math.abs(hi),1e-12);
+      const sx=k=>X0+(X1-X0)*(k-k0)/kspan,sz=j=>Z0+(Z1-Z0)*j/(nz-1),sy=v=>Y0+(Y1-Y0)*(v-lo)/span;
+      world=new THREE.Group();scene.add(world);
+      const add=(obj,show)=>{world.add(obj);if(show)groups.push({obj,show});return obj;};
+      const seg=(pts,color,opacity)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));return new THREE.LineSegments(g,new THREE.LineBasicMaterial({color,transparent:true,opacity}));};
+      const text=(s,x,y,z,o,dx=0)=>{const sp=makeLabel(s,o);sp.position.set(x+dx*sp.scale.x/2,y,z);return sp;};
+      // Surface mesh
+      const pos=new Float32Array(nx*nz*3),colors=new Float32Array(nx*nz*3),indices=[];let peak={abs:-1,v:0,i:0,j:0};
       for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){
-        const idx=j*nx+i,v=Number(D.Z[j][i])||0,x=-1.55+3.1*i/(nx-1),z=-1+2*j/(nz-1),y=-.85+1.7*(v-lo)/span,c=colorFor(v);
-        pos.set([x,y,z],idx*3);colors.set(c,idx*3);
+        const idx=j*nx+i,v=Number(D.Z[j][i])||0;
+        pos.set([sx(D.ks[i]),sy(v),sz(j)],idx*3);colors.set(surfaceColor(v,maxAbs),idx*3);
+        if(Math.abs(v)>peak.abs)peak={abs:Math.abs(v),v,i,j};
         if(i<nx-1&&j<nz-1)indices.push(idx,idx+nx,idx+1,idx+1,idx+nx,idx+nx+1);
       }
       const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));geo.setAttribute('color',new THREE.BufferAttribute(colors,3));geo.setIndex(indices);geo.computeVertexNormals();
-      mesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide}));scene.add(mesh);
-      const axisPts=[];for(let i=0;i<=4;i++){const x=-1.55+3.1*i/4,z=-1+2*i/4;axisPts.push(x,-.86,-1,x,-.86,1,-1.55,-.86,z,1.55,-.86,z);}
-      const axisGeo=new THREE.BufferGeometry();axisGeo.setAttribute('position',new THREE.Float32BufferAttribute(axisPts,3));grid=new THREE.LineSegments(axisGeo,new THREE.LineBasicMaterial({color:0x667085,transparent:true,opacity:.42}));scene.add(grid);draw();
+      add(new THREE.Mesh(geo,new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide})));
+      // Ticks
+      const kt=niceTicks(k0,k1,5).filter(k=>k>=k0-1e-9&&k<=k1+1e-9),jt=[0,.25,.5,.75,1].map(f=>Math.round(f*(nz-1))),yt=niceTicks(lo,hi,5);
+      // Floor grid + frame
+      const fp=[];kt.forEach(k=>fp.push(sx(k),FLOOR,Z0,sx(k),FLOOR,Z1));jt.forEach(j=>fp.push(X0,FLOOR,sz(j),X1,FLOOR,sz(j)));
+      fp.push(X0,FLOOR,Z0,X1,FLOOR,Z0,X1,FLOOR,Z0,X1,FLOOR,Z1,X1,FLOOR,Z1,X0,FLOOR,Z1,X0,FLOOR,Z1,X0,FLOOR,Z0);
+      add(seg(fp,0x667085,.45));
+      // Zero plane (only when the surface crosses zero)
+      if(lo<0&&hi>0){
+        const y0=sy(0),plane=new THREE.Mesh(new THREE.PlaneGeometry(X1-X0,Z1-Z0),new THREE.MeshBasicMaterial({color:0x9aa4b5,transparent:true,opacity:.10,side:THREE.DoubleSide,depthWrite:false}));
+        plane.rotation.x=-Math.PI/2;plane.position.set((X0+X1)/2,y0,(Z0+Z1)/2);add(plane);
+        add(seg([X0,y0,Z0,X1,y0,Z0,X1,y0,Z0,X1,y0,Z1,X1,y0,Z1,X0,y0,Z1,X0,y0,Z1,X0,y0,Z0],0xc0c8d6,.55));
+      }
+      // Spot marker
+      const hasSpot=Number.isFinite(D.spot)&&D.spot>=k0&&D.spot<=k1,spotX=hasSpot?sx(D.spot):0;
+      if(hasSpot)add(seg([spotX,FLOOR+.003,Z0,spotX,FLOOR+.003,Z1],0xf5c542,.9));
+      // Back walls with Y gridlines (chosen opposite to the camera)
+      [-1,1].forEach(zs=>{
+        const g=new THREE.Group(),z=zs*Z1,p=[];
+        yt.forEach(v=>p.push(X0,sy(v),z,X1,sy(v),z));kt.forEach(k=>p.push(sx(k),FLOOR,z,sx(k),Y1,z));
+        g.add(seg(p,0x667085,.30));
+        if(hasSpot){g.add(seg([spotX,FLOOR,z,spotX,Y1,z],0xf5c542,.55));g.add(text('SPOT $'+fmt(D.spot,2),spotX,Y1+.12,z,{color:'#f5c542',bold:true,size:24}));}
+        add(g,(cx,cz)=>zs===-cz);
+      });
+      [-1,1].forEach(xs=>{
+        const g=new THREE.Group(),x=xs*X1,p=[];
+        yt.forEach(v=>p.push(x,sy(v),Z0,x,sy(v),Z1));jt.forEach(j=>p.push(x,FLOOR,sz(j),x,Y1,sz(j)));
+        g.add(seg(p,0x667085,.30));add(g,(cx)=>xs===-cx);
+      });
+      // Strike axis labels (near edge)
+      [-1,1].forEach(zs=>{
+        const g=new THREE.Group();
+        kt.forEach(k=>g.add(text(kLabel(k),sx(k),FLOOR-.02,zs*(Z1+.15))));
+        g.add(text('STRIKE (USDT)',(X0+X1)/2,FLOOR-.02,zs*(Z1+.40),{color:'#c9d2e0',bold:true,size:24}));
+        add(g,(cx,cz)=>zs===cz);
+      });
+      // Time axis labels (near edge)
+      [-1,1].forEach(xs=>{
+        const g=new THREE.Group();
+        jt.forEach(j=>g.add(text(j===0?'Now':tLabel(D.ts[j]),xs*(X1+.22),FLOOR-.02,sz(j))));
+        g.add(text('TIME TO EXPIRY',xs*(X1+.62),FLOOR-.02,(Z0+Z1)/2,{color:'#c9d2e0',bold:true,size:24}));
+        add(g,(cx)=>xs===cx);
+      });
+      // Value axis labels (on the vertical edge where the two back walls meet)
+      [-1,1].forEach(xs=>[-1,1].forEach(zs=>{
+        const g=new THREE.Group();
+        yt.forEach(v=>g.add(text(sfmt(v),xs*(X1+.06),sy(v),zs*Z1,{color:v===0?'#e6ebf3':'#aab4c3',bold:v===0},xs)));
+        g.add(text(D.yTitle||'VALUE',xs*(X1+.06),Y1+.26,zs*Z1,{color:'#c9d2e0',bold:true,size:24},xs));
+        add(g,(cx,cz)=>xs===-cx&&zs===-cz);
+      }));
+      // Peak marker
+      const pk=new THREE.Mesh(new THREE.SphereGeometry(.04,14,10),new THREE.MeshBasicMaterial({color:0xffd166}));
+      pk.position.set(sx(D.ks[peak.i]),sy(peak.v),sz(peak.j));add(pk);
+      draw();
     };
-    const resetView=()=>{view.az=.62;view.el=.55;view.r=4.8;draw();};
+    const resetView=()=>{view.az=.62;view.el=.55;view.r=5.6;draw();};
     if(reset)reset.addEventListener('click',resetView);
     root.addEventListener('pointerdown',e=>{root.setPointerCapture?.(e.pointerId);view.points.set(e.pointerId,[e.clientX,e.clientY]);view.drag=[e.clientX,e.clientY,view.az,view.el];view.pinch=view.points.size===2?pointDistance():0;root.classList.add('is-dragging');});
     const pointDistance=()=>{const a=[...view.points.values()];return a.length>1?Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]):0;};
     root.addEventListener('pointermove',e=>{
-      if(!view.points.has(e.pointerId))return;const old=view.points.get(e.pointerId);view.points.set(e.pointerId,[e.clientX,e.clientY]);
+      if(!view.points.has(e.pointerId))return;view.points.set(e.pointerId,[e.clientX,e.clientY]);
       if(view.points.size===1&&view.drag){view.az=view.drag[2]-(e.clientX-view.drag[0])*.008;view.el=Math.max(.08,Math.min(1.48,view.drag[3]+(e.clientY-view.drag[1])*.008));}
-      else if(view.points.size===2){const d=pointDistance();if(view.pinch&&d)view.r=Math.max(1.8,Math.min(9,view.r*view.pinch/d));view.pinch=d;}
+      else if(view.points.size===2){const d=pointDistance();if(view.pinch&&d)view.r=Math.max(2.2,Math.min(10,view.r*view.pinch/d));view.pinch=d;}
       draw();
     });
     const end=e=>{view.points.delete(e.pointerId);if(!view.points.size){view.drag=null;view.pinch=0;root.classList.remove('is-dragging');}};
     root.addEventListener('pointerup',end);root.addEventListener('pointercancel',end);
-    root.addEventListener('wheel',e=>{e.preventDefault();view.r=Math.max(1.8,Math.min(9,view.r*(e.deltaY>0?1.1:.9)));draw();},{passive:false});
+    root.addEventListener('wheel',e=>{e.preventDefault();view.r=Math.max(2.2,Math.min(10,view.r*(e.deltaY>0?1.1:.9)));draw();},{passive:false});
     if(window.ResizeObserver)new ResizeObserver(draw).observe(root);
     return {set,clear,draw,reset:resetView};
+  }
+  // Statistics panel under each surface. j=0 is "now" (full time to expiry), j=last is closest to expiry.
+  function surfaceStats(D,isGreek){
+    const {ks,ts,Z,spot}=D,nx=ks.length,nz=ts.length,last=nz-1,val=(j,i)=>Number(Z[j][i])||0;
+    let peak={abs:-1,v:0,i:0,j:0},sum=0;
+    for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const v=val(j,i);sum+=v;if(Math.abs(v)>peak.abs)peak={abs:Math.abs(v),v,i,j};}
+    const near=ks.reduce((b,k,i)=>Math.abs(k-spot)<Math.abs(ks[b]-spot)?i:b,0);
+    const net=j=>{let s=0;for(let i=0;i<nx;i++)s+=val(j,i);return s;};
+    const pct=(a,b)=>Math.abs(a)>1e-12?(b-a)/Math.abs(a)*100:null,pctTxt=p=>p==null?'—':(p>=0?'+':'')+fmt(p,1)+'%';
+    const cls=v=>v>0?'pos':v<0?'neg':'';
+    const tile=(l,v,s,c='')=>`<div class="opt-stat ${c}"><span>${l}</span><b>${v}</b><small>${s||''}</small></div>`;
+    const peakTile=tile('PEAK |VALUE|',sfmt(peak.v),`$${fmt(ks[peak.i],2)} · τ ${tLabel(ts[peak.j])}`,cls(peak.v));
+    if(isGreek){
+      const a0=val(0,near),a1=val(last,near);
+      return [peakTile,
+        tile('AT SPOT · NOW',sfmt(a0),`Strike $${fmt(ks[near],2)} · τ ${tLabel(ts[0])}`,cls(a0)),
+        tile('AT SPOT · NEAR EXPIRY',sfmt(a1),`Strike $${fmt(ks[near],2)} · τ ${tLabel(ts[last])}`,cls(a1)),
+        tile('Δ AT SPOT',pctTxt(pct(a0,a1)),'now → near expiry'),
+        tile('MEAN',sfmt(sum/(nx*nz)),'Toàn surface'),
+        tile('GRID',`${nx} × ${nz}`,'strikes × time steps')].join('');
+    }
+    const n0=net(0),n1=net(last);
+    const flipTile=(label,j)=>{
+      const f=gammaFlip(ks.map((k,i)=>({strike:k,value:val(j,i)})));
+      return tile(label,f==null?'—':'$'+fmt(f,2),f==null?'Cumulative không đổi dấu':`Spot ${spot>=f?'trên':'dưới'} flip ${fmt(Math.abs(spot-f),2)}`,f==null?'':'accent');
+    };
+    return [peakTile,
+      tile('NET · NOW',sfmt(n0),`τ ${tLabel(ts[0])}`,cls(n0)),
+      tile('NET · NEAR EXPIRY',sfmt(n1),`τ ${tLabel(ts[last])}`,cls(n1)),
+      tile('Δ NET',pctTxt(pct(n0,n1)),'now → near expiry'),
+      flipTile('CUM. FLIP · NOW',0),flipTile('CUM. FLIP · NEAR EXPIRY',last),
+      tile('SPOT',`$${fmt(spot,2)}`,`${nx} strikes × ${nz} steps`)].join('');
   }
   const median=a=>{const b=a.filter(Number.isFinite).sort((x,y)=>x-y);return b.length?b[Math.floor(b.length/2)]:1;};
   function selectedOptionRecords(){
@@ -580,7 +677,8 @@
     let lo=Infinity,hi=-Infinity;Z.forEach(row=>row.forEach(v=>{lo=Math.min(lo,v);hi=Math.max(hi,v);}));
     if(!Number.isFinite(lo)||!Number.isFinite(hi))return null;
     if(lo===hi){const e=Math.abs(lo)*.1||1;lo-=e;hi+=e;}
-    return {ks:allStrikes,ts,Z,lo,hi,spot,T,rate,q,records};
+    const info=METRIC_INFO[metric],yTitle=isGreek?`${metric.toUpperCase()} · ${side==='C'?'Call':'Put'} / contract`:(info?`${info.short} · ${info.unit}`:metric.toUpperCase());
+    return {ks:allStrikes,ts,Z,lo,hi,spot,T,rate,q,records,yTitle};
   }
   function drawSurface(which){
     const isGreek=which==='greek',metric=isGreek?state.greekMetric:state.surfaceMetric,side=state.greekSide;
@@ -591,8 +689,11 @@
     if(!state.surfaceRenderers[rendererKey])state.surfaceRenderers[rendererKey]=makeSurfaceRenderer(id,isGreek?'optGreekReset':'optSurfaceReset');
     const renderer=state.surfaceRenderers[rendererKey];if(!renderer)return;
     const D=buildSurfaceData(metric,isGreek,side);
-    if(!D){renderer.clear();const minEl=$o(isGreek?'optGreekSurfaceMin':'optSurfaceMin'),maxEl=$o(isGreek?'optGreekSurfaceMax':'optSurfaceMax');if(minEl)minEl.textContent='—';if(maxEl)maxEl.textContent='—';if(note)note.textContent='Cần ít nhất hai strike có Mark IV và Spot hợp lệ để dựng surface.';return;}
+    if(!D){renderer.clear();const minEl=$o(isGreek?'optGreekSurfaceMin':'optSurfaceMin'),maxEl=$o(isGreek?'optGreekSurfaceMax':'optSurfaceMax');if(minEl)minEl.textContent='—';if(maxEl)maxEl.textContent='—';const sEl0=$o(isGreek?'optGreekSurfaceStats':'optSurfaceStats');if(sEl0)sEl0.innerHTML='';if(note)note.textContent='Cần ít nhất hai strike có Mark IV và Spot hợp lệ để dựng surface.';return;}
     renderer.set(D,{lo:D.lo,hi:D.hi});
+    const gradEl=$o(isGreek?'optGreekSurfaceGrad':'optSurfaceGrad'),statsEl=$o(isGreek?'optGreekSurfaceStats':'optSurfaceStats');
+    if(gradEl)gradEl.style.background=surfaceLegend(D.lo,D.hi);
+    if(statsEl)statsEl.innerHTML=surfaceStats(D,isGreek);
     const dd=t=>`${Math.max(0,t*365).toFixed(2)} ngày`,minEl=$o(isGreek?'optGreekSurfaceMin':'optSurfaceMin'),maxEl=$o(isGreek?'optGreekSurfaceMax':'optSurfaceMax');
     if(minEl)minEl.textContent=fmt(D.lo,4);if(maxEl)maxEl.textContent=fmt(D.hi,4);
     if(note){
@@ -710,7 +811,7 @@
     const copy=$o('optCopyLevels');if(copy)copy.addEventListener('click',copyLevels);
     ['optModelSpot','optModelDte','optModelRate','optModelYield'].forEach(id=>{const el=$o(id);if(el){el.addEventListener('input',()=>scheduleSurfaceRender());el.addEventListener('change',()=>scheduleSurfaceRender());}});
     const modelReset=$o('optModelReset');if(modelReset)modelReset.addEventListener('click',resetSurfaceParams);
-    window.addEventListener?.('resize',()=>{if(state.active){const rows=makeRows();renderOIChart(rows);renderThetaChart(rows);Object.values(state.surfaceRenderers).forEach(r=>r?.draw?.())}});
+    window.addEventListener?.('resize',()=>{if(state.active){const rows=makeRows();renderOIChart(rows);Object.values(state.surfaceRenderers).forEach(r=>r?.draw?.())}});
     clearError();
   }
   window.optionsSetActive=activate;window.optionsRefresh=refresh;window.optionsDebug=debug;

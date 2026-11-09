@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Unbounded:wght@800&family=Sora:wght@500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/options.css">
+<link rel="stylesheet" href="css/stock-options.css">
 <link rel="stylesheet" href="css/elliott-structure.css">
 <link rel="stylesheet" href="css/market-statistics.css">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
@@ -392,10 +393,6 @@
       <div class="opt-card-title"><h3>Open Interest by Strike</h3><small class="opt-chart-meta"><span class="opt-legend-item"><i class="opt-legend-call"></i>Call</span><span class="opt-legend-item"><i class="opt-legend-put"></i>Put</span><b id="optOIWall">OI Wall: —</b></small></div>
       <div id="optOIChart" class="opt-aux-chart"><div class="opt-empty">Đang chờ OI…</div></div>
     </div>
-    <div class="card">
-      <div class="opt-card-title"><h3>Theta by Strike</h3><small class="opt-chart-meta"><span class="opt-legend-item"><i class="opt-legend-call"></i>Call</span><span class="opt-legend-item"><i class="opt-legend-put"></i>Put</span><b id="optThetaWall">Max |Theta|: —</b></small></div>
-      <div id="optThetaChart" class="opt-aux-chart"><div class="opt-empty">Đang chờ Greeks…</div></div>
-    </div>
   </div>
   <div class="card opt-scenario-card">
     <div class="opt-card-title"><div><h3>Surface Scenario Parameters</h3><small>Điều chỉnh giả định cho hai mô hình 3D; không thay đổi dữ liệu Greeks/OI realtime bên trên</small></div><button class="btn ghost sm" id="optModelReset" type="button">Auto / Reset</button></div>
@@ -410,15 +407,15 @@
     <div class="card opt-surface-card">
       <div class="opt-card-title"><div><h3>Exposure Surface</h3><small>Strike × Time to Expiry × Net Exposure</small></div><div class="opt-surface-actions"><select id="optSurfaceMetric" aria-label="Exposure surface metric"><option value="gamma">GEX</option><option value="delta">DEX</option><option value="vanna">VEX</option><option value="vega">VGEX</option><option value="charm">CHEX</option><option value="theta">THEX</option></select><button class="btn ghost sm" id="optSurfaceReset" type="button">Reset view</button></div></div>
       <div id="optSurface" class="opt-surface-view"><div class="opt-empty">Đang dựng Exposure Surface…</div></div>
-      <div class="opt-surface-foot"><span>Strike</span><span>Time to expiry</span><span>Exposure</span></div>
-      <div class="opt-surface-range"><span id="optSurfaceMin">—</span><i class="opt-surface-gradient"></i><span id="optSurfaceMax">—</span></div>
+      <div class="opt-surface-range"><span id="optSurfaceMin">—</span><i class="opt-surface-gradient" id="optSurfaceGrad"></i><span id="optSurfaceMax">—</span></div>
+      <div id="optSurfaceStats" class="opt-surface-stats"></div>
       <p id="optSurfaceNote" class="opt-surface-note">OI và Mark IV được giữ cố định; Greeks được chiếu theo mô hình Black-Scholes.</p>
     </div>
     <div class="card opt-surface-card">
       <div class="opt-card-title"><div><h3>Greek Surface</h3><small>Greek theo từng hợp đồng · không nhân OI</small></div><div class="opt-surface-actions"><select id="optGreekMetric" aria-label="Greek surface metric"><option value="delta">Delta</option><option value="gamma">Gamma</option><option value="vega">Vega</option><option value="theta">Theta</option><option value="vanna">Vanna</option><option value="charm">Charm</option></select><select id="optGreekSide" aria-label="Option side"><option value="C">Call</option><option value="P">Put</option></select><button class="btn ghost sm" id="optGreekReset" type="button">Reset view</button></div></div>
       <div id="optGreekSurface" class="opt-surface-view"><div class="opt-empty">Đang dựng Greek Surface…</div></div>
-      <div class="opt-surface-foot"><span>Strike</span><span>Time to expiry</span><span>Greek value</span></div>
-      <div class="opt-surface-range"><span id="optGreekSurfaceMin">—</span><i class="opt-surface-gradient"></i><span id="optGreekSurfaceMax">—</span></div>
+      <div class="opt-surface-range"><span id="optGreekSurfaceMin">—</span><i class="opt-surface-gradient" id="optGreekSurfaceGrad"></i><span id="optGreekSurfaceMax">—</span></div>
+      <div id="optGreekSurfaceStats" class="opt-surface-stats"></div>
       <p id="optGreekSurfaceNote" class="opt-surface-note">Giữ IV tại Mark IV hiện tại; Greeks là phép chiếu mô hình, không phải dự báo giá.</p>
     </div>
   </div>
@@ -442,15 +439,18 @@
     <div id="optMethod" class="opt-method" hidden>
       <p><strong>Nguồn Greeks:</strong> Binance Options WebSocket <code>xauusdt@optionMarkPrice</code> phát Mark Price, Index Price, IV, Delta, Gamma, Vega và Theta. Không có Rho trong stream này nên không tự bịa hoặc ước lượng Rho.</p>
       <p><strong>Exposure:</strong> DEX / Delta Notional = Σ(Delta × OI × Contract Unit × XAU Index). GEX cho biến động 1% = Σ(Gamma × OI × Contract Unit × XAU Index² × 0.01). VGEX và THEX cộng Vega/Theta Binance native × OI; VEX và CHEX dùng Vanna/Charm ước lượng × OI. Các đơn vị không được chuẩn hoá thành USD khi Binance không định nghĩa rõ scaling.</p>
-      <p><strong>Key Levels / Strike charts:</strong> Call Wall và Put Wall là strike có trị tuyệt đối Call GEX hoặc Put GEX lớn nhất theo OI; đây là mức tập trung exposure theo quy ước chuẩn (Call GEX dương, Put GEX âm), không phải vị thế dealer đã xác minh. Gamma Flip tìm điểm cumulative GEX đổi dấu khi cộng dồn theo strike; nếu toàn bộ exposure cùng dấu thì không có Gamma Flip. OI Wall là strike/side có số hợp đồng OI lớn nhất. OI by Strike so sánh Call/Put contracts; Theta by Strike hiển thị Theta × OI và Max |Theta|.</p>
+      <p><strong>Key Levels / Strike charts:</strong> Call Wall và Put Wall là strike có trị tuyệt đối Call GEX hoặc Put GEX lớn nhất theo OI; đây là mức tập trung exposure theo quy ước chuẩn (Call GEX dương, Put GEX âm), không phải vị thế dealer đã xác minh. Gamma Flip tìm điểm cumulative GEX đổi dấu khi cộng dồn theo strike; nếu toàn bộ exposure cùng dấu thì không có Gamma Flip. OI Wall là strike/side có số hợp đồng OI lớn nhất. OI by Strike so sánh Call/Put contracts.</p>
       <p><strong>Vanna / Charm:</strong> Binance stream Mark Price hiện cung cấp Delta, Gamma, Vega và Theta, không phát Vanna/Charm. Hai giá trị này được tính ước lượng từ công thức Black-Scholes với Mark IV, Index Price, risk-free rate nếu feed có (fallback 4%) và thời gian đến expiry ước tính theo ngày lịch. Vì vậy VEX/CHEX được gắn nhãn model estimate.</p>
-      <p><strong>Surface:</strong> Exposure Surface và Greek Surface chiếu Greeks theo strike × thời gian còn lại đến expiry bằng Black-Scholes-style model; OI và Mark IV được giữ cố định. Có thể thay đổi Spot (S), DTE, risk-free rate (r) và yield (q) trong Surface Scenario Parameters; nút Auto / Reset quay về Spot/expiry/rate live và q = 0. Delta/Gamma/Vega/Theta được hiệu chỉnh theo Greeks Binance ở điều kiện live trước khi chiếu sang kịch bản; Vanna/Charm không có giá trị chuẩn từ stream để hiệu chỉnh. Thời điểm settlement chính xác không được phát trong Mark Price payload nên DTE tự động là xấp xỉ theo ngày expiry. Surface là scenario visualization, không phải dự báo và không phải dữ liệu dealer positioning.</p>
+      <p><strong>Surface:</strong> Exposure Surface và Greek Surface chiếu Greeks theo strike × thời gian còn lại đến expiry bằng Black-Scholes-style model; OI và Mark IV được giữ cố định. Có thể thay đổi Spot (S), DTE, risk-free rate (r) và yield (q) trong Surface Scenario Parameters; nút Auto / Reset quay về Spot/expiry/rate live và q = 0. Delta/Gamma/Vega/Theta được hiệu chỉnh theo Greeks Binance ở điều kiện live trước khi chiếu sang kịch bản; Vanna/Charm không có giá trị chuẩn từ stream để hiệu chỉnh. Thời điểm settlement chính xác không được phát trong Mark Price payload nên DTE tự động là xấp xỉ theo ngày expiry. Trục Strike/Time/Value có tick và nhãn trực tiếp trên 3D; mặt phẳng xám mờ là mức 0, vạch vàng là Spot, chấm vàng là điểm có |giá trị| lớn nhất. Dưới mỗi surface có bảng thống kê (Peak, Net now/near expiry, Cumulative Flip, ...). Surface là scenario visualization, không phải dự báo và không phải dữ liệu dealer positioning.</p>
       <p><strong>Giới hạn quan trọng:</strong> Open Interest cho biết số hợp đồng đang mở, không cho biết tài khoản/nhóm nào đang Long hay Short. Vì vậy Gamma Exposure được tính theo quy ước chuẩn của thị trường (Call +, Put −), còn Delta/Vega/Theta/Vanna/Charm giữ dấu gốc của Greek × OI; đây không phải dữ liệu dealer positioning thực tế. Gamma theo strike là mô hình có điều kiện, không phải GEX chính thức của toàn thị trường.</p>
       <p><strong>Nguồn dữ liệu:</strong> <code>@optionMarkPrice</code> cập nhật Greeks/IV/mark; <code>!index@arr</code> cập nhật Index Price; <code>@optionOpenInterest@YYMMDD</code> được mở đồng thời cho mọi kỳ hạn hiện có (mỗi 60 giây); <code>@optionTicker@YYMMDD</code> bổ sung thống kê khối lượng/giao dịch 24 giờ; <code>@optionTrade</code> đẩy từng giao dịch mới. Ticker 24h là thống kê gộp, không phải tape giao dịch. Nếu stream chưa phát dữ liệu, phần tương ứng sẽ hiển thị trạng thái chờ thay vì tự tạo số.</p>
       <p><strong>Thị trường:</strong> XAU Commodity Options là hợp đồng European-style, thanh toán USDT, Contract Unit/Multiplier = 1; retail chỉ được mở vị thế mua quyền chọn. Dashboard không quan sát được vị thế Long/Short thực tế của từng bên.</p>
     </div>
   </div>
 </section>
+
+<section class="view stock-options-view" id="v-qqqOptions" aria-label="QQQ Stock Options"></section>
+<section class="view stock-options-view" id="v-gldOptions" aria-label="GLD Stock Options"></section>
 
 <section class="view" id="v-ind">
   <div class="card dtt-settings" id="dttSettings" style="margin-bottom:14px"></div>
@@ -501,6 +501,8 @@
 <script src="js/connection-ui.js"></script>
 <script src="js/market-statistics.js"></script>
 <script src="js/options.js"></script>
+<script src="js/stock-options-config.js"></script>
+<script src="js/stock-options.js"></script>
 <script src="js/quant-stats.js"></script>
 <script src="js/quant-regression.js"></script>
 <script src="js/quant-timeseries.js"></script>

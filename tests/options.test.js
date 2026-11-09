@@ -1,6 +1,6 @@
 /* Binance XAU Options: direct browser WebSocket streams, normalization and dashboard tests. */
 const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
-const ids=['v-options','optExpiry','optStatus','optMetrics','optExposure','optGreeks','optChainBody','optMeta','optErrors','optRefresh','optExplain','optMethod','optExposureMetric','optExposureTitle','optExposureUnits','optFlowBody','optLevels','optCopyLevels','optOIChart','optOIWall','optThetaChart','optThetaWall','optModelReset','optModelSpot','optModelDte','optModelRate','optModelYield','optSurfaceMin','optSurfaceMax','optGreekSurfaceMin','optGreekSurfaceMax','optSurface','optSurfaceNote','optSurfaceMetric','optSurfaceReset','optGreekSurface','optGreekSurfaceNote','optGreekMetric','optGreekSide','optGreekReset'];
+const ids=['v-options','optExpiry','optStatus','optMetrics','optExposure','optGreeks','optChainBody','optMeta','optErrors','optRefresh','optExplain','optMethod','optExposureMetric','optExposureTitle','optExposureUnits','optFlowBody','optLevels','optCopyLevels','optOIChart','optOIWall','optModelReset','optModelSpot','optModelDte','optModelRate','optModelYield','optSurfaceMin','optSurfaceMax','optGreekSurfaceMin','optGreekSurfaceMax','optSurface','optSurfaceNote','optSurfaceMetric','optSurfaceReset','optGreekSurface','optGreekSurfaceNote','optGreekMetric','optGreekSide','optGreekReset'];
 const els=Object.fromEntries(ids.map(id=>[id,{id,innerHTML:'',textContent:'',className:'',value:'',hidden:false,disabled:false,handlers:{},addEventListener(k,fn){this.handlers[k]=fn}}]));
 const fakeTimers=new Map();let timerId=0;
 function setTimeoutFake(fn,ms){const id=++timerId;fakeTimers.set(id,{fn,ms});return id}
@@ -61,14 +61,13 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','options.js'),'utf
   assert(els.optChainBody.innerHTML.includes('1.200')&&els.optChainBody.innerHTML.includes('-0.500'));
   assert(els.optExposure.innerHTML.includes('opt-gex-row'));
   assert(els.optLevels.innerHTML.includes('GAMMA FLIP')&&els.optLevels.innerHTML.includes('OI WALL'),'key levels render');
-  assert(els.optOIChart.innerHTML.includes('<svg')&&els.optThetaChart.innerHTML.includes('<svg'),'OI and Theta strike charts render');
+  assert(els.optOIChart.innerHTML.includes('<svg'),'OI strike chart renders');
   assert(els.optGreeks.innerHTML.includes('Gamma Exposure')&&els.optGreeks.innerHTML.includes('Vega')&&els.optGreeks.innerHTML.includes('Theta'));
   assert(els.optMetrics.innerHTML.includes('XAU INDEX')&&els.optMetrics.innerHTML.includes('PUT / CALL'));
   assert(els.optStatus.textContent.includes('Live'));
   assert(els.optFlowBody.innerHTML.includes('BUY'));
   assert(els.optFlowBody.innerHTML.includes('24H CONTRACT ACTIVITY'));
   assert(els.optOIWall.textContent.includes('OI Wall:'));
-  assert(els.optThetaWall.textContent.includes('Max |Theta|:'));
   assert(context.window.optionsDebug().surfaceScenario.S===4000,'surface scenario defaults to live spot');
   els.optModelSpot.value='4100';els.optModelDte.value='7';els.optModelRate.value='5';els.optModelYield.value='1';els.optModelSpot.handlers.input();
   const scenario=context.window.optionsDebug().surfaceScenario;
@@ -92,7 +91,7 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','options.js'),'utf
   assert.strictEqual(els.optExposureTitle.textContent,'Vanna Exposure by Strike');
   assert(els.optLevels.innerHTML.includes('NET VEX'),'net level follows Vanna exposure');
   console.log('ok  GEX / DEX / VEX / VGEX / CHEX / THEX exposure selector');
-  console.log('ok  Key levels, Open Interest by Strike and Theta by Strike render');
+  console.log('ok  Key levels and Open Interest by Strike render');
 
   context.window.optionsSetActive(false);
   assert(FakeWebSocket.instances.every(ws=>ws.readyState===3),'leaving Options closes all stream sockets');
