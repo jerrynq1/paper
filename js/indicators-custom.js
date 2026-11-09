@@ -198,6 +198,36 @@ IND.kz={
   lab:()=>"",f:()=>[]
 };
 
+/* ===== CRT - Candle Range Theory (HTF + PD Array): 4 model CRT, vùng CRT H/L, PD Array (OID, RB, FVG, OB, BB), nến HTF bên phải, bảng thông tin =====
+   Port từ Pine Script "CRT - Candle Range Theory (HTF + PD Array)". Kiểu "of": phần tính + vẽ nằm ở js/crt.js. Màu: Bullish, Bearish, Vùng Range, RB, FVG, OB, BB. */
+const CRT_TFO=[["1800","30m"],["3600","1H"],["7200","2H"],["14400","4H"],["21600","6H"],["28800","8H"],["43200","12H"],["86400","1D"],["604800","1W"]];
+IND.crt={
+  n:"CRT (Candle Range Theory)",t:"of",ver:1,
+  d:"Candle Range Theory trên khung HTF: nến sweep (đã đóng) quét High/Low của nến Range rồi đóng cửa trở lại trong range. 4 model: 2nd Candle, 3rd Candle, Multiple Candle, Inside Bar. Vẽ vùng CRT H / mid / L kéo sang phải, PD Array trong nến sweep (OID, Rejection Block, FVG, Order Block, Breaker Block), nến HTF ở mép phải chart và bảng thông tin. Chỉ dùng nến HTF đã đóng nên không repaint. Khung HTF phải lớn hơn khung chart.",
+  p:[["htf","Khung CRT (HTF)","14400","s",{g:"CRT",mn:1,o:CRT_TFO,tt:"Phải lớn hơn khung chart đang xem (ví dụ chart 15m, HTF 4H)."}],
+     ["m1","Model 1: 2nd Candle CRT",true,"b"],["m2","Model 2: 3rd Candle CRT",true,"b"],["m3","Model 3: Multiple Candle CRT",true,"b"],["m4","Model 4: Inside Bar CRT",true,"b"],
+     ["maxK","Số nến HTF tối đa (từ nến Range đến nến Sweep)",8,"i",{min:3,max:15}],
+     ["extN","Kéo dài vùng sang phải (số nến HTF)",2,"i",{min:1,max:20}],
+     ["onlyLast","Chỉ hiển thị CRT gần nhất",true,"b"],
+     ["maxn","Số CRT tối đa khi hiện lịch sử",5,"i",{min:1,max:30,on:p=>!p.onlyLast}],
+     ["maxScan","Số nến chart tối đa để quét PD Array",300,"i",{min:20,max:900}],
+     ["alrt","Báo khi có CRT mới",true,"b",{tt:"Hiện thông báo trên thanh trạng thái và phát tiếng bíp khi nến HTF vừa đóng tạo thành CRT. Không báo khi mở chart/đổi mã/đổi HTF, và không báo trong Replay."}],
+     ["showFVG","Fair Value Gap (FVG)",true,"b",{g:"PD Array"}],["showOB","Order Block (OB)",true,"b"],["showBB","Breaker Block (BB)",true,"b"],["showRB","Rejection Block (RB)",true,"b"],
+     ["showOHL","Old High/Low (OID): đỉnh/đáy bị quét",true,"b"],
+     ["maxFVG","Số FVG tối đa",2,"i",{min:1,max:5,on:p=>p.showFVG}],
+     ["showHTF","Hiện nến HTF bên phải",true,"b",{g:"Nến HTF bên phải"}],
+     ["nHTF","Số nến HTF",5,"i",{min:1,max:6,on:p=>p.showHTF}],
+     ["dock","Gắn vào mép phải chart",true,"b",{on:p=>p.showHTF,tt:"Bật: nến HTF luôn nằm sát mép phải vùng vẽ, không cần chừa khoảng trống bên phải chart. Tắt: đặt theo số nến tính từ nến cuối như bản Pine (cần kéo chart sang trái để chừa chỗ)."}],
+     ["htfOff","Khoảng cách tới nến cuối (nến)",10,"i",{min:2,max:100,on:p=>p.showHTF&&!p.dock}],
+     ["cW","Độ rộng thân nến",3,"i",{min:1,max:9,on:p=>p.showHTF}],
+     ["cGap","Khoảng cách giữa các nến",6,"i",{min:2,max:15,on:p=>p.showHTF}],
+     ["tbl","Hiện bảng thông tin",true,"b",{g:"Bảng"}],
+     ["tpos","Vị trí bảng","tr","s",{o:[["tr","Trên phải"],["tl","Trên trái"],["br","Dưới phải"],["bl","Dưới trái"]],on:p=>p.tbl}]],
+  c:["#089981","#f23645","#787b86","#ff9800","#2962ff","#9c27b0","#14b8a6"],
+  L:["Bullish","Bearish","Vùng CRT Range","Rejection Block (RB)","FVG","Order Block (OB)","Breaker Block (BB)"],
+  lab:p=>CRT_TFO.find(x=>x[0]===String(p.htf))?.[1]||"",f:()=>[]
+};
+
 /* ===== Goldbach Levels (Trifecta): PO3 dealing range với các level [03]..[97], nhiều range, fractal, mini map, PO3 tự chọn theo khung giờ =====
    Port từ Pine Script "Goldbach Trifecta Style" (MPL-2.0). Kiểu "of": phần tính + vẽ nằm ở js/goldbach.js. Màu: HL, Liquidity, GIP, Flow, Rebalance, Fractal, Level giữa. */
 const GBO=["3","9","27","81","243","729","2187","6561","19683","59049","177147","531441"],GBS=GBO.map(v=>[v,v]),GBL=["Tiny","Small","Normal","Large"];
