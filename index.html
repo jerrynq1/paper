@@ -297,11 +297,11 @@
       <label>SYMBOL BROKER<select id="msSymbol"><option value="">Đang tìm NQ / NAS100…</option></select><small>Ưu tiên NAS100; tự chọn tên thực tế do broker cTrader cung cấp.</small></label>
       <label>SESSION<select id="msMode"><option value="RTH">RTH · 09:30–16:00 New York</option><option value="ETH">ETH · 18:00–17:00 New York</option></select><small>ETH dùng khung Globex tham chiếu, có nghỉ 17:00–18:00 ET.</small></label>
       <label>ĐỘ PHỦ TỐI THIỂU<select id="msCoverage"><option value="0.4">40% · dữ liệu rộng</option><option value="0.5">50%</option><option value="0.55" selected>55% · mặc định</option><option value="0.65">65%</option><option value="0.75">75% · chặt</option><option value="0.85">85%</option></select><small>Phiên thiếu nến được loại khỏi thống kê chính.</small></label>
-      <div class="ms-actions"><button class="btn" id="msLoad" type="button">↓ Tải / tiếp tục lịch sử M1</button><button class="btn ghost" id="msStop" type="button" hidden>Dừng tải</button><button class="btn ghost" id="msExport" type="button">Xuất CSV</button><button class="btn ghost" id="msDelete" type="button">Xóa cache</button></div>
+      <div class="ms-actions"><button class="btn" id="msLoad" type="button">↓ Tải / tiếp tục lịch sử M1</button><button class="btn ghost" id="msUseChart" type="button">↙ Nhập M1 đang có trên Chart</button><button class="btn ghost" id="msStop" type="button" hidden>Dừng tải</button><button class="btn ghost" id="msExport" type="button">Xuất CSV</button><button class="btn ghost" id="msDelete" type="button">Xóa cache</button></div>
     </div>
     <div class="ms-progress"><div class="ms-progress-track"><span id="msProgressBar"></span></div><small id="msProgressText">Chưa có tiến trình tải.</small></div>
     <div id="msStatus" class="ms-status" data-kind="info">Đang chờ kết nối cTrader…</div>
-    <div class="ms-source-note"><b>Nguồn & phạm vi:</b> dữ liệu M1 lấy trực tiếp từ broker cTrader của bạn và lưu trên thiết bị bằng IndexedDB. Nếu broker cấp NAS100 CFD thì đây là feed CFD của broker, không phải dữ liệu tập trung CME NQ. Volume của CFD có thể là tick-volume; thống kê biến động bên dưới dùng OHLC range, không dựa volume.</div>
+    <div class="ms-source-note"><b>Nguồn & phạm vi:</b> ưu tiên nhập các nến M1 OHLC đã tải sẵn trên Chart (cùng symbol), sau đó mới tải tiếp lịch sử cũ hơn từ cTrader. Dữ liệu được lưu trên thiết bị bằng IndexedDB. Nếu broker cấp NAS100 CFD thì đây là feed CFD của broker, không phải dữ liệu tập trung CME NQ. <b>Chỉ dùng timestamp + Open / High / Low / Close; không đọc, không tính và không cần Volume.</b></div>
   </div>
   <div id="msOverview" class="ms-overview"></div>
   <div id="msForecast" class="card ms-forecast-card"></div>
