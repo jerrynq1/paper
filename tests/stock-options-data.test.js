@@ -84,3 +84,22 @@ test('exposure uses the actual multiplier supplied by Binance', () => {
   assert.equal(result.theta, -0.3 * 10 * 50);
   assert.equal(result.multiplierMissing, 0);
 });
+
+
+test('option volume by strike survives missing OI and is kept separate from OI exposure', () => {
+  const session = {
+    price: 100, contracts: [{ os: 'QQQ261110C00100000' }, { os: 'QQQ261110P00100000' }],
+    quotes: new Map([
+      ['c', { optionSymbol:'c', side:'C', strike:100, multiplier:100, openInterest:null, volume:12, gamma:0.1, delta:0.5, vega:0.2, theta:-0.3 }],
+      ['p', { optionSymbol:'p', side:'P', strike:100, multiplier:100, openInterest:5, volume:8, gamma:0.1, delta:-0.5, vega:0.2, theta:-0.3 }]
+    ])
+  };
+  const result = helpers.calc(session);
+  assert.equal(result.dist.length, 1);
+  assert.equal(result.dist[0].callVol, 12);
+  assert.equal(result.dist[0].putVol, 8);
+  assert.equal(result.dist[0].callOI, 0);
+  assert.equal(result.dist[0].putOI, 5);
+  assert.equal(result.volume, 20);
+  assert.equal(result.oiKnown, 1);
+});

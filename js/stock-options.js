@@ -136,7 +136,7 @@
         expiry:null, expirations:[], contracts:[], contractSymbols:new Set(), quotes:new Map(), price:null, previousClose:null,
         phase:'—', priceTime:0, interval:'5m', chart:null, candleSeries:null, volumeSeries:null,
         lastCandle:null, candlesSeen:0, oiLastUpdate:0, quoteLoading:false, chartResize:null,
-        quoteFeed:'delay', streamExpiry:null, streamNames:[], reconnectDelay:1000, requestId:1, chainLoadToken:0
+        quoteFeed:'delay', streamExpiry:null, streamNames:[], reconnectDelay:1000, requestId:1, chainLoadToken:0, crossAssetError:''
       };
       bindView(sessions[cfg.key]);
     }
@@ -244,7 +244,7 @@
     const current=new Map(received.filter(q=>q.optionSymbol).map(q=>[q.optionSymbol,q]));
     s.contractSymbols=new Set(symbols);
     s.quotes=current;
-    s.oiLastUpdate=Date.now();
+    s.oiLastUpdate=Date.now();s.crossAssetError='';
     renderAll(s);
     setStatus(s,`Quote loaded · ${received.length} contracts`,'ok');
     updateChainMeta(s);
@@ -287,16 +287,18 @@
     let callOI=0,putOI=0,oiKnown=0,oiMissing=0,multiplierMissing=0,callVol=0,putVol=0;
     const per=new Map();let delta=spot!==null?0:null,gamma=spot!==null?0:null,vega=0,theta=0;
     for(const q of rows){
-      if(q.volume!=null){if(q.side==='C')callVol+=q.volume;else putVol+=q.volume;}
-      if(q.openInterest==null){oiMissing++;continue;}
-      const oi=q.openInterest, m=q.multiplier, side=q.side;
-      oiKnown++;
-      if(side==='C')callOI+=oi;else putOI+=oi;
-      const p=per.get(strikeKey(q.strike))||{strike:q.strike,gex:0,dex:0,vgex:0,thex:0,callOI:0,putOI:0};
-      if(side==='C')p.callOI+=oi;else p.putOI+=oi;
+      if(!Number.isFinite(q.strike))continue;
+      const side=q.side;
+      // Volume được gom riêng với OI: Binance có thể trả volume nhưng openInterest=null.
+      const p=per.get(strikeKey(q.strike))||{strike:q.strike,gex:0,dex:0,vgex:0,thex:0,callOI:0,putOI:0,callVol:0,putVol:0,callGex:0,putGex:0};
+      if(q.volume!=null){if(side==='C'){callVol+=q.volume;p.callVol+=q.volume;}else{putVol+=q.volume;p.putVol+=q.volume;}}
       per.set(strikeKey(q.strike),p);
+      if(q.openInterest==null){oiMissing++;continue;}
+      const oi=q.openInterest, m=q.multiplier;
+      oiKnown++;
+      if(side==='C'){callOI+=oi;p.callOI+=oi;}else{putOI+=oi;p.putOI+=oi;}
       if(m==null||!Number.isFinite(m)||m<=0){multiplierMissing++;continue;}
-      if(spot!==null && q.gamma!=null){const v=q.gamma*oi*m*spot*spot*.01*(side==='P'?-1:1);p.gex+=v;gamma+=v;}
+      if(spot!==null && q.gamma!=null){const v=q.gamma*oi*m*spot*spot*.01*(side==='P'?-1:1);p.gex+=v;if(side==='C')p.callGex+=v;else p.putGex+=v;gamma+=v;}
       if(spot!==null && q.delta!=null){const v=q.delta*oi*m*spot;p.dex+=v;delta+=v;}
       if(q.vega!=null){const v=q.vega*oi*m;p.vgex+=v;vega+=v;}
       if(q.theta!=null){const v=q.theta*oi*m;p.thex+=v;theta+=v;}
@@ -323,6 +325,7 @@
 
   function renderAll(s){
     renderKpis(s);renderLevels(s);renderExposure(s);renderGreeks(s);renderOI(s);renderChain(s);updateChainMeta(s);
+    try{if(typeof window.crossAssetMapDataUpdated==='function')window.crossAssetMapDataUpdated(s.cfg.key)}catch(e){}
   }
   function metric(value,label,sub,cls=''){
     return `<div class="opt-metric"><span>${label}</span><strong class="${cls}">${value}</strong><small>${sub||''}</small></div>`;
@@ -477,6 +480,7 @@
     if(change){change.textContent=diff===null?'Chưa có giá đối chiếu':`${diff>=0?'+':''}${fmt(diff,2)} (${p===null?'—':(p*100).toFixed(2)+'%'})`;change.className='so-quote-change '+(diff===null?'':diff>=0?'pos-t':'neg-t');}
     if(prev)prev.textContent=fmt(s.previousClose,2);if(phase)phase.textContent=esc(s.phase||'—');if(updated)updated.textContent=new Date(s.priceTime).toLocaleTimeString('vi-VN');
     renderKpis(s);renderLevels(s);renderExposure(s);renderGreeks(s);renderOI(s);renderChain(s);
+    try{if(typeof window.crossAssetMapDataUpdated==='function')window.crossAssetMapDataUpdated(s.cfg.key)}catch(e){}
   }
 
   function subscribe(s){
@@ -529,7 +533,7 @@
   async function refreshQuotes(s){
     if(!s.active||!s.expiry||s.quoteLoading)return;
     s.quoteLoading=true;
-    try{await loadChain(s);}catch(e){showError(s,e.message);setStatus(s,'Quote refresh lỗi','bad');}
+    try{await loadChain(s);}catch(e){s.crossAssetError=e.message||String(e);showError(s,e.message);setStatus(s,'Quote refresh lỗi','bad');try{if(typeof window.crossAssetMapDataUpdated==='function')window.crossAssetMapDataUpdated(s.cfg.key)}catch{}}
     finally{s.quoteLoading=false;}
   }
   function startPolling(s){
@@ -552,7 +556,7 @@
       await loadChain(s);
       startPolling(s);
       setStatus(s,`Connected · ${s.quotes.size} option quotes`,'ok');
-    }catch(e){showError(s,e.message);setStatus(s,'Không tải được dữ liệu','bad');}
+    }catch(e){s.crossAssetError=e.message||String(e);showError(s,e.message);setStatus(s,'Không tải được dữ liệu','bad');try{if(typeof window.crossAssetMapDataUpdated==='function')window.crossAssetMapDataUpdated(s.cfg.key)}catch{}}
   }
   function deactivate(s){
     s.active=false;closeSocket(s);
@@ -585,14 +589,43 @@
     };
   }
 
+  let crossAssetRequested=null;
   function setActive(viewKey){
     for(const s of Object.values(sessions)){
-      if(s.cfg.key+'Options'===viewKey)activate(s);
+      if(s.cfg.key+'Options'===viewKey||s.cfg.key===crossAssetRequested)activate(s);
       else if(s.active)deactivate(s);
     }
+  }
+  function crossAssetStart(key){
+    if(!sessions[key])throw new Error('Nguồn ETF không hợp lệ: '+key);
+    crossAssetRequested=key;activate(sessions[key]);
+  }
+  function crossAssetStop(){
+    crossAssetRequested=null;setActive(document.body?.dataset?.v||null);
+  }
+  async function crossAssetSetExpiry(key,expiry){
+    const s=sessions[key];if(!s||!s.expirations.some(x=>x.date===expiry))throw new Error('Expiry không hợp lệ cho '+(s?.cfg.symbol||key));
+    if(s.expiry===expiry)return true;
+    s.expiry=expiry;s.crossAssetError='';
+    try{await loadChain(s);return true;}
+    catch(e){s.crossAssetError=e.message||String(e);try{if(typeof window.crossAssetMapDataUpdated==='function')window.crossAssetMapDataUpdated(key)}catch{}throw e;}
+  }
+  function crossAssetSnapshot(key){
+    const s=sessions[key];if(!s)return null;
+    const c=calc(s);
+    return {key,symbol:s.cfg.symbol,price:s.price,priceTime:s.priceTime,expiry:s.expiry,expirations:s.expirations.map(x=>({date:x.date,root:x.root})),updatedAt:s.oiLastUpdate,error:s.crossAssetError||'',
+      coverage:c.coverage,oiKnown:c.oiKnown,totalContracts:c.totalContracts,callOI:c.callOI,putOI:c.putOI,callVol:c.callVol,putVol:c.putVol,
+      callWall:c.callWall?{strike:c.callWall.strike,oi:c.callWall.callOI}:null,
+      putWall:c.putWall?{strike:c.putWall.strike,oi:c.putWall.putOI}:null,
+      flip:c.flip,oiWall:c.oiWall?{strike:c.oiWall.strike,oi:c.oiWall.oi}:null,
+      dist:c.dist.map(x=>({strike:x.strike,callOI:x.callOI,putOI:x.putOI,callVol:x.callVol,putVol:x.putVol,gex:x.gex,callGex:x.callGex,putGex:x.putGex}))};
   }
 
   buildViews();
   window.stockOptionsSetActive=setActive;
+  window.stockOptionsCrossAssetStart=crossAssetStart;
+  window.stockOptionsCrossAssetStop=crossAssetStop;
+  window.stockOptionsCrossAssetSnapshot=crossAssetSnapshot;
+  window.stockOptionsCrossAssetSetExpiry=crossAssetSetExpiry;
   window.stockOptionsDebug=()=>Object.fromEntries(Object.values(sessions).map(s=>[s.cfg.symbol,{expiry:s.expiry,quotes:s.quotes.size,oi:[...s.quotes.values()].filter(q=>q.openInterest!==null).length,price:s.price,interval:s.interval}]));
 })();
