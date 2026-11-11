@@ -10,7 +10,7 @@
       yêu cầu đủ số print trong cửa sổ; lọc theo tỉ trọng print trong nến; bước giá tự động theo biên độ nến.
    4. Kết hợp HVN Profile theo THỜI GIAN (không phụ thuộc vùng nhìn thấy): marker trong vùng HVN còn hiệu lực, biết vai trò vùng (hỗ trợ khi giá tới từ trên, kháng cự khi từ dưới),
       "đúng vai trò" khi mua bị hấp thụ tại kháng cự hoặc bán bị hấp thụ tại hỗ trợ; có đánh dấu POC.
-   Phần trên (đến mốc "vẽ") là hàm thuần, được kiểm thử bằng tests/hab.test.js. Cần dữ liệu tick (footprint) nên dùng chung bộ tải tick với Footprint/Big Trade. */
+   Phần tính ngưỡng ở đầu file được tách khỏi DOM/canvas. Cần dữ liệu tick (footprint) nên dùng chung bộ tải tick với Footprint/Big Trade. */
 
 /* Các print của 1 nến. mins = mảng các phút, mỗi phút là mảng dòng footprint [giá, mua, bán]. B/S = [[hàng, volume]] của phía mua/bán. sl, sql = tổng ln(v), ln(v)² (cho chế độ log). */
 function haBar(mins,step){

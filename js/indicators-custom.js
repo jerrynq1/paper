@@ -342,7 +342,7 @@ IND.kina={
 
 /* ===== ICT 2022 Mentorship — Full Toolkit =====
    Bao phủ 33 chương bằng các lớp tự động (OHLC + thời gian), mô hình tham khảo và phần nhập tay.
-   Mã nguồn/giới hạn chi tiết: ICT_2022_COVERAGE_VI.md. Kiểu "of" vẽ trong js/ict-2022.js. */
+   Mô tả và giới hạn nằm trong README.md, mục ICT 2022. Kiểu "of" vẽ trong js/ict-2022.js. */
 IND.ict22={
   n:"ICT 2022 · Full Toolkit",t:"of",ver:3,
   d:"Bộ công cụ ICT 2022 đa lớp theo 33 chương PDF: cấu trúc ST/IT/LT, HH/HL/LH/LL, BOS/MSS; thanh khoản/sweep; PD Arrays và block; dealing range, Premium/Discount, OTE; Sessions/Killzones New York; PO3/AMD, Judas, Three Drives, Silver Bullet; NWOG/NDOG, CBDR, ADR, IPDA, Quarterly Shift; HTF→LTF Entry Drill; dashboard Daily Bias/DOL; và Trade Plan SL/TP/RR/BE nhập tay. Mô hình chỉ là suy luận OHLC/time; SMT và tin cần nguồn ngoài.",

@@ -44,7 +44,7 @@ const conv=(t,s)=>{
 function calcAll(){
   const A={t:agg.map(x=>x.time),s:agg.map(x=>x.st),o:agg.map(x=>x.open),h:agg.map(x=>x.high),l:agg.map(x=>x.low),c:agg.map(x=>x.close),v:agg.map(x=>x.v)},E=eff();
   return ACT.map(a=>{
-    if(!isOn(a)||IND[a.key].t==="of")return null;
+    if(!isOn(a)||IND[a.key].t==="of"||IND[a.key].t==="mm")return null;
     const off=a.p.offset?Math.round(a.p.offset):0;
     return IND[a.key].f(A,a.p,E,a).map((s,j)=>{
       if(off&&!s.sp)s={...s,d:shiftA(s.d,off)};
@@ -317,13 +317,13 @@ function openSet(id){
 }
 legend();
 let IF="all";
-const TL={ov:"Overlay",osc:"Oscillator",of:"Orderflow"};
+const TL={ov:"Overlay",osc:"Oscillator",of:"Orderflow",mm:"Market Model"};
 function buildInd(){
   const LS=ACT;
   $("actList").innerHTML=LS.length?LS.map(a=>{const d=IND[a.key];
-    return `<div class="f" style="grid-template-columns:1fr auto;gap:8px 12px" data-id="${a.id}"><div><b>${d.n}</b> <span class="msg">${TL[d.t]}</span><div class="bar" style="margin-top:6px">${d.p.filter(sp=>pshow(sp,a.p)&&(d.t!=="of"||(sp[4]&&sp[4].mn))).map(sp=>`<label class="msg">${sp[1]} ${pin(sp,a.p[sp[0]],"ap_"+a.id+"_",sp[3]==="s"?"width:auto":sp[3]==="b"?"":"width:78px")}</label>`).join("")}${d.L.map((l,j)=>`<label class="msg">${l} <input type="color" data-c="${j}" value="${cres(a,j)}"></label>`).join("")}</div></div><div class="bar"><label class="msg">Hiện <input type="checkbox" data-on="1"${a.on?" checked":""}></label><button class="btn ghost sm" data-set="1">Cài đặt</button><button class="btn ghost sm" data-rm="1">Xóa</button></div></div>`}).join(""):`<div class="msg">Chưa có indicator nào. Chọn trong kho bên dưới.</div>`;
+    return `<div class="f" style="grid-template-columns:1fr auto;gap:8px 12px" data-id="${a.id}"><div><b>${d.n}</b> <span class="msg">${TL[d.t]}</span><div class="bar" style="margin-top:6px">${d.p.filter(sp=>pshow(sp,a.p)&&(!["of","mm"].includes(d.t)||(sp[4]&&sp[4].mn))).map(sp=>`<label class="msg">${sp[1]} ${pin(sp,a.p[sp[0]],"ap_"+a.id+"_",sp[3]==="s"?"width:auto":sp[3]==="b"?"":"width:78px")}</label>`).join("")}${d.L.map((l,j)=>`<label class="msg">${l} <input type="color" data-c="${j}" value="${cres(a,j)}"></label>`).join("")}</div></div><div class="bar"><label class="msg">Hiện <input type="checkbox" data-on="1"${a.on?" checked":""}></label><button class="btn ghost sm" data-set="1">Cài đặt</button><button class="btn ghost sm" data-rm="1">Xóa</button></div></div>`}).join(""):`<div class="msg">Chưa có indicator nào. Chọn trong kho bên dưới.</div>`;
   $("indGrid").innerHTML=Object.entries(IND).filter(([k,d])=>IF==="all"||d.t===IF).map(([k,d])=>`<div class="card"><h2>${d.n} <span class="pill">${TL[d.t]}</span></h2><p class="msg" style="margin:0 0 12px">${d.d}</p><button class="btn sm" data-add="${k}">+ Thêm vào chart</button></div>`).join("");
-  $("indF").innerHTML=[["all","Tất cả"],["ov","Overlay"],["osc","Oscillator"],["of","Orderflow"]].map(([k,n])=>`<button class="tf${k===IF?" on":""}" data-f="${k}">${n}</button>`).join("");
+  $("indF").innerHTML=[["all","Tất cả"],["ov","Overlay"],["osc","Oscillator"],["of","Orderflow"],["mm","Market Model"]].map(([k,n])=>`<button class="tf${k===IF?" on":""}" data-f="${k}">${n}</button>`).join("");
 }
 $("v-ind").onclick=e=>{
   const t=e.target.closest("[data-add],[data-rm],[data-f],[data-set]");if(!t)return;
