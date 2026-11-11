@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/options.css">
 <link rel="stylesheet" href="css/stock-options.css">
+<link rel="stylesheet" href="css/cross-asset-map.css">
 <link rel="stylesheet" href="css/elliott-structure.css">
 <link rel="stylesheet" href="css/market-statistics.css">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
@@ -32,9 +33,26 @@
     <div class="symw"><input id="sym" title="Chọn mã giao dịch" aria-label="Mã" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="symDd" autocomplete="off" autocapitalize="characters" spellcheck="false"><svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></div>
     <div class="tfs" id="tfs"></div>
     <span class="pill" id="st">Chưa kết nối</span><button class="btn ghost sm" id="pvtToggle" type="button" title="Kéo chọn vùng giá để lập bảng biến thiên">↔ Bảng biến thiên</button>
-    <button class="btn ghost sm" data-go="ind">ƒx Indicator</button><button class="btn ghost sm" id="dttBtn" type="button" aria-pressed="true" title="Bật/tắt Digital Time Theory">◉ DTT</button><button class="btn ghost sm" data-go="cs">🎨 Màu nến</button><button class="btn ghost sm" id="rpB" type="button" aria-pressed="false" title="Replay: xem lại giá chạy để backtest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 4 12l7 6z"/><path d="M20 6l-7 6 7 6z"/></svg>Replay</button>
+    <button class="btn ghost sm" id="xmapToggle" type="button" aria-expanded="false">⇄ Cross-Asset Map</button><button class="btn ghost sm" data-go="ind">ƒx Indicator</button><button class="btn ghost sm" id="dttBtn" type="button" aria-pressed="true" title="Bật/tắt Digital Time Theory">◉ DTT</button><button class="btn ghost sm" data-go="cs">🎨 Màu nến</button><button class="btn ghost sm" id="rpB" type="button" aria-pressed="false" title="Replay: xem lại giá chạy để backtest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 4 12l7 6z"/><path d="M20 6l-7 6 7 6z"/></svg>Replay</button>
 <div class="px"><span><small>Bid</small><b id="bid">–</b></span><span><small>Ask</small><b id="ask">–</b></span></div>
   </div>
+  <section class="card xmap-panel" id="xmapPanel" hidden aria-label="Cross-asset options map">
+    <div class="xmap-head"><div><div class="xmap-eyebrow">ETF OPTIONS → CFD / INDEX</div><h3>Cross-Asset Liquidity Map</h3><p class="msg">Chiếu strike, OI và GEX từ QQQ / GLD lên NAS100 / XAUUSD bằng tỷ lệ giá đồng thời.</p></div><span class="xmap-state" id="xmapState">Tắt</span></div>
+    <div class="xmap-controls">
+      <label>NGUỒN PROXY<select id="xmapSource"><option value="qqq">QQQ Options → NAS100</option><option value="gld">GLD Options → XAUUSD</option></select></label>
+      <label>EXPIRY<select id="xmapExpiry"><option value="">Đang tải kỳ hạn…</option></select></label>
+      <label>HEATMAP<select id="xmapMetric"><option value="oi">Open Interest</option><option value="gex">Gamma Exposure</option></select></label>
+      <label class="xmap-check"><input type="checkbox" id="xmapHeat" checked><span>Heatmap</span></label>
+      <label class="xmap-check"><input type="checkbox" id="xmapWalls" checked><span>OI Walls + Gamma Flip</span></label>
+      <label class="xmap-check"><input type="checkbox" id="xmapBubbles" checked><span>Volume bubbles</span></label>
+      <label class="xmap-opacity">Độ đậm <input type="range" id="xmapOpacity" min="10" max="90" value="48"></label>
+      <button class="btn sm" id="xmapEnable" type="button">Bật overlay</button>
+      <button class="btn ghost sm" id="xmapTarget" type="button">Mở chart NAS100</button>
+    </div>
+    <div class="xmap-meta" id="xmapMeta">Chọn proxy và bật overlay để tải Option Chain. Cần Cloudflare Worker Binance đã cấu hình và chart cTrader của mã đích.</div>
+    <div class="xmap-legend"><span><i class="xmap-dot call"></i> Call volume</span><span><i class="xmap-dot put"></i> Put volume</span><span><i class="xmap-line call"></i> Call OI Wall</span><span><i class="xmap-line put"></i> Put OI Wall</span><span><i class="xmap-line flip"></i> Gamma Flip</span></div>
+    <p class="xmap-disclaimer">Lưu ý: bubble là volume hợp đồng quyền chọn theo strike (không phải volume futures/CFD theo thời gian); heatmap là OI/GEX theo strike. Đây là vùng tập trung exposure của ETF options, không phải sổ lệnh hay dealer positioning đã xác minh trên NAS100/XAUUSD.</p>
+  </section>
   <div class="card" id="chartCard"><div id="ohlc"></div><div id="legend"></div><div id="cw"><div id="chart"></div><div id="panes"></div></div><div id="pvtSelection" aria-hidden="true"></div><section id="pvtPanel" class="pvt-panel" aria-label="Bảng biến thiên giá" hidden></section>
     <div id="clk"><button type="button" id="clkB" aria-haspopup="dialog" aria-expanded="false" title="Đổi múi giờ hiển thị"><span id="clkT">--:--:--</span><small id="clkZ"></small><span aria-hidden="true">▾</span></button></div>
     <div id="tzp" role="dialog" aria-label="Múi giờ"></div>
@@ -503,6 +521,7 @@
 <script src="js/options.js"></script>
 <script src="js/stock-options-config.js"></script>
 <script src="js/stock-options.js"></script>
+<script src="js/cross-asset-map.js"></script>
 <script src="js/quant-stats.js"></script>
 <script src="js/quant-regression.js"></script>
 <script src="js/quant-timeseries.js"></script>
