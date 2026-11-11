@@ -84,6 +84,7 @@
       <div class="card so-chain-toolbar">
         <div class="opt-toolbar">
           <div class="opt-control"><label for="${p}-expiry">EXPIRATION</label><select id="${p}-expiry"><option value="">Đang tải kỳ hạn…</option></select></div>
+          <div class="opt-control"><label for="${p}-strike-count">HIỂN THỊ STRIKE</label><select id="${p}-strike-count"><option value="5">5 strikes</option><option value="10">10 strikes</option><option value="15" selected>15 strikes</option><option value="20">20 strikes</option><option value="30">30 strikes</option><option value="50">50 strikes</option><option value="100">100 strikes</option><option value="all">Tất cả</option></select></div>
           <div class="opt-source">Underlying: <b>${cfg.symbol}</b> · Contract multiplier: <b id="${p}-contract-multiplier">—</b> · Quote source: Binance Stock Options</div>
         </div>
         <div class="so-chain-meta" id="${p}-chain-meta">Đang lấy Option Chain…</div>
@@ -119,7 +120,8 @@
           <p><strong>Nguồn Option Chain:</strong> Binance Stock Options <code>option/chain-symbols</code> liệt kê OCC symbols theo ngày đáo hạn; <code>get-option-quote</code> trả Bid/Ask/Mid, volume, OI, multiplier, IV và Greeks.</p>
           <p><strong>Contract size:</strong> multiplier đọc từ từng option quote (mẫu GLD trong HAR là 100 shares/contract). Không hardcode OI và không thay <code>null</code> bằng 0.</p>
           <p><strong>GEX:</strong> Σ(Gamma × OI × multiplier × Spot² × 0.01), Call dương và Put âm. <strong>DEX:</strong> Σ(Delta × OI × multiplier × Spot). Vega và Theta tổng hợp từ Greek × OI × multiplier.</p>
-          <p><strong>Key Levels:</strong> Call Wall / Put Wall là strike có OI lớn nhất theo từng phía; Gamma Flip là điểm cumulative GEX đổi dấu nếu tồn tại. Đây là các chỉ báo tập trung OI/Greek, không phải dealer positioning đã xác minh.</p>
+          <p><strong>Key Levels:</strong> Call/Put OI Wall là strike có OI lớn nhất theo từng phía. Gamma Flip là điểm cumulative GEX đổi dấu. GEX 1–10 là các strike có trị tuyệt đối net GEX lớn nhất, xếp theo độ mạnh chứ không theo thứ tự giá. Max Pain là strike tối thiểu hóa intrinsic payout tính từ OI của toàn expiry.</p>
+          <p><strong>Vol Trigger:</strong> chỉ hiện khi Binance hoặc nguồn dữ liệu tích hợp cung cấp trường Vol Trigger riêng. Không đồng nhất trường này với Gamma Flip. Với nguồn Binance hiện tại nếu không có trường riêng, dashboard sẽ ghi chưa có dữ liệu.</p>
           <p><strong>Giới hạn:</strong> Binance trả <code>oi: null</code> cho một số hợp đồng. Các hợp đồng này được đánh dấu thiếu OI và bị loại khỏi exposure, nhưng vẫn hiển thị dữ liệu quote/Greeks còn lại. Endpoint quote có thể trả dữ liệu trễ; độ trễ phụ thuộc quyền dữ liệu tài khoản.</p>
           <p><strong>Chart:</strong> Dùng Equity WebSocket <code>${cfg.symbol}@kline_INTERVAL</code> (5m, 1h, 1d, 1w, 1M). Luồng công khai được xác minh là cập nhật nến đang chạy, không bao gồm backfill lịch sử trong request capture hiện có. Biểu đồ sẽ bắt đầu có nến khi Binance gửi payload; không tự sinh dữ liệu lịch sử.</p>
           <p><strong>Không có trong nguồn hiện tại:</strong> option trade prints/flow tape và Vanna/Charm không nằm trong quote response được ghi nhận, nên dashboard không tự ước lượng hoặc hiển thị hai loại dữ liệu này như dữ liệu Binance.</p>
@@ -127,6 +129,11 @@
       </div>`;
   }
 
+  const DISPLAY_KEY='tp_stock_options_display_strikes_v1';
+  function readDisplayStrikes(key){
+    try{const v=JSON.parse(localStorage.getItem(DISPLAY_KEY)||'{}')[key];return v==='all'?'all':([5,10,15,20,30,50,100].includes(+v)?+v:15)}catch{return 15}
+  }
+  function saveDisplayStrikes(key,value){try{const v=JSON.parse(localStorage.getItem(DISPLAY_KEY)||'{}')||{};v[key]=value;localStorage.setItem(DISPLAY_KEY,JSON.stringify(v))}catch{}}
   function buildViews(){
     for(const cfg of Object.values(CONFIG)){
       const view = $('v-'+cfg.key+'Options');
@@ -136,7 +143,8 @@
         expiry:null, expirations:[], contracts:[], contractSymbols:new Set(), quotes:new Map(), price:null, previousClose:null,
         phase:'—', priceTime:0, interval:'5m', chart:null, candleSeries:null, volumeSeries:null,
         lastCandle:null, candlesSeen:0, oiLastUpdate:0, quoteLoading:false, chartResize:null,
-        quoteFeed:'delay', streamExpiry:null, streamNames:[], reconnectDelay:1000, requestId:1, chainLoadToken:0, crossAssetError:''
+        quoteFeed:'delay', streamExpiry:null, streamNames:[], reconnectDelay:1000, requestId:1, chainLoadToken:0, crossAssetError:'',
+        displayStrikes:readDisplayStrikes(cfg.key), chainComplete:false, hydrating:false, hydrateProgress:0, loadedExpiry:null
       };
       bindView(sessions[cfg.key]);
     }
@@ -219,47 +227,120 @@
       last:num(q.p??q.l??q.lastPrice??q.last), bid:num(q.bp??q.bid), ask:num(q.ap??q.ask), mid:num(q.mp??q.mid),
       volume:num(q.v??q.volume), openInterest:oi===null||oi===undefined?null:num(oi),
       iv:num(q.iv??q.impliedVolatility), delta:num(q.de??q.delta), gamma:num(q.ga??q.gamma), theta:num(q.th??q.theta), vega:num(q.ve??q.vega),
-      breakEven:num(q.be??q.breakEven), previousClose:num(q.pcp??q.previousClose), bidSize:num(q.bs??q.bidSize), askSize:num(q.as??q.askSize)
+      breakEven:num(q.be??q.breakEven), previousClose:num(q.pcp??q.previousClose), bidSize:num(q.bs??q.bidSize), askSize:num(q.as??q.askSize),
+      volTrigger:num(q.vt??q.volTrigger??q.volatilityTrigger)
     };
   }
 
-  async function loadChain(s){
+  function strikeSymbols(list, s){
+    const count=s.displayStrikes;
+    if(count==='all')return list.map(x=>x.os).filter(Boolean);
+    const strikes=[...new Set(list.map(x=>occStrike(x.os)).filter(v=>Number.isFinite(v)))].sort((a,b)=>a-b);
+    if(!strikes.length)return list.map(x=>x.os).filter(Boolean);
+    const anchor=Number.isFinite(s.price)?s.price:strikes[Math.floor(strikes.length/2)];
+    const selected=new Set(strikes.slice().sort((a,b)=>Math.abs(a-anchor)-Math.abs(b-anchor)).slice(0,Math.max(1,+count||15)).map(strikeKey));
+    return list.filter(x=>selected.has(strikeKey(occStrike(x.os)))).map(x=>x.os).filter(Boolean);
+  }
+  async function fetchQuoteBatches(s, symbols, token, expiry, concurrency=2){
+    const batches=[];for(let i=0;i<symbols.length;i+=100)batches.push(symbols.slice(i,i+100));
+    let next=0,receivedCount=0;
+    async function worker(){
+      while(next<batches.length){
+        const batch=batches[next++];
+        const reply=await request('/bapi/equity/v1/friendly/equity/option/get-option-quote','POST',{occSymbols:batch});
+        if(token!==s.chainLoadToken||expiry!==s.expiry)return;
+        const received=(Array.isArray(reply.data)?reply.data:[]).map(normaliseQuote).filter(q=>q.optionSymbol);
+        for(const q of received)s.quotes.set(q.optionSymbol,q);
+        receivedCount+=received.length;s.hydrateProgress+=batch.length;
+        s.oiLastUpdate=Date.now();
+        if(s.hydrating)updateChainMeta(s);
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(Math.max(1,concurrency),batches.length||1)},worker));
+    return receivedCount;
+  }
+  async function hydrateRemainingQuotes(s, symbols, token, expiry){
+    if(!symbols.length){s.chainComplete=true;s.hydrating=false;s.loadedExpiry=expiry;renderAll(s);setStatus(s,`Loaded · ${s.quotes.size}/${s.contracts.length} contracts`,'ok');return;}
+    s.hydrating=true;
+    try{
+      await fetchQuoteBatches(s,symbols,token,expiry,2);
+      if(token!==s.chainLoadToken||expiry!==s.expiry)return;
+      const allQuotesPresent=s.contractSymbols?Array.from(s.contractSymbols).every(symbol=>s.quotes.has(symbol)):s.quotes.size>=s.contracts.length;
+      s.chainComplete=allQuotesPresent;s.loadedExpiry=allQuotesPresent?expiry:null;
+      s.hydrating=false;s.crossAssetError='';
+      renderAll(s);setStatus(s,allQuotesPresent?`Loaded full chain · ${s.quotes.size}/${s.contracts.length} contracts`:`Chain còn thiếu quote · ${s.quotes.size}/${s.contracts.length}` ,allQuotesPresent?'ok':'warn');
+    }catch(e){
+      if(token!==s.chainLoadToken)return;
+      s.hydrating=false;s.chainComplete=false;s.crossAssetError=e.message||String(e);
+      renderAll(s);setStatus(s,'Chain tải chưa đầy đủ · xem lỗi','bad');showError(s,e.message||String(e));
+    }
+  }
+  async function loadChain(s, refreshAll=false){
     if(!s.expiry)return;
     const token=++s.chainLoadToken;
-    const cfg=s.cfg, expiry=s.expiry, meta=s.expirations.find(x=>x.date===expiry);
-    const root=meta?.root||cfg.root;
-    setStatus(s,'Đang tải Option Chain…','loading');
-    $(`so-${cfg.key}-chain`).innerHTML='<tr><td colspan="19" class="opt-empty">Đang lấy danh sách OCC contracts và quote…</td></tr>';
+    const cfg=s.cfg,expiry=s.expiry,meta=s.expirations.find(x=>x.date===expiry),root=meta?.root||cfg.root;
+    const sameExpiry=s.loadedExpiry===expiry&&s.quotes.size>0;
+    const previousQuotes=sameExpiry?new Map(s.quotes):new Map();
+    const keepCompleteSnapshot=!!(refreshAll&&sameExpiry);
+    s.hydrating=keepCompleteSnapshot;s.chainComplete=keepCompleteSnapshot;s.hydrateProgress=0;
+    setStatus(s,'Đang lấy Option Chain…','loading');
+    if(!s.quotes.size)$(`so-${cfg.key}-chain`).innerHTML='<tr><td colspan="19" class="opt-empty">Đang lấy danh sách OCC contracts…</td></tr>';
     const chain=await request(`/bapi/equity/v1/public/equity/option/chain-symbols?${new URLSearchParams({symbol:cfg.symbol,rootSymbol:root,expirationDate:expiry})}`);
     if(token!==s.chainLoadToken||expiry!==s.expiry)return;
     const list=chain.data?.l||[];
     if(!list.length)throw new Error(`Binance không trả contract cho ${cfg.symbol} expiry ${expiry}.`);
     s.contracts=list;
     const symbols=list.map(x=>x.os).filter(Boolean);
-    const batches=[];for(let i=0;i<symbols.length;i+=100)batches.push(symbols.slice(i,i+100));
-    const replies=await Promise.all(batches.map(batch=>request('/bapi/equity/v1/friendly/equity/option/get-option-quote','POST',{occSymbols:batch})));
-    if(token!==s.chainLoadToken||expiry!==s.expiry)return;
-    const received=replies.flatMap(x=>Array.isArray(x.data)?x.data:[]).map(normaliseQuote);
-    if(!received.length)throw new Error('Binance trả danh sách contract nhưng không có quote.');
-    const current=new Map(received.filter(q=>q.optionSymbol).map(q=>[q.optionSymbol,q]));
     s.contractSymbols=new Set(symbols);
-    s.quotes=current;
+    // A same-expiry refresh may see a changed listed-strike set; discard quotes no longer in that chain.
+    s.quotes=new Map([...previousQuotes].filter(([symbol])=>s.contractSymbols.has(symbol)));
+    // A periodic refresh re-quotes the whole expiry in the background while preserving the last complete snapshot.
+    if(refreshAll&&sameExpiry){
+      s.hydrateProgress=0;s.hydrating=true;
+      s.chainComplete=Array.from(s.contractSymbols).every(symbol=>s.quotes.has(symbol));
+      s.oiLastUpdate=Date.now();s.crossAssetError='';
+      renderAll(s);updateChainMeta(s);syncOptionStream(s);
+      setStatus(s,`Đang làm mới toàn bộ ${symbols.length} contracts · vẫn giữ dữ liệu gần nhất trên chart`,'loading');
+      hydrateRemainingQuotes(s,symbols,token,expiry);
+      return;
+    }
+    const visibleSymbols=strikeSymbols(list,s);
+    const already=new Set(s.quotes.keys());
+    const priority=visibleSymbols.filter(x=>!already.has(x));
+    if(priority.length){
+      await fetchQuoteBatches(s,priority,token,expiry,2);
+      if(token!==s.chainLoadToken||expiry!==s.expiry)return;
+    }
+    if(!s.quotes.size&&priority.length<symbols.length){
+      // Fallback only when Binance returned no visible ATM quote at all.
+      await fetchQuoteBatches(s,symbols,token,expiry,2);
+      if(token!==s.chainLoadToken||expiry!==s.expiry)return;
+    }
+    if(!s.quotes.size)throw new Error('Binance trả danh sách contract nhưng không có quote.');
     s.oiLastUpdate=Date.now();s.crossAssetError='';
-    renderAll(s);
-    setStatus(s,`Quote loaded · ${received.length} contracts`,'ok');
-    updateChainMeta(s);
-    syncOptionStream(s);
+    const missing=symbols.filter(x=>!s.quotes.has(x));
+    s.hydrateProgress=symbols.length-missing.length;
+    s.hydrating=missing.length>0;
+    s.chainComplete=missing.length===0;
+    renderAll(s);updateChainMeta(s);syncOptionStream(s);
+    if(missing.length){
+      setStatus(s,`Đã hiển thị ${s.displayStrikes==='all'?'tất cả':s.displayStrikes} strikes · đang tải phần còn lại (${s.quotes.size}/${symbols.length})`,'loading');
+      // Full-chain analytics are hydrated in the background; first paint only requests visible ATM strikes.
+      hydrateRemainingQuotes(s,missing,token,expiry);
+    }else{
+      s.loadedExpiry=expiry;setStatus(s,`Loaded · ${s.quotes.size} option quotes`,'ok');
+    }
   }
 
   function mergeLiveQuote(s, raw){
     const arr=Array.isArray(raw)?raw:[raw];
-    const sourceKeys={name:['n','name'],side:['t','contractType','side'],expiration:['e','expiration'],strike:['sp','strikePrice','strike'],multiplier:['m','multiplier'],last:['p','l','lastPrice','last'],bid:['bp','bid'],ask:['ap','ask'],mid:['mp','mid'],volume:['v','volume'],openInterest:['oi','openInterest'],iv:['iv','impliedVolatility'],delta:['de','delta'],gamma:['ga','gamma'],theta:['th','theta'],vega:['ve','vega'],breakEven:['be','breakEven'],previousClose:['pcp','previousClose'],bidSize:['bs','bidSize'],askSize:['as','askSize']};
+    const sourceKeys={name:['n','name'],side:['t','contractType','side'],expiration:['e','expiration'],strike:['sp','strikePrice','strike'],multiplier:['m','multiplier'],last:['p','l','lastPrice','last'],bid:['bp','bid'],ask:['ap','ask'],mid:['mp','mid'],volume:['v','volume'],openInterest:['oi','openInterest'],iv:['iv','impliedVolatility'],delta:['de','delta'],gamma:['ga','gamma'],theta:['th','theta'],vega:['ve','vega'],breakEven:['be','breakEven'],previousClose:['pcp','previousClose'],bidSize:['bs','bidSize'],askSize:['as','askSize'],volTrigger:['vt','volTrigger','volatilityTrigger']};
     let changed=false;
     for(const item of arr){
       if(!item || !(item.os||item.optionSymbol))continue;
       const q=normaliseQuote(item);
       if(s.contractSymbols?.size && !s.contractSymbols.has(q.optionSymbol))continue;
-      const old=s.quotes.get(q.optionSymbol)||{...q,openInterest:null,volume:null,iv:null,delta:null,gamma:null,theta:null,vega:null,bid:null,ask:null,mid:null,last:null,multiplier:null,bidSize:null,askSize:null};
+      const old=s.quotes.get(q.optionSymbol)||{...q,openInterest:null,volume:null,iv:null,delta:null,gamma:null,theta:null,vega:null,bid:null,ask:null,mid:null,last:null,multiplier:null,bidSize:null,askSize:null,volTrigger:null};
       const next={...old,optionSymbol:q.optionSymbol};
       for(const [field,keys] of Object.entries(sourceKeys)){
         if(keys.some(k=>Object.prototype.hasOwnProperty.call(item,k)))next[field]=q[field];
@@ -282,24 +363,38 @@
     return [...map.values()].sort((a,b)=>a.strike-b.strike);
   }
 
+  function maxPainOf(dist){
+    if(!dist.length)return null;
+    const strikes=dist.map(x=>x.strike);let best=null;
+    for(const settlement of strikes){
+      let payout=0;
+      for(const x of dist){
+        payout+=Math.max(0,settlement-x.strike)*(x.callPainOI||0);
+        payout+=Math.max(0,x.strike-settlement)*(x.putPainOI||0);
+      }
+      if(!best||payout<best.payout)best={strike:settlement,payout};
+    }
+    return best;
+  }
   function calc(s){
     const rows=getRows(s),spot=s.price;
     let callOI=0,putOI=0,oiKnown=0,oiMissing=0,multiplierMissing=0,callVol=0,putVol=0;
     const per=new Map();let delta=spot!==null?0:null,gamma=spot!==null?0:null,vega=0,theta=0;
+    const volTriggers=[];
     for(const q of rows){
       if(!Number.isFinite(q.strike))continue;
       const side=q.side;
-      // Volume được gom riêng với OI: Binance có thể trả volume nhưng openInterest=null.
-      const p=per.get(strikeKey(q.strike))||{strike:q.strike,gex:0,dex:0,vgex:0,thex:0,callOI:0,putOI:0,callVol:0,putVol:0,callGex:0,putGex:0};
+      const p=per.get(strikeKey(q.strike))||{strike:q.strike,gex:0,dex:0,vgex:0,thex:0,callOI:0,putOI:0,callVol:0,putVol:0,callGex:0,putGex:0,callPainOI:0,putPainOI:0};
       if(q.volume!=null){if(side==='C'){callVol+=q.volume;p.callVol+=q.volume;}else{putVol+=q.volume;p.putVol+=q.volume;}}
+      if(q.volTrigger!=null&&q.volTrigger>0)volTriggers.push(q.volTrigger);
       per.set(strikeKey(q.strike),p);
       if(q.openInterest==null){oiMissing++;continue;}
-      const oi=q.openInterest, m=q.multiplier;
+      const oi=q.openInterest,m=q.multiplier;
       oiKnown++;
-      if(side==='C'){callOI+=oi;p.callOI+=oi;}else{putOI+=oi;p.putOI+=oi;}
+      if(side==='C'){callOI+=oi;p.callOI+=oi;p.callPainOI+=oi*(m>0?m:1);}else{putOI+=oi;p.putOI+=oi;p.putPainOI+=oi*(m>0?m:1);}
       if(m==null||!Number.isFinite(m)||m<=0){multiplierMissing++;continue;}
-      if(spot!==null && q.gamma!=null){const v=q.gamma*oi*m*spot*spot*.01*(side==='P'?-1:1);p.gex+=v;if(side==='C')p.callGex+=v;else p.putGex+=v;gamma+=v;}
-      if(spot!==null && q.delta!=null){const v=q.delta*oi*m*spot;p.dex+=v;delta+=v;}
+      if(spot!==null&&q.gamma!=null){const v=q.gamma*oi*m*spot*spot*.01*(side==='P'?-1:1);p.gex+=v;if(side==='C')p.callGex+=v;else p.putGex+=v;gamma+=v;}
+      if(spot!==null&&q.delta!=null){const v=q.delta*oi*m*spot;p.dex+=v;delta+=v;}
       if(q.vega!=null){const v=q.vega*oi*m;p.vgex+=v;vega+=v;}
       if(q.theta!=null){const v=q.theta*oi*m;p.thex+=v;theta+=v;}
     }
@@ -309,7 +404,7 @@
     let cumulative=0,flip=null,previous=null;
     for(const x of dist){
       const next=cumulative+x.gex;
-      if(previous && ((cumulative<=0&&next>=0)||(cumulative>=0&&next<=0)) && next!==cumulative){
+      if(previous&&((cumulative<=0&&next>=0)||(cumulative>=0&&next<=0))&&next!==cumulative){
         const ratio=(0-cumulative)/(next-cumulative);flip=previous.strike+(x.strike-previous.strike)*ratio;break;
       }
       cumulative=next;previous=x;
@@ -317,10 +412,14 @@
     const totalContracts=Math.max(rows.length,s.contracts.length||0);
     oiMissing=Math.max(oiMissing,totalContracts-oiKnown);
     const validOI=oiKnown,coverage=totalContracts?validOI/totalContracts:0;
+    const gexLevels=dist.filter(x=>Number.isFinite(x.gex)&&Math.abs(x.gex)>0).slice().sort((a,b)=>Math.abs(b.gex)-Math.abs(a.gex)).slice(0,10);
+    const volTrigger=volTriggers.length?volTriggers.sort((a,b)=>a-b)[Math.floor(volTriggers.length/2)]:null;
+    const complete=!!s.chainComplete&&(s.contractSymbols?.size?Array.from(s.contractSymbols).every(symbol=>s.quotes.has(symbol)):s.quotes.size>=s.contracts.length);
+    const oiComplete=complete&&oiMissing===0;
+    const maxPainComplete=oiComplete&&multiplierMissing===0;
     return {rows,dist,callOI,putOI,oiKnown,oiMissing,multiplierMissing,totalContracts,callVol,putVol,volume:callVol+putVol,delta,gamma,vega,theta,
-      callWall:calls[0]||null,putWall:puts[0]||null,flip,coverage,oiWall:dist.reduce((best,x)=>{
-        const v=Math.max(x.callOI,x.putOI);return v>0&&(!best||v>best.oi)?{strike:x.strike,oi:v}:best;
-      },null)};
+      callWall:calls[0]||null,putWall:puts[0]||null,flip,volTrigger,gexLevels,maxPain:maxPainComplete?maxPainOf(dist):null,complete,oiComplete,maxPainComplete,coverage,
+      oiWall:dist.reduce((best,x)=>{const v=Math.max(x.callOI,x.putOI);return v>0&&(!best||v>best.oi)?{strike:x.strike,oi:v}:best;},null)};
   }
 
   function renderAll(s){
@@ -344,14 +443,19 @@
   }
   function renderLevels(s){
     const c=calc(s),el=$(`so-${s.cfg.key}-levels`);if(!el)return;
+    const pending=c.complete?'':' · đang tải full chain';
     const data=[
-      ['CALL WALL',c.callWall?fmt(c.callWall.strike,2):'—',c.callWall?`OI ${compact(c.callWall.callOI)}`:'Không có OI Call'],
-      ['PUT WALL',c.putWall?fmt(c.putWall.strike,2):'—',c.putWall?`OI ${compact(c.putWall.putOI)}`:'Không có OI Put'],
-      ['GAMMA FLIP',c.flip===null?'—':fmt(c.flip,2),c.flip===null?'Không tìm thấy điểm GEX đổi dấu':'Cumulative GEX'],
-      ['MAX OI STRIKE',c.oiWall?fmt(c.oiWall.strike,2):'—',c.oiWall?`Max side OI ${compact(c.oiWall.oi)}`:'Chưa có OI']
+      ['CALL OI WALL',c.callWall?fmt(c.callWall.strike,2):'—',c.callWall?`OI ${compact(c.callWall.callOI)}`:'Không có OI Call','positive'],
+      ['PUT OI WALL',c.putWall?fmt(c.putWall.strike,2):'—',c.putWall?`OI ${compact(c.putWall.putOI)}`:'Không có OI Put','negative'],
+      ['GAMMA FLIP',c.flip===null?'—':fmt(c.flip,2),c.flip===null?'Không tìm thấy điểm GEX đổi dấu':'Cumulative GEX','accent'],
+      ['VOL TRIGGER',c.volTrigger===null?'—':fmt(c.volTrigger,2),c.volTrigger===null?'Binance chưa cung cấp level riêng':'Nguồn provider','accent'],
+      ['MAX PAIN',c.maxPain?fmt(c.maxPain.strike,2):'—',c.maxPain?`Payout model ${compact(c.maxPain.payout)}`:!c.complete?'Cần tải hết expiry':!c.oiComplete?'OI chưa đủ để tính tin cậy':'Thiếu contract multiplier','accent'],
+      ['MAX OI STRIKE',c.oiWall?fmt(c.oiWall.strike,2):'—',c.oiWall?`Max side OI ${compact(c.oiWall.oi)}`:'Chưa có OI','']
     ];
-    el.innerHTML=data.map(([a,b,d])=>`<div class="opt-level"><span>${a}</span><b>${b}</b><small>${d}</small></div>`).join('');
+    c.gexLevels.forEach((x,i)=>data.push([`GEX ${i+1}`,fmt(x.strike,2),`${x.gex>=0?'+':''}${compact(x.gex)} · ${x.gex>=0?'Net +':'Net −'}`,x.gex>=0?'positive':'negative']));
+    el.innerHTML=data.map(([a,b,d,cls])=>`<div class="opt-level ${cls||''}"><span>${a}</span><b>${b}</b><small>${d}${pending}</small></div>`).join('');
   }
+
   function renderExposure(s){
     const c=calc(s),el=$(`so-${s.cfg.key}-gex`);if(!el)return;
     const metricKey=$(`so-${s.cfg.key}-exposure-metric`)?.value||'gamma';
@@ -399,9 +503,10 @@
     return `<td>${fmt(q[field],2)} <small>× ${size===null?'—':compact(size)}</small></td>`;
   }
   function renderChain(s){
-    const data=pairedRows(s),el=$(`so-${s.cfg.key}-chain`),spot=s.price;if(!el)return;
-    if(!data.length){el.innerHTML='<tr><td colspan="19" class="opt-empty">Chưa có contract.</td></tr>';return;}
-    const atm=spot===null?null:data.reduce((best,x)=>!best||Math.abs(x.strike-spot)<Math.abs(best.strike-spot)?x:best,null);
+    const all=pairedRows(s),el=$(`so-${s.cfg.key}-chain`),spot=s.price;if(!el)return;
+    if(!all.length){el.innerHTML='<tr><td colspan="19" class="opt-empty">Chưa có contract.</td></tr>';return;}
+    const atm=spot===null?all[Math.floor(all.length/2)]:all.reduce((best,x)=>!best||Math.abs(x.strike-spot)<Math.abs(best.strike-spot)?x:best,null);
+    const data=s.displayStrikes==='all'?all:all.slice().sort((a,b)=>Math.abs(a.strike-(spot??atm.strike))-Math.abs(b.strike-(spot??atm.strike))).slice(0,Math.max(1,+s.displayStrikes||15)).sort((a,b)=>a.strike-b.strike);
     el.innerHTML=data.map(x=>{
       const c=x.C,p=x.P,atmClass=atm&&x.strike===atm.strike?'atm':'';
       return `<tr class="${atmClass}">
@@ -416,11 +521,13 @@
         ${quoteSizeCell(p,'ask')}${quoteSizeCell(p,'bid')}
       </tr>`;
     }).join('');
-    $(`so-${s.cfg.key}-rows-count`).textContent=`${s.quotes.size} option contracts · ${data.length} strikes`;
+    const limit=s.displayStrikes==='all'?'All':s.displayStrikes;
+    $(`so-${s.cfg.key}-rows-count`).textContent=`Showing ${data.length}/${all.length} strikes · ${s.quotes.size}/${s.contracts.length} quotes · limit ${limit}`;
   }
+
   function updateChainMeta(s){
     const c=calc(s),el=$(`so-${s.cfg.key}-chain-meta`);if(!el)return;
-    el.innerHTML=`<span>Expiry: <b>${esc(s.expiry||'—')}</b></span><span>Contracts: <b>${s.contracts.length||s.quotes.size}</b></span><span>Quotes: <b>${s.quotes.size}</b></span><span>OI available: <b>${c.oiKnown}</b></span><span>OI unavailable: <b>${c.oiMissing}</b></span><span>Last quote update: <b>${s.oiLastUpdate?new Date(s.oiLastUpdate).toLocaleTimeString('vi-VN'):'—'}</b></span>`;
+    el.innerHTML=`<span>Expiry: <b>${esc(s.expiry||'—')}</b></span><span>Contracts: <b>${s.contracts.length||s.quotes.size}</b></span><span>Quotes: <b>${s.quotes.size}/${s.contracts.length||s.quotes.size}</b></span><span>OI available: <b>${c.oiKnown}</b></span><span>OI unavailable / pending: <b>${c.oiMissing}</b></span><span>Full chain: <b>${c.complete?'Loaded':s.hydrating?'Loading…':'Partial'}</b></span><span>Last quote update: <b>${s.oiLastUpdate?new Date(s.oiLastUpdate).toLocaleTimeString('vi-VN'):'—'}</b></span>`;
     const multiplier=[...s.quotes.values()].find(x=>x.multiplier!==null && x.multiplier>0)?.multiplier??null;
     const mult=$(`so-${s.cfg.key}-multiplier`),toolbarMult=$(`so-${s.cfg.key}-contract-multiplier`);
     if(mult)mult.textContent=multiplier?`${fmt(multiplier,0)} shares`:'—';
@@ -531,9 +638,9 @@
   }
 
   async function refreshQuotes(s){
-    if(!s.active||!s.expiry||s.quoteLoading)return;
+    if(!s.active||!s.expiry||s.quoteLoading||s.hydrating)return;
     s.quoteLoading=true;
-    try{await loadChain(s);}catch(e){s.crossAssetError=e.message||String(e);showError(s,e.message);setStatus(s,'Quote refresh lỗi','bad');try{if(typeof window.crossAssetMapDataUpdated==='function')window.crossAssetMapDataUpdated(s.cfg.key)}catch{}}
+    try{await loadChain(s,true);}catch(e){s.crossAssetError=e.message||String(e);showError(s,e.message);setStatus(s,'Quote refresh lỗi','bad');try{if(typeof window.crossAssetMapDataUpdated==='function')window.crossAssetMapDataUpdated(s.cfg.key)}catch{}}
     finally{s.quoteLoading=false;}
   }
   function startPolling(s){
@@ -580,11 +687,12 @@
     view.dataset.stockOptionsBound='1';
     $(`${p}-refresh`).onclick=()=>{clearError(s);refreshQuotes(s);};
     $(`${p}-expiry`).onchange=e=>{s.expiry=e.target.value;loadChain(s).catch(err=>{showError(s,err.message);setStatus(s,'Không tải được expiry','bad')});};
+    const strikeSelect=$(`${p}-strike-count`);if(strikeSelect){strikeSelect.value=String(s.displayStrikes);strikeSelect.onchange=e=>{s.displayStrikes=e.target.value==='all'?'all':Math.max(5,+e.target.value||15);saveDisplayStrikes(s.cfg.key,s.displayStrikes);renderChain(s);};}
     view.querySelectorAll('[data-so-interval]').forEach(b=>b.onclick=()=>changeInterval(s,b.dataset.soInterval));
     $(`${p}-method-toggle`).onclick=()=>{const box=$(`${p}-method`);box.hidden=!box.hidden;};
     $(`${p}-exposure-metric`).onchange=()=>renderExposure(s);
     $(`${p}-copy`).onclick=()=>{
-      const c=calc(s),text=[`${s.cfg.symbol} · ${s.expiry}`,`Call Wall: ${c.callWall?.strike??'—'}`,`Put Wall: ${c.putWall?.strike??'—'}`,`Gamma Flip: ${c.flip??'—'}`,`Call OI: ${c.callOI}`,`Put OI: ${c.putOI}`,`GEX: ${c.gamma}`,`DEX: ${c.delta}`,`OI coverage: ${(c.coverage*100).toFixed(1)}%`].join('\n');
+      const c=calc(s),text=[`${s.cfg.symbol} · ${s.expiry}`,`Call Wall: ${c.callWall?.strike??'—'}`,`Put Wall: ${c.putWall?.strike??'—'}`,`Gamma Flip: ${c.flip??'—'}`,`Vol Trigger: ${c.volTrigger??'Not supplied by source'}`,`Max Pain: ${c.maxPain?.strike??'—'}`,`GEX 1-10: ${c.gexLevels.map(x=>x.strike).join(', ')}`,`Call OI: ${c.callOI}`,`Put OI: ${c.putOI}`,`GEX: ${c.gamma}`,`DEX: ${c.delta}`,`OI coverage: ${(c.coverage*100).toFixed(1)}%`].join('\n');
       if(navigator.clipboard?.writeText)navigator.clipboard.writeText(text).catch(()=>{});else{const t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();}
     };
   }
@@ -617,7 +725,8 @@
       coverage:c.coverage,oiKnown:c.oiKnown,totalContracts:c.totalContracts,callOI:c.callOI,putOI:c.putOI,callVol:c.callVol,putVol:c.putVol,
       callWall:c.callWall?{strike:c.callWall.strike,oi:c.callWall.callOI}:null,
       putWall:c.putWall?{strike:c.putWall.strike,oi:c.putWall.putOI}:null,
-      flip:c.flip,oiWall:c.oiWall?{strike:c.oiWall.strike,oi:c.oiWall.oi}:null,
+      flip:c.flip,volTrigger:c.volTrigger,maxPain:c.maxPain?{strike:c.maxPain.strike,payout:c.maxPain.payout}:null,complete:c.complete,oiComplete:c.oiComplete,maxPainComplete:c.maxPainComplete,
+      gexLevels:c.gexLevels.map((x,i)=>({rank:i+1,strike:x.strike,gex:x.gex})),oiWall:c.oiWall?{strike:c.oiWall.strike,oi:c.oiWall.oi}:null,
       dist:c.dist.map(x=>({strike:x.strike,callOI:x.callOI,putOI:x.putOI,callVol:x.callVol,putVol:x.putVol,gex:x.gex,callGex:x.callGex,putGex:x.putGex}))};
   }
 
@@ -627,5 +736,5 @@
   window.stockOptionsCrossAssetStop=crossAssetStop;
   window.stockOptionsCrossAssetSnapshot=crossAssetSnapshot;
   window.stockOptionsCrossAssetSetExpiry=crossAssetSetExpiry;
-  window.stockOptionsDebug=()=>Object.fromEntries(Object.values(sessions).map(s=>[s.cfg.symbol,{expiry:s.expiry,quotes:s.quotes.size,oi:[...s.quotes.values()].filter(q=>q.openInterest!==null).length,price:s.price,interval:s.interval}]));
+  window.stockOptionsDebug=()=>Object.fromEntries(Object.values(sessions).map(s=>[s.cfg.symbol,{expiry:s.expiry,quotes:s.quotes.size,contracts:s.contracts.length,complete:s.chainComplete,hydrating:s.hydrating,displayStrikes:s.displayStrikes,oi:[...s.quotes.values()].filter(q=>q.openInterest!==null).length,price:s.price,interval:s.interval}]));
 })();

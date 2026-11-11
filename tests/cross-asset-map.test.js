@@ -38,3 +38,13 @@ test('invalid or unavailable price anchors do not create synthetic levels', () =
   assert.equal(math.mapStrike(630, 600, 0), null);
   assert.equal(math.mapStrike(-1, 600, 25000), null);
 });
+
+
+test('GEX ranking returns the strongest absolute net exposure first', () => {
+  const rows = [
+    { strike: 90, gex: -10 },
+    { strike: 100, gex: 80 },
+    { strike: 110, gex: -40 }
+  ];
+  assert.deepEqual(math.rankGexLevels(rows, 2).map(x => x.strike), [100, 110]);
+});

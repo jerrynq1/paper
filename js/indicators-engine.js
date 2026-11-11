@@ -181,6 +181,8 @@ function applyColor(a,j){                           // đổi 1 ô màu: cập n
       else if(m.k==="f"&&!m.pc)ss[x].applyOptions({color:hexA(c,m.al==null?.1:m.al)})}catch{}})}
 let riq=0;const rIndSoon=()=>{if(!riq)riq=requestAnimationFrame(()=>{riq=0;renderInd()})};
 function renderInd(){
+  // Special orderflow indicators manage their own canvas layers and data sessions.
+  try{window.crossAssetMapIndicatorSync?.()}catch(e){console.warn("cross asset indicator sync",e)}
   Object.entries(SER).forEach(([id,ss])=>{const pn=PN[id],ch=pn?pn.ch:chart;ss.forEach(s=>{if(s){try{ch.removeSeries(s)}catch{}}})});
   SER={};LV={};RAW={};SM={};
   chart.priceScale("right").applyOptions({scaleMargins:{top:.06,bottom:.15}});
@@ -310,7 +312,7 @@ function openSet(id){
     else if(t.dataset.w){a.w=+t.value;saveInd();renderInd()}
     else if(t.dataset.v){const l=[...o.querySelectorAll("[data-v]")].filter(x=>x.checked).map(x=>+x.dataset.v);if(!l.length){t.checked=true;return}if(l.length===allTfs().length)delete a.vis;else a.vis=l;saveInd();renderInd()}
   };
-  o.oninput=e=>{const t=e.target,j=t.dataset.c;if(j===undefined)return;a.c[+j]=t.value;saveInd();if(d.rc)rIndSoon();else applyColor(a,+j);legend()};
+  o.oninput=e=>{const t=e.target,j=t.dataset.c;if(j===undefined)return;a.c[+j]=t.value;saveInd();if(d.rc)rIndSoon();else applyColor(a,+j);try{window.crossAssetMapIndicatorSync?.()}catch{}legend()};
   draw();document.body.append(o);o.querySelector("[data-act=ok]").focus();
 }
 legend();
@@ -328,6 +330,10 @@ $("v-ind").onclick=e=>{
   if(t.dataset.set){openSet(t.closest("[data-id]").dataset.id);return}
   if(t.dataset.f){IF=t.dataset.f;buildInd();return}
   if(t.dataset.add){
+    if(t.dataset.add==='xmap'){
+      const existing=ACT.find(a=>a.key==='xmap');
+      if(existing){openSet(existing.id);return}
+    }
     ACT.push(mkA(t.dataset.add));saveInd();renderInd()
     buildInd();return}
   if(t.dataset.rm){const id=t.closest("[data-id]").dataset.id;
@@ -342,6 +348,6 @@ $("v-ind").onchange=e=>{
 };
 $("v-ind").oninput=e=>{
   const t=e.target,j=t.dataset.c;if(j===undefined)return;const a=ACT.find(x=>x.id===t.closest("[data-id]").dataset.id);if(!a)return;
-  a.c[+j]=t.value;saveInd();remTpl(a);if(IND[a.key].rc)rIndSoon();else applyColor(a,+j);legend();
+  a.c[+j]=t.value;saveInd();remTpl(a);if(IND[a.key].rc)rIndSoon();else applyColor(a,+j);try{window.crossAssetMapIndicatorSync?.()}catch{}legend();
 };
 document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>show(b.dataset.go));

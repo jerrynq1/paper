@@ -26,3 +26,5 @@
 .xmap-line.call{border-color:#ff5c8a}.xmap-line.put{border-color:#35d6b0}.xmap-line.flip{border-color:#ffc857}
 .xmap-disclaimer{margin:0;color:var(--mut);font-size:10px;line-height:1.4}
 @media(max-width:650px){.xmap-panel{padding:10px}.xmap-controls>label:not(.xmap-check):not(.xmap-opacity){min-width:calc(50% - 8px);flex:1}.xmap-controls .btn{flex:1}.xmap-legend{gap:7px}}
+
+.xmap-line.pain{border-color:#b68cff}.xmap-panel .xmap-controls .btn{height:32px;padding:5px 12px;font-size:11px}

@@ -403,3 +403,31 @@ IND.ict22={
   lab:()=>"33 chương · ICT 2022",
   f:()=>[]
 };
+
+/* ===== Cross-Asset ETF Options Liquidity Map =====
+   Projects QQQ -> NAS100 and GLD -> XAUUSD option-derived levels onto the active cTrader chart.
+   Rendering/data lifecycle lives in cross-asset-map.js; this definition makes it a normal,
+   persistent indicator with an eye toggle and the standard settings dialog.
+*/
+IND.xmap={
+  n:"ETF Options Liquidity Map",t:"of",ver:1,
+  d:"Chiếu heatmap OI/GEX, volume bubbles, OI walls, Gamma Flip, Max Pain và GEX 1–10 từ QQQ → NAS100 hoặc GLD → XAUUSD. Cần thêm indicator này vào chart và bật bằng nút mắt. Vol Trigger chỉ hiện khi nguồn dữ liệu cung cấp mức riêng; không tự thay thế bằng Gamma Flip.",
+  p:[
+    ["source","Nguồn ETF","qqq","s",{g:"Nguồn dữ liệu",o:[["qqq","QQQ → NAS100"],["gld","GLD → XAUUSD"]]}],
+    ["metric","Heatmap theo","gex","s",{g:"Heatmap",o:[["gex","Net GEX"],["oi","Open Interest"],["vol","Volume"]]}],
+    ["heat","Hiện heatmap",true,"b"],
+    ["opacity","Độ mờ heatmap",0.48,"n",{min:0.1,max:0.9,step:0.05}],
+    ["bubbles","Hiện volume bubbles",true,"b",{g:"Volume bubbles"}],
+    ["bubbleCount","Số bubble tối đa",36,"i",{min:5,max:100,step:1}],
+    ["walls","Call / Put OI Walls",true,"b",{g:"Key levels"}],
+    ["flip","Gamma Flip",true,"b"],
+    ["volTrigger","Vol Trigger (nếu feed có)",true,"b"],
+    ["maxPain","Max Pain",true,"b"],
+    ["gexCount","Số level GEX 1–10 (0 = tắt)",10,"i",{min:0,max:10,step:1}],
+    ["showSourceTag","Nhãn nguồn dữ liệu trên chart",true,"b"]
+  ],
+  c:["#35b6ff","#ec557c","#35e59a","#ff536b","#ff5c8a","#35d6b0","#ffc857","#b68cff","#43c7e8","#a7d96b"],
+  L:["Heatmap dương / OI","Heatmap âm","Call bubble","Put bubble","Call OI Wall","Put OI Wall","Gamma Flip","Max Pain","Vol Trigger","GEX 1–10"],
+  lab:p=>`${p.source==='gld'?'GLD → XAUUSD':'QQQ → NAS100'} · ${String(p.metric||'gex').toUpperCase()} · GEX ${p.gexCount??10}/10`,
+  f:()=>[]
+};
